@@ -4,3 +4,5 @@ web/dist/
 coverage/
 .superpowers/
 app.db
+.worktrees/
+.data/
