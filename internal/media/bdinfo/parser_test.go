@@ -21,3 +21,10 @@ SUBTITLE: English / 20.123 kbps
 		t.Fatal("expected one audio track and one subtitle track")
 	}
 }
+
+func TestParseReturnsErrorWhenNoRecognizedFields(t *testing.T) {
+	_, err := Parse("this is not a bdinfo log")
+	if err == nil {
+		t.Fatal("expected Parse to return error for unrecognized input")
+	}
+}

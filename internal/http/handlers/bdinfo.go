@@ -40,7 +40,7 @@ func (h *BDInfoHandler) Parse(w http.ResponseWriter, r *http.Request) {
 
 	parsed, err := parse(req.LogText)
 	if err != nil {
-		http.Error(w, "failed to parse bdinfo", http.StatusInternalServerError)
+		http.Error(w, "failed to parse bdinfo", http.StatusBadRequest)
 		return
 	}
 
