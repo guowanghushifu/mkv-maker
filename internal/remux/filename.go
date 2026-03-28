@@ -4,17 +4,19 @@ import "strings"
 
 func BuildFilename(d Draft) string {
 	audioLabel := "UnknownAudio"
-	for _, track := range d.Audio {
-		if track.Selected && track.Default {
-			audioLabel = track.CodecLabel
-			break
-		}
+	if track, ok := d.DefaultSelectedAudio(); ok && strings.TrimSpace(track.CodecLabel) != "" {
+		audioLabel = track.CodecLabel
+	}
+
+	hdrLabel := d.Video.HDRType
+	if d.EnableDV && !strings.Contains(strings.ToUpper(hdrLabel), "DV") {
+		hdrLabel = "HDR.DV"
 	}
 
 	parts := []string{
 		d.Title + " - " + d.Video.Resolution,
 		"BluRay",
-		d.Video.HDRType,
+		hdrLabel,
 		d.Video.Codec,
 		audioLabel,
 	}

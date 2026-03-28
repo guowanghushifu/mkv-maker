@@ -6,6 +6,7 @@ func RankPlaylists(in []PlaylistInfo) []PlaylistInfo {
 	out := append([]PlaylistInfo(nil), in...)
 	for i := range out {
 		out[i].FeatureScore = int64(out[i].DurationSeconds)*1000 + out[i].SizeBytes + int64(out[i].ChapterCount)*100
+		out[i].IsFeatureCandidate = false
 	}
 	slices.SortFunc(out, func(a, b PlaylistInfo) int {
 		switch {
