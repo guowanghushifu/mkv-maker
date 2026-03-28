@@ -1,0 +1,82 @@
+package media
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+)
+
+type SourceType string
+
+const (
+	SourceISO  SourceType = "iso"
+	SourceBDMV SourceType = "bdmv"
+)
+
+type SourceEntry struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Path       string     `json:"path"`
+	Type       SourceType `json:"type"`
+	Size       int64      `json:"size"`
+	ModifiedAt time.Time  `json:"modifiedAt"`
+}
+
+type Scanner struct{}
+
+func NewScanner() *Scanner {
+	return &Scanner{}
+}
+
+func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []SourceEntry
+	for _, entry := range entries {
+		fullPath := filepath.Join(root, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+
+		switch {
+		case !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".iso"):
+			out = append(out, SourceEntry{
+				ID:         entry.Name(),
+				Name:       strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())),
+				Path:       fullPath,
+				Type:       SourceISO,
+				Size:       info.Size(),
+				ModifiedAt: info.ModTime(),
+			})
+		case entry.IsDir() && isBDMVRoot(fullPath):
+			out = append(out, SourceEntry{
+				ID:         entry.Name(),
+				Name:       entry.Name(),
+				Path:       fullPath,
+				Type:       SourceBDMV,
+				Size:       0,
+				ModifiedAt: info.ModTime(),
+			})
+		}
+	}
+
+	slices.SortFunc(out, func(a, b SourceEntry) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	return out, nil
+}
+
+func isBDMVRoot(path string) bool {
+	if _, err := os.Stat(filepath.Join(path, "BDMV", "PLAYLIST")); err == nil {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(path, "BDMV", "index.bdmv"))
+	return err == nil
+}

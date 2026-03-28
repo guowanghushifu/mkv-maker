@@ -20,5 +20,19 @@ func NewRouter(
 	}
 	mux.Handle("/api/config", configRoute)
 
+	sourcesHandler := handlers.NewSourcesHandler(configHandler.InputDir, nil)
+
+	var sourceScanRoute http.Handler = http.HandlerFunc(sourcesHandler.Scan)
+	if requireAuth != nil {
+		sourceScanRoute = requireAuth(sourceScanRoute)
+	}
+	mux.Handle("/api/sources/scan", sourceScanRoute)
+
+	var sourcesRoute http.Handler = http.HandlerFunc(sourcesHandler.List)
+	if requireAuth != nil {
+		sourcesRoute = requireAuth(sourcesRoute)
+	}
+	mux.Handle("/api/sources", sourcesRoute)
+
 	return mux
 }
