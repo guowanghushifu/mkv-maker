@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wangdazhuo/mkv-maker/internal/config"
 	httpapi "github.com/wangdazhuo/mkv-maker/internal/http"
@@ -36,7 +37,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 
-	sessionStore := store.NewSessionStore(db)
+	sessionStore := store.NewSessionStore(db, time.Duration(cfg.SessionMaxAge)*time.Second)
 	authHandler := &handlers.AuthHandler{
 		AppPassword:   cfg.AppPassword,
 		Sessions:      sessionStore,

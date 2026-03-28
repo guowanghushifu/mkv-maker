@@ -6,13 +6,28 @@ import (
 	"github.com/wangdazhuo/mkv-maker/internal/store"
 )
 
-const sessionCookieName = "session_token"
+const SessionCookieName = "session_token"
 
 func RequireAuth(sessions *store.SessionStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cookie, err := r.Cookie(sessionCookieName)
-			if err != nil || !sessions.Valid(cookie.Value) {
+			if sessions == nil {
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+
+			cookie, err := r.Cookie(SessionCookieName)
+			if err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			valid, err := sessions.Valid(cookie.Value)
+			if err != nil {
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			if !valid {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}

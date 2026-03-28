@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/wangdazhuo/mkv-maker/internal/http/middleware"
 	"github.com/wangdazhuo/mkv-maker/internal/store"
 )
-
-const SessionCookieName = "session_token"
 
 type AuthHandler struct {
 	AppPassword   string
@@ -44,7 +43,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
+		Name:     middleware.SessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
