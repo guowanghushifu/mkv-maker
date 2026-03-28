@@ -2,37 +2,31 @@ package remux
 
 import "strings"
 
-func BuildFilename(draft Draft) string {
-	title := compact(draft.Title)
-	if title == "" {
-		title = "Untitled"
-	}
-
-	parts := make([]string, 0, 6)
-	if resolution := compact(draft.Video.Resolution); resolution != "" {
-		parts = append(parts, resolution)
-	}
-	parts = append(parts, "BluRay")
-	if hdr := compact(draft.Video.HDRType); hdr != "" {
-		parts = append(parts, hdr)
-	}
-	if codec := compact(draft.Video.Codec); codec != "" {
-		parts = append(parts, codec)
-	}
-
-	if audio, ok := draft.DefaultSelectedAudio(); ok {
-		if codecLabel := compact(audio.CodecLabel); codecLabel != "" {
-			parts = append(parts, codecLabel)
+func BuildFilename(d Draft) string {
+	audioLabel := "UnknownAudio"
+	for _, track := range d.Audio {
+		if track.Selected && track.Default {
+			audioLabel = track.CodecLabel
+			break
 		}
 	}
 
-	body := strings.Join(parts, ".")
-	if body == "" {
-		return title + ".mkv"
+	parts := []string{
+		d.Title + " - " + d.Video.Resolution,
+		"BluRay",
+		d.Video.HDRType,
+		d.Video.Codec,
+		audioLabel,
 	}
-	return title + " - " + body + ".mkv"
+	return strings.Join(compact(parts), ".") + ".mkv"
 }
 
-func compact(s string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(s)), ".")
+func compact(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if strings.TrimSpace(item) != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }

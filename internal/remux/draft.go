@@ -1,19 +1,26 @@
 package remux
 
 type Draft struct {
-	Title string
-	Video VideoTrack
-	Audio []AudioTrack
+	Title      string
+	SourcePath string
+	Playlist   string
+	OutputPath string
+	EnableDV   bool
+	Video      VideoTrack
+	Audio      []AudioTrack
 }
 
 type VideoTrack struct {
+	Name       string
 	Resolution string
 	Codec      string
 	HDRType    string
 }
 
 type AudioTrack struct {
+	ID         string
 	Name       string
+	Language   string
 	CodecLabel string
 	Default    bool
 	Selected   bool

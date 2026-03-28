@@ -1,38 +1,26 @@
 package analyzer
 
-import "sort"
+import "slices"
 
-func RankPlaylists(playlists []PlaylistInfo) []PlaylistInfo {
-	ranked := make([]PlaylistInfo, len(playlists))
-	copy(ranked, playlists)
-
-	for i := range ranked {
-		ranked[i].FeatureScore = featureScore(ranked[i])
-		ranked[i].IsFeatureCandidate = false
+func RankPlaylists(in []PlaylistInfo) []PlaylistInfo {
+	out := append([]PlaylistInfo(nil), in...)
+	for i := range out {
+		out[i].FeatureScore = int64(out[i].DurationSeconds)*1000 + out[i].SizeBytes + int64(out[i].ChapterCount)*100
 	}
-
-	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].FeatureScore != ranked[j].FeatureScore {
-			return ranked[i].FeatureScore > ranked[j].FeatureScore
+	slices.SortFunc(out, func(a, b PlaylistInfo) int {
+		switch {
+		case a.FeatureScore > b.FeatureScore:
+			return -1
+		case a.FeatureScore < b.FeatureScore:
+			return 1
+		default:
+			return 0
 		}
-		if ranked[i].DurationSeconds != ranked[j].DurationSeconds {
-			return ranked[i].DurationSeconds > ranked[j].DurationSeconds
-		}
-		if ranked[i].SizeBytes != ranked[j].SizeBytes {
-			return ranked[i].SizeBytes > ranked[j].SizeBytes
-		}
-		return ranked[i].Name < ranked[j].Name
 	})
 
-	if len(ranked) > 0 {
-		ranked[0].IsFeatureCandidate = true
+	if len(out) > 0 {
+		out[0].IsFeatureCandidate = true
 	}
 
-	return ranked
-}
-
-func featureScore(info PlaylistInfo) float64 {
-	return float64(info.DurationSeconds) +
-		(float64(info.SizeBytes) / 1_000_000.0) +
-		(float64(info.ChapterCount) * 120.0)
+	return out
 }
