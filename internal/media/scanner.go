@@ -55,12 +55,17 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 				ModifiedAt: info.ModTime(),
 			})
 		case entry.IsDir() && isBDMVRoot(fullPath):
+			size, err := directorySize(fullPath)
+			if err != nil {
+				return nil, err
+			}
+
 			out = append(out, SourceEntry{
 				ID:         entry.Name(),
 				Name:       entry.Name(),
 				Path:       fullPath,
 				Type:       SourceBDMV,
-				Size:       0,
+				Size:       size,
 				ModifiedAt: info.ModTime(),
 			})
 		}
@@ -79,4 +84,27 @@ func isBDMVRoot(path string) bool {
 	}
 	_, err := os.Stat(filepath.Join(path, "BDMV", "index.bdmv"))
 	return err == nil
+}
+
+func directorySize(root string) (int64, error) {
+	var size int64
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		size += info.Size()
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
 }
