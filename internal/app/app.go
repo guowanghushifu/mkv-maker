@@ -2,9 +2,12 @@ package app
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wangdazhuo/mkv-maker/internal/config"
@@ -68,11 +71,13 @@ func New(cfg config.Config) (*App, error) {
 		JobsLog:        jobsHandler.Log,
 	})
 
+	handler := withFrontend(router, filepath.Join("web", "dist"))
+
 	return &App{
 		Config:   cfg,
 		DB:       db,
 		Sessions: sessionStore,
-		Handler:  router,
+		Handler:  handler,
 	}, nil
 }
 
@@ -81,4 +86,34 @@ func (a *App) Close() error {
 		return nil
 	}
 	return a.DB.Close()
+}
+
+func withFrontend(apiHandler http.Handler, distDir string) http.Handler {
+	if _, err := os.Stat(filepath.Join(distDir, "index.html")); err != nil {
+		return apiHandler
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			apiHandler.ServeHTTP(w, r)
+			return
+		}
+
+		requestPath := path.Clean("/" + r.URL.Path)
+		requestPath = strings.TrimPrefix(requestPath, "/")
+		if requestPath != "" {
+			candidate := filepath.Join(distDir, filepath.FromSlash(requestPath))
+			info, err := os.Stat(candidate)
+			if err == nil && !info.IsDir() {
+				http.ServeFile(w, r, candidate)
+				return
+			}
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				http.Error(w, "failed to read frontend asset", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+	})
 }
