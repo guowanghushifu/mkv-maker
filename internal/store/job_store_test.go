@@ -63,8 +63,8 @@ func TestSQLiteJobStoreCreateListGetAndLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJobLog returned error: %v", err)
 	}
-	if !strings.Contains(logBody, "queued") {
-		t.Fatalf("expected queued log text, got %q", logBody)
+	if !strings.Contains(logBody, "remux started") {
+		t.Fatalf("expected remux started log text, got %q", logBody)
 	}
 	if !strings.Contains(logBody, "00800.MPLS") {
 		t.Fatalf("expected playlist in log text, got %q", logBody)
@@ -72,6 +72,90 @@ func TestSQLiteJobStoreCreateListGetAndLog(t *testing.T) {
 	logPath := filepath.Join(logsDir, created.ID+".log")
 	if _, err := os.Stat(logPath); err != nil {
 		t.Fatalf("expected log file %s to exist: %v", logPath, err)
+	}
+}
+
+func TestSQLiteJobStoreCreateRunningJobAndGetCurrent(t *testing.T) {
+	db := openJobsTestDB(t)
+	jobStore := NewSQLiteJobStore(db, t.TempDir())
+
+	created, err := jobStore.CreateRunningJob(CreateJobInput{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler - 2160p.mkv",
+		OutputPath:   "/remux/Nightcrawler - 2160p.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  `{"source":{"name":"Nightcrawler Disc"}}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateRunningJob returned error: %v", err)
+	}
+	if created.Status != "running" {
+		t.Fatalf("expected running status, got %q", created.Status)
+	}
+
+	current, err := jobStore.GetCurrentJob()
+	if err != nil {
+		t.Fatalf("GetCurrentJob returned error: %v", err)
+	}
+	if current.ID != created.ID {
+		t.Fatalf("expected current id %q, got %q", created.ID, current.ID)
+	}
+}
+
+func TestSQLiteJobStoreCreateRunningJobRejectsWhenAnotherTaskIsRunning(t *testing.T) {
+	db := openJobsTestDB(t)
+	jobStore := NewSQLiteJobStore(db, t.TempDir())
+
+	if _, err := jobStore.CreateRunningJob(CreateJobInput{
+		SourceName:   "Disc A",
+		OutputName:   "Disc A.mkv",
+		OutputPath:   "/remux/Disc A.mkv",
+		PlaylistName: "00001.MPLS",
+		PayloadJSON:  `{"source":{"name":"Disc A"}}`,
+	}); err != nil {
+		t.Fatalf("first CreateRunningJob returned error: %v", err)
+	}
+
+	_, err := jobStore.CreateRunningJob(CreateJobInput{
+		SourceName:   "Disc B",
+		OutputName:   "Disc B.mkv",
+		OutputPath:   "/remux/Disc B.mkv",
+		PlaylistName: "00002.MPLS",
+		PayloadJSON:  `{"source":{"name":"Disc B"}}`,
+	})
+	if !errors.Is(err, ErrJobAlreadyRunning) {
+		t.Fatalf("expected ErrJobAlreadyRunning, got %v", err)
+	}
+}
+
+func TestSQLiteJobStoreMarkRunningJobsFailedOnRecovery(t *testing.T) {
+	db := openJobsTestDB(t)
+	jobStore := NewSQLiteJobStore(db, t.TempDir())
+
+	created, err := jobStore.CreateRunningJob(CreateJobInput{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler - 2160p.mkv",
+		OutputPath:   "/remux/Nightcrawler - 2160p.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  `{"source":{"name":"Nightcrawler Disc"}}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateRunningJob returned error: %v", err)
+	}
+
+	if err := jobStore.MarkRunningJobsFailed("process ended before completion"); err != nil {
+		t.Fatalf("MarkRunningJobsFailed returned error: %v", err)
+	}
+
+	got, err := jobStore.GetJob(created.ID)
+	if err != nil {
+		t.Fatalf("GetJob returned error: %v", err)
+	}
+	if got.Status != "failed" {
+		t.Fatalf("expected failed status, got %q", got.Status)
+	}
+	if !strings.Contains(got.Message, "process ended before completion") {
+		t.Fatalf("expected recovery message, got %q", got.Message)
 	}
 }
 
