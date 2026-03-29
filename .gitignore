@@ -6,4 +6,3 @@ coverage/
 app.db
 .worktrees/
 .data/
-/server
