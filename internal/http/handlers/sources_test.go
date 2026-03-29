@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -110,7 +111,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
-	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
 	streamPath := filepath.Join(sourcePath, "BDMV", "STREAM", "00005.m2ts")
@@ -144,7 +145,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			"discTitle":"Nightcrawler",
 			"audioLabels":["English Dolby TrueHD/Atmos Audio","普通话","国配简体特效"],
 			"subtitleLabels":["国配简体特效","简英特效"],
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer\nFILES:\nName            Time In         Length          Size            Total Bitrate\n00005.M2TS      0:00:00.000     1:57:49.645     86043982848     97.43"
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer"
 		}
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/Nightcrawler/resolve", strings.NewReader(reqBody))
@@ -296,7 +297,7 @@ func TestSourcesHandlerResolveRejectsBDInfoPlaylistMismatch(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS"), []byte("playlist"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS"), buildTestMPLS([]string{"00008"}), 0o644); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
 
@@ -347,4 +348,23 @@ func withRouteParam(req *http.Request, key, value string) *http.Request {
 	routeCtx := chi.NewRouteContext()
 	routeCtx.URLParams.Add(key, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
+}
+
+func buildTestMPLS(clipNames []string) []byte {
+	size := 32 + len(clipNames)*11
+	data := make([]byte, size)
+	copy(data[:4], []byte("MPLS"))
+	copy(data[4:8], []byte("0300"))
+	binary.BigEndian.PutUint32(data[8:12], 20)
+
+	playlistStart := 20
+	binary.BigEndian.PutUint16(data[playlistStart+6:playlistStart+8], uint16(len(clipNames)))
+	cursor := playlistStart + 10
+	for _, clip := range clipNames {
+		binary.BigEndian.PutUint16(data[cursor:cursor+2], 9)
+		copy(data[cursor+2:cursor+7], []byte(clip))
+		copy(data[cursor+7:cursor+11], []byte("M2TS"))
+		cursor += 11
+	}
+	return data
 }
