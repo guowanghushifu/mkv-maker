@@ -47,8 +47,25 @@ func New(cfg config.Config) (*App, error) {
 		InputDir:  cfg.InputDir,
 		OutputDir: cfg.OutputDir,
 	}
+	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, nil)
+	bdinfoHandler := handlers.NewBDInfoHandler()
+	draftsHandler := handlers.NewDraftsHandler()
+	jobsHandler := handlers.NewJobsHandler()
 
-	router := httpapi.NewRouter(authHandler, configHandler, middleware.RequireAuth(sessionStore))
+	router := httpapi.NewRouter(httpapi.Dependencies{
+		RequireAuth:    middleware.RequireAuth(sessionStore),
+		Login:          authHandler.Login,
+		Logout:         authHandler.Logout,
+		ConfigGet:      configHandler.Get,
+		SourcesScan:    sourcesHandler.Scan,
+		SourcesList:    sourcesHandler.List,
+		SourcesResolve: sourcesHandler.Resolve,
+		BDInfoParse:    bdinfoHandler.Parse,
+		DraftsPreview:  draftsHandler.PreviewFilename,
+		JobsList:       jobsHandler.List,
+		JobsGet:        jobsHandler.Get,
+		JobsLog:        jobsHandler.Log,
+	})
 
 	return &App{
 		Config:   cfg,

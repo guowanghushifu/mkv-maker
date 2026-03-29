@@ -54,6 +54,14 @@ func (h *SourcesHandler) List(w http.ResponseWriter, r *http.Request) {
 	h.writeScannedSources(w)
 }
 
+func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
 func (h *SourcesHandler) writeScannedSources(w http.ResponseWriter) {
 	items, err := h.Scanner.Scan(h.InputDir)
 	if err != nil {

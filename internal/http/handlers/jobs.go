@@ -52,3 +52,19 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
+
+func (h *JobsHandler) Get(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
+func (h *JobsHandler) Log(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	http.Error(w, "not implemented", http.StatusNotImplemented)
+}
