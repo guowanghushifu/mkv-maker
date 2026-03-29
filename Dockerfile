@@ -24,8 +24,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     ffmpeg \
     mediainfo \
-    mkvtoolnix \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /etc/apt/keyrings && \
+    wget -O /etc/apt/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg && \
+    printf '%s\n' \
+      'deb [signed-by=/etc/apt/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/debian/ trixie main' \
+      > /etc/apt/sources.list.d/mkvtoolnix.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends mkvtoolnix && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV APP_DATA_DIR=/app/data \
     BD_INPUT_DIR=/bd_input \

@@ -41,6 +41,9 @@ Optional host mount overrides:
 
 The container publishes `http://localhost:8080`, serves the web UI at `/`, and serves API routes under `/api/*`.
 
+`mkvtoolnix` is installed from the official MKVToolNix Debian repository for `trixie`, following the vendor instructions at:
+- https://mkvtoolnix.download/downloads.html#debian
+
 ## Docker Hub publish workflow
 
 Manual release workflow: `.github/workflows/docker-publish.yml`.
