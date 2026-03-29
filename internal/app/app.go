@@ -58,7 +58,7 @@ func New(cfg config.Config) (*App, error) {
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	jobStore := store.NewSQLiteJobStore(db, filepath.Join(cfg.DataDir, "logs"))
-	jobsHandler := handlers.NewJobsHandler(jobStore)
+	jobsHandler := handlers.NewJobsHandler(jobStore, cfg.InputDir, cfg.OutputDir)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		RequireAuth:    middleware.RequireAuth(sessionStore),

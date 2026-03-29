@@ -5,14 +5,19 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	mediabdinfo "github.com/wangdazhuo/mkv-maker/internal/media/bdinfo"
 	"github.com/wangdazhuo/mkv-maker/internal/store"
 )
 
 type JobsHandler struct {
-	Store store.JobsRepository
+	Store     store.JobsRepository
+	InputDir  string
+	OutputDir string
 }
 
 type listJobsResponse struct {
@@ -27,6 +32,7 @@ type createJobRequest struct {
 	} `json:"source"`
 	BDInfo struct {
 		PlaylistName string `json:"playlistName"`
+		RawText      string `json:"rawText"`
 	} `json:"bdinfo"`
 	Draft struct {
 		PlaylistName string `json:"playlistName"`
@@ -35,8 +41,12 @@ type createJobRequest struct {
 	OutputPath     string `json:"outputPath"`
 }
 
-func NewJobsHandler(jobStore store.JobsRepository) *JobsHandler {
-	return &JobsHandler{Store: jobStore}
+func NewJobsHandler(jobStore store.JobsRepository, inputDir, outputDir string) *JobsHandler {
+	return &JobsHandler{
+		Store:     jobStore,
+		InputDir:  strings.TrimSpace(inputDir),
+		OutputDir: strings.TrimSpace(outputDir),
+	}
 }
 
 func (h *JobsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +98,24 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "only bdmv sources are supported", http.StatusBadRequest)
 		return
 	}
+	if !isPathWithinRoot(h.InputDir, req.Source.Path) {
+		http.Error(w, "source path is outside input root", http.StatusBadRequest)
+		return
+	}
+	if _, err := os.Stat(req.Source.Path); err != nil {
+		http.Error(w, "source path does not exist", http.StatusBadRequest)
+		return
+	}
+	if !isPathWithinRoot(h.OutputDir, req.OutputPath) {
+		http.Error(w, "output path is outside output root", http.StatusBadRequest)
+		return
+	}
+
+	parsed, err := mediabdinfo.Parse(req.BDInfo.RawText)
+	if err != nil {
+		http.Error(w, "invalid bdinfo payload", http.StatusBadRequest)
+		return
+	}
 	payloadJSON := strings.TrimSpace(string(body))
 	if payloadJSON == "" {
 		encoded, err := json.Marshal(req)
@@ -98,9 +126,26 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		payloadJSON = string(encoded)
 	}
 
-	playlistName := strings.TrimSpace(req.BDInfo.PlaylistName)
+	playlistName := strings.ToUpper(strings.TrimSpace(parsed.PlaylistName))
 	if playlistName == "" {
-		playlistName = strings.TrimSpace(req.Draft.PlaylistName)
+		http.Error(w, "missing playlist name", http.StatusBadRequest)
+		return
+	}
+	if requested := strings.ToUpper(strings.TrimSpace(req.BDInfo.PlaylistName)); requested != "" && requested != playlistName {
+		http.Error(w, "bdinfo playlist mismatch", http.StatusBadRequest)
+		return
+	}
+	if draftPlaylist := strings.ToUpper(strings.TrimSpace(req.Draft.PlaylistName)); draftPlaylist != "" && draftPlaylist != playlistName {
+		http.Error(w, "draft playlist mismatch", http.StatusBadRequest)
+		return
+	}
+	playlistPath := filepath.Join(req.Source.Path, "PLAYLIST", playlistName)
+	if !strings.EqualFold(filepath.Base(strings.TrimSpace(req.Source.Path)), "BDMV") {
+		playlistPath = filepath.Join(req.Source.Path, "BDMV", "PLAYLIST", playlistName)
+	}
+	if _, err := os.Stat(playlistPath); err != nil {
+		http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
+		return
 	}
 	input := store.CreateJobInput{
 		SourceName:   strings.TrimSpace(req.Source.Name),

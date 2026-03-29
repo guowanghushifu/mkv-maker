@@ -230,6 +230,37 @@ func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 	}
 }
 
+func TestSourcesHandlerResolveRejectsBDInfoPlaylistMismatch(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "MismatchDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS"), []byte("playlist"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	})
+
+	reqBody := `{"sourceId":"MismatchDisc","bdinfo":{"playlistName":"00999.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/MismatchDisc/resolve", strings.NewReader(reqBody))
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
+	}
+}
+
 func TestSourcesHandlerResolveRejectsUnknownSource(t *testing.T) {
 	h := NewSourcesHandler(t.TempDir(), "/remux", stubSourceScanner{
 		items: []media.SourceEntry{

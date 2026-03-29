@@ -3,13 +3,14 @@ import type { Job } from '../../api/types';
 import { StatusBadge } from '../../components/StatusBadge';
 
 type JobsPageProps = {
+  error?: string | null;
   jobs: Job[];
   onStartNew: () => void;
   onRefresh: () => Promise<void> | void;
   onLoadLog: (jobId: string) => Promise<string>;
 };
 
-export function JobsPage({ jobs, onStartNew, onRefresh, onLoadLog }: JobsPageProps) {
+export function JobsPage({ error, jobs, onStartNew, onRefresh, onLoadLog }: JobsPageProps) {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [logsByJobId, setLogsByJobId] = useState<Record<string, string>>({});
   const [loadingJobId, setLoadingJobId] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function JobsPage({ jobs, onStartNew, onRefresh, onLoadLog }: JobsPagePro
           New Workflow
         </button>
       </div>
+      {error ? <p className="error-text">{error}</p> : null}
 
       {jobs.length === 0 ? (
         <p className="muted-text">No jobs yet. Queue a remux job from the review step.</p>
@@ -73,4 +75,3 @@ export function JobsPage({ jobs, onStartNew, onRefresh, onLoadLog }: JobsPagePro
     </section>
   );
 }
-

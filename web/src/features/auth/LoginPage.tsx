@@ -2,9 +2,10 @@ import { FormEvent, useState } from 'react';
 
 type LoginPageProps = {
   onSuccess: (password: string) => Promise<void> | void;
+  error?: string | null;
 };
 
-export function LoginPage({ onSuccess }: LoginPageProps) {
+export function LoginPage({ onSuccess, error: externalError }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -33,9 +34,9 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
           placeholder="Enter password"
         />
         {error ? <p className="error-text">{error}</p> : null}
+        {externalError ? <p className="error-text">{externalError}</p> : null}
         <button type="submit">Continue</button>
       </form>
     </section>
   );
 }
-

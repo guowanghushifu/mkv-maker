@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -49,6 +51,16 @@ func (s stubJobsRepository) GetJobLog(id string) (string, error) {
 }
 
 func TestJobsHandlerCreateReturnsCreatedQueuedJob(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourcePath := filepath.Join(inputRoot, "Nightcrawler", "BDMV")
+	if err := os.MkdirAll(filepath.Join(sourcePath, "PLAYLIST"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourcePath, "PLAYLIST", "00800.MPLS"), []byte("playlist"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	outputRoot := t.TempDir()
+
 	h := NewJobsHandler(stubJobsRepository{
 		createFn: func(input store.CreateJobInput) (store.APIJob, error) {
 			if input.SourceName != "Nightcrawler Disc" {
@@ -73,14 +85,14 @@ func TestJobsHandlerCreateReturnsCreatedQueuedJob(t *testing.T) {
 				Status:       "queued",
 			}, nil
 		},
-	})
+	}, inputRoot, outputRoot)
 
 	reqBody := `{
-		"source":{"id":"Nightcrawler","name":"Nightcrawler Disc"},
-		"bdinfo":{"playlistName":"00800.MPLS"},
+		"source":{"id":"Nightcrawler","name":"Nightcrawler Disc","path":"` + sourcePath + `","type":"bdmv"},
+		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
 		"draft":{"sourceId":"Nightcrawler","playlistName":"00800.MPLS"},
 		"outputFilename":"Nightcrawler - 2160p.mkv",
-		"outputPath":"/remux/Nightcrawler - 2160p.mkv"
+		"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler - 2160p.mkv") + `"
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -134,7 +146,7 @@ func TestJobsHandlerListGetAndLog(t *testing.T) {
 			}
 			return "[2026-03-29T12:00:00Z] queued", nil
 		},
-	})
+	}, t.TempDir(), t.TempDir())
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
 	listW := httptest.NewRecorder()
@@ -168,7 +180,7 @@ func TestJobsHandlerGetReturnsNotFound(t *testing.T) {
 		getFn: func(id string) (store.APIJob, error) {
 			return store.APIJob{}, store.ErrJobNotFound
 		},
-	})
+	}, t.TempDir(), t.TempDir())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/jobs/missing", nil)
 	req = withRouteParamJobs(req, "id", "missing")

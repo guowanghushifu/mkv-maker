@@ -2,6 +2,7 @@ import type { SourceEntry } from '../../api/types';
 
 type ScanPageProps = {
   loading: boolean;
+  error?: string | null;
   sources: SourceEntry[];
   selectedSourceId: string | null;
   onScan: () => Promise<void> | void;
@@ -24,6 +25,7 @@ function formatBytes(bytes: number): string {
 
 export function ScanPage({
   loading,
+  error,
   sources,
   selectedSourceId,
   onScan,
@@ -49,6 +51,7 @@ export function ScanPage({
           Continue to BDInfo
         </button>
       </div>
+      {error ? <p className="error-text">{error}</p> : null}
       {sources.length === 0 ? (
         <p className="muted-text">No sources yet. Run scan to discover BDMV directories.</p>
       ) : (

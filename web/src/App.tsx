@@ -32,6 +32,9 @@ function App() {
   const [bdinfoText, setBdinfoText] = useState('');
   const [parsedBDInfo, setParsedBDInfo] = useState<ParsedBDInfo | null>(null);
   const [bdinfoError, setBdinfoError] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [jobsError, setJobsError] = useState<string | null>(null);
   const [parsingBDInfo, setParsingBDInfo] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [filenamePreview, setFilenamePreview] = useState('');
@@ -70,21 +73,34 @@ function App() {
   }, [draft, fallbackTitle, filenameEdited, token]);
 
   const handleLogin = async (password: string) => {
-    const loginResult = await api.login(password);
-    setToken(loginResult.token);
-    setStep('scan');
+    try {
+      const loginResult = await api.login(password);
+      setLoginError(null);
+      setToken(loginResult.token);
+      setStep('scan');
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Login failed.');
+    }
   };
 
   const handleScan = async () => {
     setScanning(true);
+    setScanError(null);
     try {
       const scannedSources = (await api.scanSources(token ?? undefined)).filter(
         (source) => source.type === 'bdmv'
       );
       setSources(scannedSources);
-      if (!selectedSourceId && scannedSources.length > 0) {
+      if (scannedSources.length === 0) {
+        setSelectedSourceId(null);
+      } else if (!selectedSourceId || !scannedSources.some((source) => source.id === selectedSourceId)) {
         setSelectedSourceId(scannedSources[0].id);
       }
+      if (step === 'bdinfo' && !scannedSources.some((source) => source.id === selectedSourceId)) {
+        setStep('scan');
+      }
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : 'Source scan failed.');
     } finally {
       setScanning(false);
     }
@@ -126,8 +142,13 @@ function App() {
   };
 
   const refreshJobs = async () => {
-    const nextJobs = await api.listJobs(token ?? undefined);
-    setJobs(nextJobs);
+    try {
+      const nextJobs = await api.listJobs(token ?? undefined);
+      setJobsError(null);
+      setJobs(nextJobs);
+    } catch (error) {
+      setJobsError(error instanceof Error ? error.message : 'Failed to refresh jobs.');
+    }
   };
 
   const handleSubmitJob = async () => {
@@ -154,6 +175,9 @@ function App() {
       );
       await refreshJobs();
       setStep('jobs');
+      setJobsError(null);
+    } catch (error) {
+      setJobsError(error instanceof Error ? error.message : 'Failed to queue job.');
     } finally {
       setSubmittingJob(false);
     }
@@ -173,11 +197,12 @@ function App() {
 
   return (
     <Layout currentStep={currentStep}>
-      {step === 'login' ? <LoginPage onSuccess={handleLogin} /> : null}
+      {step === 'login' ? <LoginPage onSuccess={handleLogin} error={loginError} /> : null}
 
       {step === 'scan' ? (
         <ScanPage
           loading={scanning}
+          error={scanError}
           sources={sources}
           selectedSourceId={selectedSourceId}
           onScan={handleScan}
@@ -229,6 +254,7 @@ function App() {
 
       {step === 'jobs' ? (
         <JobsPage
+          error={jobsError}
           jobs={jobs}
           onStartNew={handleStartNewWorkflow}
           onRefresh={refreshJobs}
@@ -240,4 +266,3 @@ function App() {
 }
 
 export default App;
-

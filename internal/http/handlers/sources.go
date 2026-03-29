@@ -153,9 +153,10 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playlistName := strings.ToUpper(strings.TrimSpace(req.BDInfo.PlaylistName))
-	if playlistName == "" {
-		playlistName = strings.ToUpper(strings.TrimSpace(parsed.PlaylistName))
+	playlistName := strings.ToUpper(strings.TrimSpace(parsed.PlaylistName))
+	if requested := strings.ToUpper(strings.TrimSpace(req.BDInfo.PlaylistName)); requested != "" && requested != playlistName {
+		http.Error(w, "bdinfo playlist mismatch", http.StatusBadRequest)
+		return
 	}
 	playlistName = strings.ToUpper(filepath.Base(playlistName))
 	if !playlistNamePattern.MatchString(playlistName) {
