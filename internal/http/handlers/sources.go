@@ -284,19 +284,47 @@ func findSourceByID(sources []media.SourceEntry, id string) (media.SourceEntry, 
 }
 
 func isPathWithinRoot(root, path string) bool {
-	absRoot, err := filepath.Abs(root)
+	resolvedRoot, err := resolvePathForContainment(root, true)
 	if err != nil {
 		return false
 	}
-	absPath, err := filepath.Abs(path)
+	resolvedPath, err := resolvePathForContainment(path, false)
 	if err != nil {
 		return false
 	}
-	rel, err := filepath.Rel(absRoot, absPath)
+	rel, err := filepath.Rel(resolvedRoot, resolvedPath)
 	if err != nil {
 		return false
 	}
 	return rel == "." || !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
+}
+
+func resolvePathForContainment(path string, mustExist bool) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if mustExist {
+		return filepath.EvalSymlinks(absPath)
+	}
+
+	dir := absPath
+	if !isDirectoryPath(absPath) {
+		dir = filepath.Dir(absPath)
+	}
+	resolvedDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	if dir == absPath {
+		return resolvedDir, nil
+	}
+	return filepath.Join(resolvedDir, filepath.Base(absPath)), nil
+}
+
+func isDirectoryPath(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func compactLabels(labels []string) []string {

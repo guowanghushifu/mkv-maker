@@ -131,6 +131,11 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing playlist name", http.StatusBadRequest)
 		return
 	}
+	playlistName = strings.ToUpper(filepath.Base(playlistName))
+	if !playlistNamePattern.MatchString(playlistName) {
+		http.Error(w, "invalid playlist name", http.StatusBadRequest)
+		return
+	}
 	if requested := strings.ToUpper(strings.TrimSpace(req.BDInfo.PlaylistName)); requested != "" && requested != playlistName {
 		http.Error(w, "bdinfo playlist mismatch", http.StatusBadRequest)
 		return
