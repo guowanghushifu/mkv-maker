@@ -1,0 +1,204 @@
+:root {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #13243a;
+  background: #eef3f9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #13243a;
+  background: linear-gradient(180deg, #f7f9fc 0%, #e8eff9 100%);
+}
+
+.app-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.app-header p {
+  margin: 0.25rem 0 1rem;
+  color: #3f5874;
+}
+
+.step-list {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.step-list li {
+  border-radius: 6px;
+  background: #dfe8f4;
+  color: #50657f;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 0.45rem 0.4rem;
+}
+
+.step-list li.is-active {
+  background: #1d6fd8;
+  color: #fff;
+}
+
+.step-list li.is-complete {
+  background: #6e9fd9;
+  color: #fff;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #d6dfec;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+.page-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stack {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 360px;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #b9c7db;
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: #fff;
+}
+
+button {
+  border: 1px solid #1d6fd8;
+  border-radius: 6px;
+  background: #1d6fd8;
+  color: #fff;
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.source-list,
+.track-list,
+.job-list {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.source-list li,
+.track-list li,
+.job-list li {
+  border: 1px solid #d6dfec;
+  border-radius: 6px;
+  padding: 0.7rem;
+  background: #f9fbff;
+}
+
+.source-list label,
+.track-list li {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.track-list li small,
+.job-list li small {
+  color: #576d87;
+}
+
+.job-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.status-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-queued {
+  background: #e7edf7;
+  color: #31507a;
+}
+
+.status-running {
+  background: #fff3db;
+  color: #7f5b0a;
+}
+
+.status-succeeded {
+  background: #dff2e5;
+  color: #145d33;
+}
+
+.status-failed {
+  background: #f7e1e1;
+  color: #8b1c1c;
+}
+
+.info-box {
+  border: 1px solid #cad7ea;
+  border-radius: 6px;
+  background: #f4f8ff;
+  padding: 0.7rem;
+}
+
+.muted-text {
+  color: #546a84;
+}
+
+.error-text {
+  color: #9a1f1f;
+}
+
+@media (max-width: 780px) {
+  .step-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
