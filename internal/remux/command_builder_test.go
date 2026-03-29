@@ -65,3 +65,54 @@ func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T)
 		t.Fatalf("expected index fallback selector for second track, got %q", joined)
 	}
 }
+
+func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSelectors(t *testing.T) {
+	draft := Draft{
+		OutputPath: "/remux/out.mkv",
+		SourcePath: "/bd_input/Nightcrawler.iso",
+		Audio: []AudioTrack{
+			{ID: "7", Name: "English", Language: "eng", Selected: true},
+			{ID: "8", Name: "French", Language: "fra", Selected: false},
+			{ID: "a1", Name: "Japanese", Language: "jpn", Selected: true},
+		},
+	}
+
+	args := BuildMKVMergeArgs(draft)
+	value, ok := optionValue(args, "--audio-tracks")
+	if !ok {
+		t.Fatalf("expected --audio-tracks option in args: %q", strings.Join(args, " "))
+	}
+	if value != "7,3" {
+		t.Fatalf("expected selected selectors \"7,3\", got %q", value)
+	}
+}
+
+func TestBuildMKVMergeArgsTrackOrderIsVideoThenSelectedAudiosInInputOrder(t *testing.T) {
+	draft := Draft{
+		OutputPath: "/remux/out.mkv",
+		SourcePath: "/bd_input/Nightcrawler.iso",
+		Audio: []AudioTrack{
+			{ID: "9", Name: "Commentary", Language: "eng", Selected: false},
+			{ID: "7", Name: "English", Language: "eng", Selected: true},
+			{ID: "a1", Name: "Japanese", Language: "jpn", Selected: true},
+		},
+	}
+
+	args := BuildMKVMergeArgs(draft)
+	value, ok := optionValue(args, "--track-order")
+	if !ok {
+		t.Fatalf("expected --track-order option in args: %q", strings.Join(args, " "))
+	}
+	if value != "0:0,0:7,0:3" {
+		t.Fatalf("expected track order \"0:0,0:7,0:3\", got %q", value)
+	}
+}
+
+func optionValue(args []string, option string) (string, bool) {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == option {
+			return args[i+1], true
+		}
+	}
+	return "", false
+}

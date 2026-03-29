@@ -8,6 +8,8 @@ import (
 
 func BuildMKVMergeArgs(d Draft) []string {
 	args := []string{"--output", d.OutputPath}
+	audioSelectors := make([]string, 0, len(d.Audio))
+	trackOrder := []string{"0:0"}
 
 	if d.Video.Name != "" {
 		args = append(args, "--track-name", "0:"+d.Video.Name)
@@ -19,6 +21,8 @@ func BuildMKVMergeArgs(d Draft) []string {
 		}
 
 		audioSelector := resolveAudioSelector(track.ID, index)
+		audioSelectors = append(audioSelectors, audioSelector)
+		trackOrder = append(trackOrder, "0:"+audioSelector)
 
 		args = append(args, "--language", audioSelector+":"+track.Language)
 		args = append(args, "--track-name", audioSelector+":"+track.Name)
@@ -26,6 +30,11 @@ func BuildMKVMergeArgs(d Draft) []string {
 			args = append(args, "--default-track-flag", audioSelector+":yes")
 		}
 	}
+
+	if len(audioSelectors) > 0 {
+		args = append(args, "--audio-tracks", strings.Join(audioSelectors, ","))
+	}
+	args = append(args, "--track-order", strings.Join(trackOrder, ","))
 
 	if d.EnableDV {
 		args = append(args, "--engage", "merge_dolby_vision")
