@@ -46,7 +46,7 @@ export type Draft = {
   subtitles: DraftTrack[];
 };
 
-export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'interrupted';
 
 export type Job = {
   id: string;

@@ -50,10 +50,10 @@ func New(cfg config.Config) (*App, error) {
 		InputDir:  cfg.InputDir,
 		OutputDir: cfg.OutputDir,
 	}
-	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, nil)
+	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, cfg.OutputDir, nil)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
-	jobsHandler := handlers.NewJobsHandler(store.NewSQLiteJobStore(db))
+	jobsHandler := handlers.NewJobsHandler(store.NewSQLiteJobStore(db, filepath.Join(cfg.DataDir, "logs")))
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		RequireAuth:    middleware.RequireAuth(sessionStore),

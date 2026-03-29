@@ -97,15 +97,36 @@ func Parse(rawText string) (Parsed, error) {
 			parsed.PlaylistName = strings.TrimSpace(strings.TrimPrefix(line, "PLAYLIST:"))
 			foundField = true
 		case strings.HasPrefix(upperLine, "VIDEO:"):
+			inline := strings.TrimSpace(strings.TrimPrefix(line, "VIDEO:"))
+			if inline != "" {
+				videoRows = append(videoRows, videoRow{
+					Codec:       "Video",
+					Description: inline,
+				})
+				foundField = true
+				continue
+			}
 			currentSection = sectionVideo
 			foundField = true
 		case strings.HasPrefix(upperLine, "AUDIO:"):
+			inline := strings.TrimSpace(strings.TrimPrefix(line, "AUDIO:"))
+			if inline != "" {
+				audioRows = append(audioRows, parseInlineTrackRow(inline))
+				foundField = true
+				continue
+			}
 			currentSection = sectionAudio
 			foundField = true
 		case strings.HasPrefix(upperLine, "SUBTITLES:"):
 			currentSection = sectionSubtitles
 			foundField = true
 		case strings.HasPrefix(upperLine, "SUBTITLE:"):
+			inline := strings.TrimSpace(strings.TrimPrefix(line, "SUBTITLE:"))
+			if inline != "" {
+				subtitleRows = append(subtitleRows, parseInlineSubtitleRow(inline))
+				foundField = true
+				continue
+			}
 			currentSection = sectionSubtitles
 			foundField = true
 		default:
@@ -298,6 +319,33 @@ func buildSubtitleLabel(row subtitleRow) string {
 		return strings.TrimSpace(row.Language)
 	}
 	return strings.TrimSpace(row.Description)
+}
+
+func parseInlineTrackRow(body string) audioRow {
+	parts := strings.Split(body, "/")
+	row := audioRow{}
+	if len(parts) > 0 {
+		row.Language = strings.TrimSpace(parts[0])
+	}
+	if len(parts) > 1 {
+		row.Codec = strings.TrimSpace(parts[1])
+	}
+	if len(parts) > 2 {
+		row.Description = strings.TrimSpace(strings.Join(parts[2:], "/"))
+	}
+	return row
+}
+
+func parseInlineSubtitleRow(body string) subtitleRow {
+	parts := strings.Split(body, "/")
+	row := subtitleRow{}
+	if len(parts) > 0 {
+		row.Language = strings.TrimSpace(parts[0])
+	}
+	if len(parts) > 1 {
+		row.Description = strings.TrimSpace(strings.Join(parts[1:], "/"))
+	}
+	return row
 }
 
 func compactLabelParts(parts ...string) []string {

@@ -60,6 +60,9 @@ func TestJobsHandlerCreateReturnsCreatedQueuedJob(t *testing.T) {
 			if input.OutputName != "Nightcrawler - 2160p.mkv" {
 				t.Fatalf("unexpected output name %q", input.OutputName)
 			}
+			if !strings.Contains(input.PayloadJSON, `"outputFilename":"Nightcrawler - 2160p.mkv"`) {
+				t.Fatalf("expected payload json to preserve request, got %q", input.PayloadJSON)
+			}
 			return store.APIJob{
 				ID:           "job-123",
 				SourceName:   input.SourceName,

@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -43,18 +45,32 @@ type JobsRepository interface {
 var ErrJobNotFound = errors.New("job not found")
 
 type SQLiteJobStore struct {
-	db *sql.DB
+	db      *sql.DB
+	logsDir string
 }
 
 type persistedJobMetadata struct {
 	SourceName   string `json:"sourceName"`
 	OutputName   string `json:"outputName"`
 	PlaylistName string `json:"playlistName"`
-	PayloadJSON  string `json:"payloadJson,omitempty"`
 }
 
-func NewSQLiteJobStore(db *sql.DB) *SQLiteJobStore {
-	return &SQLiteJobStore{db: db}
+type persistedJobPayload struct {
+	Source struct {
+		Name string `json:"name"`
+	} `json:"source"`
+	BDInfo struct {
+		PlaylistName string `json:"playlistName"`
+	} `json:"bdinfo"`
+	Draft struct {
+		PlaylistName string `json:"playlistName"`
+	} `json:"draft"`
+	OutputFilename string `json:"outputFilename"`
+	OutputPath     string `json:"outputPath"`
+}
+
+func NewSQLiteJobStore(db *sql.DB, logsDir string) *SQLiteJobStore {
+	return &SQLiteJobStore{db: db, logsDir: strings.TrimSpace(logsDir)}
 }
 
 func (s *SQLiteJobStore) CreateQueuedJob(input CreateJobInput) (APIJob, error) {
@@ -71,18 +87,33 @@ func (s *SQLiteJobStore) CreateQueuedJob(input CreateJobInput) (APIJob, error) {
 		SourceName:   strings.TrimSpace(input.SourceName),
 		OutputName:   strings.TrimSpace(input.OutputName),
 		PlaylistName: strings.TrimSpace(input.PlaylistName),
-		PayloadJSON:  strings.TrimSpace(input.PayloadJSON),
 	})
 	if err != nil {
 		return APIJob{}, err
 	}
+	draftJSON := strings.TrimSpace(input.PayloadJSON)
+	if draftJSON == "" {
+		draftJSON = string(metadataJSON)
+	}
+
+	logPath := ""
+	if s.logsDir != "" {
+		if err := os.MkdirAll(s.logsDir, 0o755); err != nil {
+			return APIJob{}, err
+		}
+		logPath = filepath.Join(s.logsDir, id+".log")
+		if err := os.WriteFile(logPath, []byte(buildInitialJobLog(input.PlaylistName, input.OutputPath)), 0o644); err != nil {
+			return APIJob{}, err
+		}
+	}
 
 	if _, err := s.db.Exec(
-		`insert into jobs(id, status, draft_json, output_path) values(?, ?, ?, ?)`,
+		`insert into jobs(id, status, draft_json, output_path, log_path) values(?, ?, ?, ?, ?)`,
 		id,
 		"queued",
-		string(metadataJSON),
+		draftJSON,
 		strings.TrimSpace(input.OutputPath),
+		logPath,
 	); err != nil {
 		return APIJob{}, err
 	}
@@ -146,28 +177,34 @@ func (s *SQLiteJobStore) GetJob(id string) (APIJob, error) {
 }
 
 func (s *SQLiteJobStore) GetJobLog(id string) (string, error) {
+	if s == nil || s.db == nil {
+		return "", errors.New("job store is not configured")
+	}
+
+	var logPath string
+	err := s.db.QueryRow(`select log_path from jobs where id = ?`, strings.TrimSpace(id)).Scan(&logPath)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrJobNotFound
+		}
+		return "", err
+	}
+	logPath = strings.TrimSpace(logPath)
+	if logPath != "" {
+		content, err := os.ReadFile(logPath)
+		if err == nil {
+			return string(content), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+
 	job, err := s.GetJob(id)
 	if err != nil {
 		return "", err
 	}
-	timestamp := strings.TrimSpace(job.CreatedAt)
-	if timestamp == "" {
-		timestamp = time.Now().UTC().Format(time.RFC3339)
-	}
-
-	lines := []string{
-		"[" + timestamp + "] " + strings.TrimSpace(job.Status),
-	}
-	if strings.TrimSpace(job.PlaylistName) != "" {
-		lines = append(lines, "Resolving playlist "+job.PlaylistName)
-	}
-	if strings.TrimSpace(job.OutputPath) != "" {
-		lines = append(lines, "Preparing output "+job.OutputPath)
-	}
-	if strings.TrimSpace(job.Message) != "" {
-		lines = append(lines, job.Message)
-	}
-	return strings.Join(lines, "\n"), nil
+	return buildInitialJobLog(job.PlaylistName, job.OutputPath), nil
 }
 
 func (s *SQLiteJobStore) MarkRunningJobsInterrupted() error {
@@ -218,10 +255,26 @@ func buildAPIJob(id, status, draftJSON, outputPath, errorText, createdAt string)
 
 func decodeJobMetadata(value string) persistedJobMetadata {
 	var metadata persistedJobMetadata
-	if err := json.Unmarshal([]byte(value), &metadata); err != nil {
+	if err := json.Unmarshal([]byte(value), &metadata); err == nil {
+		if metadata.SourceName != "" || metadata.OutputName != "" || metadata.PlaylistName != "" {
+			return metadata
+		}
+	}
+
+	var payload persistedJobPayload
+	if err := json.Unmarshal([]byte(value), &payload); err != nil {
 		return persistedJobMetadata{}
 	}
-	return metadata
+
+	playlistName := strings.TrimSpace(payload.BDInfo.PlaylistName)
+	if playlistName == "" {
+		playlistName = strings.TrimSpace(payload.Draft.PlaylistName)
+	}
+	return persistedJobMetadata{
+		SourceName:   strings.TrimSpace(payload.Source.Name),
+		OutputName:   strings.TrimSpace(payload.OutputFilename),
+		PlaylistName: playlistName,
+	}
 }
 
 func normalizeCreatedAt(createdAt string) string {
@@ -257,4 +310,16 @@ func generateJobID() (string, error) {
 		return "", err
 	}
 	return "job-" + hex.EncodeToString(buf), nil
+}
+
+func buildInitialJobLog(playlistName, outputPath string) string {
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	lines := []string{"[" + timestamp + "] queued"}
+	if strings.TrimSpace(playlistName) != "" {
+		lines = append(lines, "Resolving playlist "+strings.TrimSpace(playlistName))
+	}
+	if strings.TrimSpace(outputPath) != "" {
+		lines = append(lines, "Preparing output "+strings.TrimSpace(outputPath))
+	}
+	return strings.Join(lines, "\n")
 }

@@ -24,7 +24,7 @@ func (s stubSourceScanner) Scan(root string) ([]media.SourceEntry, error) {
 }
 
 func TestSourcesHandlerListReturnsStructuredNotFoundError(t *testing.T) {
-	h := NewSourcesHandler("/missing/input", stubSourceScanner{
+	h := NewSourcesHandler("/missing/input", "/remux", stubSourceScanner{
 		err: &os.PathError{
 			Op:   "readdir",
 			Path: "/missing/input",
@@ -59,7 +59,7 @@ func TestSourcesHandlerListReturnsStructuredNotFoundError(t *testing.T) {
 }
 
 func TestSourcesHandlerListReturnsStructuredUnreadableError(t *testing.T) {
-	h := NewSourcesHandler("/restricted/input", stubSourceScanner{
+	h := NewSourcesHandler("/restricted/input", "/remux", stubSourceScanner{
 		err: &os.PathError{
 			Op:   "readdir",
 			Path: "/restricted/input",
@@ -105,7 +105,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, stubSourceScanner{
+	h := NewSourcesHandler(inputRoot, "/custom/remux", stubSourceScanner{
 		items: []media.SourceEntry{
 			{
 				ID:   sourceID,
@@ -171,8 +171,8 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if body.PlaylistName != "00800.MPLS" {
 		t.Fatalf("expected playlist 00800.MPLS, got %q", body.PlaylistName)
 	}
-	if body.OutputDir != "/remux" {
-		t.Fatalf("expected outputDir /remux, got %q", body.OutputDir)
+	if body.OutputDir != "/custom/remux" {
+		t.Fatalf("expected outputDir /custom/remux, got %q", body.OutputDir)
 	}
 	if body.Title != "Nightcrawler" {
 		t.Fatalf("expected title Nightcrawler, got %q", body.Title)
@@ -202,7 +202,7 @@ func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 		t.Fatalf("mkdir failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, stubSourceScanner{
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
 		items: []media.SourceEntry{
 			{
 				ID:   sourceID,
@@ -225,7 +225,7 @@ func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 }
 
 func TestSourcesHandlerResolveRejectsUnknownSource(t *testing.T) {
-	h := NewSourcesHandler(t.TempDir(), stubSourceScanner{
+	h := NewSourcesHandler(t.TempDir(), "/remux", stubSourceScanner{
 		items: []media.SourceEntry{
 			{
 				ID:   "Known",

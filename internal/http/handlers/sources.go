@@ -21,8 +21,9 @@ type SourceScanner interface {
 }
 
 type SourcesHandler struct {
-	InputDir string
-	Scanner  SourceScanner
+	InputDir  string
+	OutputDir string
+	Scanner   SourceScanner
 }
 
 type sourcesErrorResponse struct {
@@ -78,13 +79,14 @@ type resolveTrack struct {
 
 var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
 
-func NewSourcesHandler(inputDir string, scanner SourceScanner) *SourcesHandler {
+func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner) *SourcesHandler {
 	if scanner == nil {
 		scanner = media.NewScanner()
 	}
 	return &SourcesHandler{
-		InputDir: inputDir,
-		Scanner:  scanner,
+		InputDir:  inputDir,
+		OutputDir: outputDir,
+		Scanner:   scanner,
 	}
 }
 
@@ -191,7 +193,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	response := resolveSourceResponse{
 		SourceID:       source.ID,
 		PlaylistName:   playlistName,
-		OutputDir:      "/remux",
+		OutputDir:      fallbackString(h.OutputDir, "/remux"),
 		Title:          title,
 		DVMergeEnabled: dvMergeEnabled,
 		Video:          video,

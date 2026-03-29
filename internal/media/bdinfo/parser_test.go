@@ -91,3 +91,26 @@ func TestParseReturnsErrorWhenNoRecognizedFields(t *testing.T) {
 		t.Fatal("expected Parse to return error for unrecognized input")
 	}
 }
+
+func TestParseSupportsLegacySingleLineFormat(t *testing.T) {
+	raw := `
+PLAYLIST: 00800.MPLS
+VIDEO: MPEG-H HEVC Video / 57999 kbps / 2160p / 23.976 fps / HDR10
+AUDIO: English / Dolby TrueHD/Atmos Audio / 7.1 / 48 kHz / 3984 kbps / 24-bit
+SUBTITLE: Chinese / 国配简体特效
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if parsed.PlaylistName != "00800.MPLS" {
+		t.Fatalf("expected playlist 00800.MPLS, got %q", parsed.PlaylistName)
+	}
+	if len(parsed.AudioLabels) != 1 || parsed.AudioLabels[0] == "" {
+		t.Fatalf("expected one parsed audio label, got %+v", parsed.AudioLabels)
+	}
+	if len(parsed.SubtitleLabels) != 1 || parsed.SubtitleLabels[0] != "国配简体特效" {
+		t.Fatalf("expected legacy subtitle label to be preserved, got %+v", parsed.SubtitleLabels)
+	}
+}

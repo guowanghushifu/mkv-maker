@@ -75,6 +75,11 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
+	payloadJSON, err := json.Marshal(req)
+	if err != nil {
+		http.Error(w, "failed to encode job payload", http.StatusInternalServerError)
+		return
+	}
 
 	playlistName := strings.TrimSpace(req.BDInfo.PlaylistName)
 	if playlistName == "" {
@@ -85,6 +90,7 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OutputName:   strings.TrimSpace(req.OutputFilename),
 		OutputPath:   strings.TrimSpace(req.OutputPath),
 		PlaylistName: playlistName,
+		PayloadJSON:  string(payloadJSON),
 	}
 	job, err := h.Store.CreateQueuedJob(input)
 	if err != nil {

@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,7 +13,8 @@ import (
 
 func TestSQLiteJobStoreCreateListGetAndLog(t *testing.T) {
 	db := openJobsTestDB(t)
-	jobStore := NewSQLiteJobStore(db)
+	logsDir := t.TempDir()
+	jobStore := NewSQLiteJobStore(db, logsDir)
 
 	created, err := jobStore.CreateQueuedJob(CreateJobInput{
 		SourceName:   "Nightcrawler Disc",
@@ -51,6 +54,10 @@ func TestSQLiteJobStoreCreateListGetAndLog(t *testing.T) {
 	if got.OutputPath != created.OutputPath {
 		t.Fatalf("expected output path %q, got %q", created.OutputPath, got.OutputPath)
 	}
+	rawDraftJSON := getDraftJSONForJob(t, db, created.ID)
+	if !strings.Contains(rawDraftJSON, `"source":{"name":"Nightcrawler Disc"}`) {
+		t.Fatalf("expected draft_json to preserve payload, got %q", rawDraftJSON)
+	}
 
 	logBody, err := jobStore.GetJobLog(created.ID)
 	if err != nil {
@@ -62,11 +69,15 @@ func TestSQLiteJobStoreCreateListGetAndLog(t *testing.T) {
 	if !strings.Contains(logBody, "00800.MPLS") {
 		t.Fatalf("expected playlist in log text, got %q", logBody)
 	}
+	logPath := filepath.Join(logsDir, created.ID+".log")
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("expected log file %s to exist: %v", logPath, err)
+	}
 }
 
 func TestSQLiteJobStoreGetMissingReturnsErrJobNotFound(t *testing.T) {
 	db := openJobsTestDB(t)
-	jobStore := NewSQLiteJobStore(db)
+	jobStore := NewSQLiteJobStore(db, t.TempDir())
 
 	_, err := jobStore.GetJob("missing")
 	if !errors.Is(err, ErrJobNotFound) {
@@ -84,4 +95,13 @@ func openJobsTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Migrate returned error: %v", err)
 	}
 	return db
+}
+
+func getDraftJSONForJob(t *testing.T, db *sql.DB, id string) string {
+	t.Helper()
+	var draftJSON string
+	if err := db.QueryRow(`select draft_json from jobs where id = ?`, id).Scan(&draftJSON); err != nil {
+		t.Fatalf("failed to load draft_json: %v", err)
+	}
+	return draftJSON
 }
