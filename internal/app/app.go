@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -24,6 +26,7 @@ type App struct {
 	DB          *sql.DB
 	Sessions    *store.SessionStore
 	Handler     http.Handler
+	logFile     *os.File
 	queueCancel context.CancelFunc
 	queueDone   chan struct{}
 }
@@ -32,15 +35,21 @@ func New(cfg config.Config) (*App, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		return nil, err
 	}
+	logFile, err := initAppLogger(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
 
 	dbPath := filepath.Join(cfg.DataDir, "app.db")
 	db, err := store.Open(dbPath)
 	if err != nil {
+		_ = logFile.Close()
 		return nil, err
 	}
 
 	if err := store.Migrate(db); err != nil {
 		_ = db.Close()
+		_ = logFile.Close()
 		return nil, err
 	}
 
@@ -91,6 +100,7 @@ func New(cfg config.Config) (*App, error) {
 		DB:          db,
 		Sessions:    sessionStore,
 		Handler:     handler,
+		logFile:     logFile,
 		queueCancel: queueCancel,
 		queueDone:   queueDone,
 	}, nil
@@ -107,9 +117,29 @@ func (a *App) Close() error {
 		<-a.queueDone
 	}
 	if a.DB == nil {
+		if a.logFile != nil {
+			return a.logFile.Close()
+		}
 		return nil
 	}
-	return a.DB.Close()
+	err := a.DB.Close()
+	if a.logFile != nil {
+		if closeErr := a.logFile.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	return err
+}
+
+func initAppLogger(dataDir string) (*os.File, error) {
+	logPath := filepath.Join(dataDir, "app.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	log.SetFlags(log.LstdFlags | log.LUTC | log.Lmicroseconds)
+	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
+	return logFile, nil
 }
 
 func withFrontend(apiHandler http.Handler, distDir string) http.Handler {

@@ -113,6 +113,13 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
+	streamPath := filepath.Join(sourcePath, "BDMV", "STREAM", "00005.m2ts")
+	if err := os.MkdirAll(filepath.Dir(streamPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
 
 	h := NewSourcesHandler(inputRoot, "/custom/remux", stubSourceScanner{
 		items: []media.SourceEntry{
@@ -195,7 +202,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if !body.DVMergeEnabled {
 		t.Fatal("expected dvMergeEnabled to be true")
 	}
-	if len(body.SegmentPaths) != 1 || !strings.HasSuffix(body.SegmentPaths[0], "/BDMV/STREAM/00005.M2TS") {
+	if len(body.SegmentPaths) != 1 || !strings.HasSuffix(strings.ToLower(body.SegmentPaths[0]), "/bdmv/stream/00005.m2ts") {
 		t.Fatalf("expected segment path from FILES section, got %+v", body.SegmentPaths)
 	}
 	if body.Video.Codec != "HEVC" || body.Video.Resolution != "2160p" || body.Video.HDRType != "HDR.DV" {

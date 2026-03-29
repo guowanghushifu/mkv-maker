@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -181,6 +182,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	}
 	playlistPath, err := findPlaylistFilePath(source.Path, playlistName)
 	if err != nil {
+		log.Printf("resolve source=%s playlist=%s: playlist lookup failed: %v", source.Path, playlistName, err)
 		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 			return
@@ -195,6 +197,15 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	}
 	inspection, err := h.Inspector.Inspect(inspectPath)
 	if err != nil {
+		log.Printf(
+			"resolve source=%s playlist=%s playlistPath=%s inspectPath=%s segments=%q: playlist inspection failed: %v",
+			source.Path,
+			playlistName,
+			playlistPath,
+			inspectPath,
+			segmentPaths,
+			err,
+		)
 		http.Error(w, "failed to inspect playlist tracks", http.StatusInternalServerError)
 		return
 	}
@@ -358,6 +369,30 @@ func findPlaylistFilePath(sourcePath, playlistName string) (string, error) {
 	return "", os.ErrNotExist
 }
 
+func findStreamFilePath(sourcePath, streamName string) (string, error) {
+	streamDir := filepath.Join(sourcePath, "BDMV", "STREAM")
+	exactPath := filepath.Join(streamDir, streamName)
+	if _, err := os.Stat(exactPath); err == nil {
+		return exactPath, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	entries, err := os.ReadDir(streamDir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.EqualFold(entry.Name(), streamName) {
+			return filepath.Join(streamDir, entry.Name()), nil
+		}
+	}
+	return "", os.ErrNotExist
+}
+
 func compactLabels(labels []string) []string {
 	out := make([]string, 0, len(labels))
 	for _, label := range labels {
@@ -417,7 +452,11 @@ func buildSegmentPaths(sourceRoot string, streamFiles []string) []string {
 		if name == "" {
 			continue
 		}
-		paths = append(paths, filepath.Join(sourceRoot, "BDMV", "STREAM", name))
+		path, err := findStreamFilePath(sourceRoot, name)
+		if err != nil {
+			continue
+		}
+		paths = append(paths, path)
 	}
 	return paths
 }
