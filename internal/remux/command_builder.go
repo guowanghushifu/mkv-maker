@@ -69,7 +69,7 @@ func BuildMKVMergeArgs(d Draft) []string {
 		args = append(args, "--engage", "merge_dolby_vision")
 	}
 
-	args = append(args, resolveInputPath(d))
+	args = append(args, resolveInputPaths(d)...)
 	return args
 }
 
@@ -93,22 +93,41 @@ func resolveTrackSelector(trackID string, index int) string {
 	return strconv.Itoa(index + 1)
 }
 
-func resolveInputPath(d Draft) string {
+func resolveInputPaths(d Draft) []string {
+	if len(d.SegmentPaths) > 0 {
+		args := make([]string, 0, len(d.SegmentPaths)*2-1)
+		for i, path := range d.SegmentPaths {
+			if strings.TrimSpace(path) == "" {
+				continue
+			}
+			if len(args) > 0 {
+				args = append(args, "+")
+			}
+			args = append(args, path)
+			if i == len(d.SegmentPaths)-1 {
+				break
+			}
+		}
+		if len(args) > 0 {
+			return args
+		}
+	}
+
 	sourcePath := strings.TrimSpace(d.SourcePath)
 	if sourcePath == "" {
-		return sourcePath
+		return nil
 	}
 	if strings.EqualFold(filepath.Ext(sourcePath), ".MPLS") {
-		return sourcePath
+		return []string{sourcePath}
 	}
 	if d.Playlist == "" {
-		return sourcePath
+		return []string{sourcePath}
 	}
 	playlist := strings.TrimSpace(d.Playlist)
 
 	if strings.EqualFold(filepath.Base(sourcePath), "BDMV") {
-		return filepath.Join(sourcePath, "PLAYLIST", playlist)
+		return []string{filepath.Join(sourcePath, "PLAYLIST", playlist)}
 	}
 
-	return filepath.Join(sourcePath, "BDMV", "PLAYLIST", playlist)
+	return []string{filepath.Join(sourcePath, "BDMV", "PLAYLIST", playlist)}
 }

@@ -137,7 +137,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			"discTitle":"Nightcrawler",
 			"audioLabels":["English Dolby TrueHD/Atmos Audio","普通话","国配简体特效"],
 			"subtitleLabels":["国配简体特效","简英特效"],
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer"
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer\nFILES:\nName            Time In         Length          Size            Total Bitrate\n00005.M2TS      0:00:00.000     1:57:49.645     86043982848     97.43"
 		}
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/Nightcrawler/resolve", strings.NewReader(reqBody))
@@ -152,11 +152,12 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	}
 
 	var body struct {
-		SourceID       string `json:"sourceId"`
-		PlaylistName   string `json:"playlistName"`
-		OutputDir      string `json:"outputDir"`
-		Title          string `json:"title"`
-		DVMergeEnabled bool   `json:"dvMergeEnabled"`
+		SourceID       string   `json:"sourceId"`
+		PlaylistName   string   `json:"playlistName"`
+		OutputDir      string   `json:"outputDir"`
+		Title          string   `json:"title"`
+		DVMergeEnabled bool     `json:"dvMergeEnabled"`
+		SegmentPaths   []string `json:"segmentPaths"`
 		Video          struct {
 			Name       string `json:"name"`
 			Codec      string `json:"codec"`
@@ -193,6 +194,9 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	}
 	if !body.DVMergeEnabled {
 		t.Fatal("expected dvMergeEnabled to be true")
+	}
+	if len(body.SegmentPaths) != 1 || !strings.HasSuffix(body.SegmentPaths[0], "/BDMV/STREAM/00005.M2TS") {
+		t.Fatalf("expected segment path from FILES section, got %+v", body.SegmentPaths)
 	}
 	if body.Video.Codec != "HEVC" || body.Video.Resolution != "2160p" || body.Video.HDRType != "HDR.DV" {
 		t.Fatalf("unexpected video %+v", body.Video)

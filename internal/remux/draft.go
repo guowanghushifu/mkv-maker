@@ -1,14 +1,15 @@
 package remux
 
 type Draft struct {
-	Title      string
-	SourcePath string
-	Playlist   string
-	OutputPath string
-	EnableDV   bool
-	Video      VideoTrack
-	Audio      []AudioTrack
-	Subtitles  []SubtitleTrack
+	Title        string
+	SourcePath   string
+	Playlist     string
+	OutputPath   string
+	EnableDV     bool
+	SegmentPaths []string
+	Video        VideoTrack
+	Audio        []AudioTrack
+	Subtitles    []SubtitleTrack
 }
 
 type VideoTrack struct {

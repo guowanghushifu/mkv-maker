@@ -41,6 +41,7 @@ export type Draft = {
   playlistName?: string;
   outputDir?: string;
   dvMergeEnabled?: boolean;
+  segmentPaths?: string[];
   video: DraftVideo;
   audio: DraftTrack[];
   subtitles: DraftTrack[];

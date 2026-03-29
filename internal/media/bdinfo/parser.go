@@ -18,6 +18,7 @@ type Parsed struct {
 	AudioLabels    []string `json:"audioLabels"`
 	SubtitleLabels []string `json:"subtitleLabels"`
 	RawText        string   `json:"rawText"`
+	StreamFiles    []string `json:"-"`
 	Video          Video    `json:"-"`
 	DVMergeEnabled bool     `json:"-"`
 }
@@ -37,6 +38,7 @@ const (
 	sectionVideo
 	sectionAudio
 	sectionSubtitles
+	sectionFiles
 )
 
 type audioRow struct {
@@ -120,6 +122,9 @@ func Parse(rawText string) (Parsed, error) {
 		case strings.HasPrefix(upperLine, "SUBTITLES:"):
 			currentSection = sectionSubtitles
 			foundField = true
+		case strings.HasPrefix(upperLine, "FILES:"):
+			currentSection = sectionFiles
+			foundField = true
 		case strings.HasPrefix(upperLine, "SUBTITLE:"):
 			inline := strings.TrimSpace(strings.TrimPrefix(line, "SUBTITLE:"))
 			if inline != "" {
@@ -155,6 +160,11 @@ func Parse(rawText string) (Parsed, error) {
 			case sectionSubtitles:
 				if row, ok := parseSubtitleTableRow(line); ok {
 					subtitleRows = append(subtitleRows, row)
+					foundField = true
+				}
+			case sectionFiles:
+				if name, ok := parseFileTableRow(line); ok {
+					parsed.StreamFiles = append(parsed.StreamFiles, name)
 					foundField = true
 				}
 			}
@@ -267,6 +277,23 @@ func parseSubtitleTableRow(line string) (subtitleRow, bool) {
 		row.Description = columns[len(columns)-1]
 	}
 	return row, true
+}
+
+func parseFileTableRow(line string) (string, bool) {
+	if shouldIgnoreTableLine(line) {
+		return "", false
+	}
+	columns := splitColumns(line)
+	if len(columns) == 0 {
+		return "", false
+	}
+	if strings.EqualFold(columns[0], "Name") {
+		return "", false
+	}
+	if strings.HasSuffix(strings.ToUpper(columns[0]), ".M2TS") {
+		return columns[0], true
+	}
+	return "", false
 }
 
 func splitColumns(line string) []string {

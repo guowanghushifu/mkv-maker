@@ -57,6 +57,7 @@ type resolveSourceResponse struct {
 	OutputDir      string         `json:"outputDir"`
 	Title          string         `json:"title"`
 	DVMergeEnabled bool           `json:"dvMergeEnabled"`
+	SegmentPaths   []string       `json:"segmentPaths,omitempty"`
 	Video          resolveVideo   `json:"video"`
 	Audio          []resolveTrack `json:"audio"`
 	Subtitles      []resolveTrack `json:"subtitles"`
@@ -187,7 +188,12 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to validate playlist", http.StatusInternalServerError)
 		return
 	}
-	inspection, err := h.Inspector.Inspect(playlistPath)
+	segmentPaths := buildSegmentPaths(source.Path, parsed.StreamFiles)
+	inspectPath := playlistPath
+	if len(segmentPaths) > 0 {
+		inspectPath = segmentPaths[0]
+	}
+	inspection, err := h.Inspector.Inspect(inspectPath)
 	if err != nil {
 		http.Error(w, "failed to inspect playlist tracks", http.StatusInternalServerError)
 		return
@@ -217,6 +223,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		OutputDir:      fallbackString(h.OutputDir, "/remux"),
 		Title:          title,
 		DVMergeEnabled: dvMergeEnabled,
+		SegmentPaths:   segmentPaths,
 		Video:          video,
 		Audio:          buildResolveTracks(audioLabels, inspection.AudioTrackIDs, false),
 		Subtitles:      buildResolveTracks(subtitleLabels, inspection.SubtitleTrackIDs, true),
@@ -401,6 +408,18 @@ func buildResolveTracks(labels []string, trackIDs []string, subtitles bool) []re
 		tracks = append(tracks, track)
 	}
 	return tracks
+}
+
+func buildSegmentPaths(sourceRoot string, streamFiles []string) []string {
+	paths := make([]string, 0, len(streamFiles))
+	for _, name := range streamFiles {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		paths = append(paths, filepath.Join(sourceRoot, "BDMV", "STREAM", name))
+	}
+	return paths
 }
 
 type MKVMergePlaylistInspector struct {

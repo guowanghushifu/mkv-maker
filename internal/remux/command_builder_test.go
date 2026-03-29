@@ -45,6 +45,21 @@ func TestBuildMKVMergeArgsUsesPlaylistFileForBluRayFolderSource(t *testing.T) {
 	}
 }
 
+func TestBuildMKVMergeArgsUsesSegmentPathsWhenPresent(t *testing.T) {
+	draft := Draft{
+		OutputPath:   "/remux/out.mkv",
+		SourcePath:   "/bd_input/Nightcrawler",
+		Playlist:     "00800.MPLS",
+		SegmentPaths: []string{"/bd_input/Nightcrawler/BDMV/STREAM/00005.m2ts", "/bd_input/Nightcrawler/BDMV/STREAM/00006.m2ts"},
+	}
+
+	args := BuildMKVMergeArgs(draft)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "/bd_input/Nightcrawler/BDMV/STREAM/00005.m2ts + /bd_input/Nightcrawler/BDMV/STREAM/00006.m2ts") {
+		t.Fatalf("expected segment paths to be used for input, got %q", joined)
+	}
+}
+
 func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",

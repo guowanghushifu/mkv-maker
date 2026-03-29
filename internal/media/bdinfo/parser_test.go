@@ -34,7 +34,13 @@ Language                        Bitrate         Description
 --------                        -------         -----------
 Chinese                         23.123 kbps     国配简体特效
 English                         18.200 kbps     简英特效
-English                         17.000 kbps`
+English                         17.000 kbps
+
+FILES:
+
+Name            Time In         Length          Size            Total Bitrate
+----            -------         ------          ----            -------------
+00005.M2TS      0:00:00.000     1:57:49.645     86,624,038,080  76,229`
 
 func TestParseExtractsPlaylistAndFrontendFieldsFromTables(t *testing.T) {
 	parsed, err := Parse(sampleBDInfo)
@@ -82,6 +88,9 @@ func TestParseExtractsPlaylistAndFrontendFieldsFromTables(t *testing.T) {
 	}
 	if !reflect.DeepEqual(parsed.SubtitleLabels, expectedSubtitles) {
 		t.Fatalf("expected subtitle labels %+v, got %+v", expectedSubtitles, parsed.SubtitleLabels)
+	}
+	if !reflect.DeepEqual(parsed.StreamFiles, []string{"00005.M2TS"}) {
+		t.Fatalf("expected parsed stream files, got %+v", parsed.StreamFiles)
 	}
 }
 

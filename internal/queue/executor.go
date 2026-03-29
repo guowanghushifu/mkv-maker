@@ -123,6 +123,7 @@ type executionPayload struct {
 		Title        string                `json:"title"`
 		PlaylistName string                `json:"playlistName"`
 		EnableDV     bool                  `json:"dvMergeEnabled"`
+		SegmentPaths []string              `json:"segmentPaths"`
 		Video        remux.VideoTrack      `json:"video"`
 		Audio        []remux.AudioTrack    `json:"audio"`
 		Subtitles    []remux.SubtitleTrack `json:"subtitles"`
@@ -168,13 +169,14 @@ func buildExecutionDraft(job store.ExecutionJob) (remux.Draft, error) {
 	}
 
 	return remux.Draft{
-		Title:      strings.TrimSpace(payload.Draft.Title),
-		SourcePath: sourcePath,
-		OutputPath: outputPath,
-		EnableDV:   payload.Draft.EnableDV,
-		Video:      payload.Draft.Video,
-		Audio:      payload.Draft.Audio,
-		Subtitles:  payload.Draft.Subtitles,
+		Title:        strings.TrimSpace(payload.Draft.Title),
+		SourcePath:   sourcePath,
+		OutputPath:   outputPath,
+		EnableDV:     payload.Draft.EnableDV,
+		SegmentPaths: payload.Draft.SegmentPaths,
+		Video:        payload.Draft.Video,
+		Audio:        payload.Draft.Audio,
+		Subtitles:    payload.Draft.Subtitles,
 	}, nil
 }
 
