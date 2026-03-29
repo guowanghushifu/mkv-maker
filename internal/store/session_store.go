@@ -54,3 +54,12 @@ func (s *SessionStore) Valid(token string) (bool, error) {
 	}
 	return count == 1, nil
 }
+
+func (s *SessionStore) Delete(token string) error {
+	if token == "" {
+		return nil
+	}
+
+	_, err := s.db.Exec(`delete from sessions where token = ?`, token)
+	return err
+}

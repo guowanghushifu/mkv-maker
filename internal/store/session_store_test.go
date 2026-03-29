@@ -44,6 +44,28 @@ func TestSessionStoreRejectsExpiredSession(t *testing.T) {
 	}
 }
 
+func TestSessionStoreDeleteRemovesSession(t *testing.T) {
+	db := openTestDB(t)
+	store := NewSessionStore(db, time.Hour)
+
+	token, err := store.Create("127.0.0.1")
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	if err := store.Delete(token); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+
+	ok, err := store.Valid(token)
+	if err != nil {
+		t.Fatalf("Valid returned error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected deleted session to be invalid")
+	}
+}
+
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")

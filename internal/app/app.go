@@ -63,6 +63,7 @@ func New(cfg config.Config) (*App, error) {
 		BDInfoParse:    bdinfoHandler.Parse,
 		DraftsPreview:  draftsHandler.PreviewFilename,
 		JobsList:       jobsHandler.List,
+		JobsCreate:     jobsHandler.Create,
 		JobsGet:        jobsHandler.Get,
 		JobsLog:        jobsHandler.Log,
 	})

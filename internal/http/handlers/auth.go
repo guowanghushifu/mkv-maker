@@ -60,6 +60,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.Sessions != nil {
+		if cookie, err := r.Cookie(middleware.SessionCookieName); err == nil {
+			if err := h.Sessions.Delete(cookie.Value); err != nil {
+				http.Error(w, "failed to delete session", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     middleware.SessionCookieName,
 		Value:    "",

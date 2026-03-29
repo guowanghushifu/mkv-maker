@@ -18,10 +18,37 @@ func TestProtectedRouteRejectsAnonymousRequests(t *testing.T) {
 	}
 }
 
+func TestProtectedPostJobsUsesCreateHandler(t *testing.T) {
+	router := NewRouter(testDependenciesWithAuthBypass(func(deps *Dependencies) {
+		deps.JobsCreate = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+		}
+		deps.JobsList = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", res.Code)
+	}
+}
+
 func testDependencies() Dependencies {
+	return testDependenciesWithAuthBypass(nil)
+}
+
+func testDependenciesWithAuthBypass(mutator func(*Dependencies)) Dependencies {
 	noop := func(http.ResponseWriter, *http.Request) {}
-	return Dependencies{
+	deps := Dependencies{
 		RequireAuth: func(next http.Handler) http.Handler {
+			if mutator != nil {
+				return next
+			}
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 			})
@@ -35,7 +62,12 @@ func testDependencies() Dependencies {
 		BDInfoParse:    noop,
 		DraftsPreview:  noop,
 		JobsList:       noop,
+		JobsCreate:     noop,
 		JobsGet:        noop,
 		JobsLog:        noop,
 	}
+	if mutator != nil {
+		mutator(&deps)
+	}
+	return deps
 }
