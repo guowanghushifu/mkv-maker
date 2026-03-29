@@ -85,6 +85,114 @@ func TestSQLiteJobStoreGetMissingReturnsErrJobNotFound(t *testing.T) {
 	}
 }
 
+func TestSQLiteJobStoreClaimTransitionAndPayloadReplay(t *testing.T) {
+	db := openJobsTestDB(t)
+	logsDir := t.TempDir()
+	jobStore := NewSQLiteJobStore(db, logsDir)
+
+	created, err := jobStore.CreateQueuedJob(CreateJobInput{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler - 2160p.mkv",
+		OutputPath:   "/remux/Nightcrawler - 2160p.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Nightcrawler Disc","path":"/bd_input/Nightcrawler","type":"bdmv"},
+			"bdinfo":{"playlistName":"00800.MPLS"},
+			"draft":{"playlistName":"00800.MPLS","audio":[{"id":"1","name":"English","language":"eng","selected":true,"default":true}]},
+			"outputFilename":"Nightcrawler - 2160p.mkv",
+			"outputPath":"/remux/Nightcrawler - 2160p.mkv"
+		}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateQueuedJob returned error: %v", err)
+	}
+
+	claimed, ok, err := jobStore.ClaimNextQueuedJob()
+	if err != nil {
+		t.Fatalf("ClaimNextQueuedJob returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected queued job to be claimed")
+	}
+	if claimed.ID != created.ID {
+		t.Fatalf("expected claimed job id %q, got %q", created.ID, claimed.ID)
+	}
+	if strings.TrimSpace(claimed.PayloadJSON) == "" {
+		t.Fatal("expected claimed job to include payload JSON")
+	}
+
+	payloadJSON, err := jobStore.GetJobPayloadJSON(created.ID)
+	if err != nil {
+		t.Fatalf("GetJobPayloadJSON returned error: %v", err)
+	}
+	if !strings.Contains(payloadJSON, `"path":"/bd_input/Nightcrawler"`) {
+		t.Fatalf("expected payload replay data to include source path, got %q", payloadJSON)
+	}
+
+	if err := jobStore.MarkJobRunning(created.ID); err != nil {
+		t.Fatalf("MarkJobRunning returned error: %v", err)
+	}
+	if err := jobStore.AppendJobLog(created.ID, "\nworker started"); err != nil {
+		t.Fatalf("AppendJobLog returned error: %v", err)
+	}
+	if err := jobStore.MarkJobCompleted(created.ID); err != nil {
+		t.Fatalf("MarkJobCompleted returned error: %v", err)
+	}
+
+	got, err := jobStore.GetJob(created.ID)
+	if err != nil {
+		t.Fatalf("GetJob returned error: %v", err)
+	}
+	if got.Status != "succeeded" {
+		t.Fatalf("expected succeeded status, got %q", got.Status)
+	}
+	if got.Message != "" {
+		t.Fatalf("expected empty error message, got %q", got.Message)
+	}
+
+	logBody, err := jobStore.GetJobLog(created.ID)
+	if err != nil {
+		t.Fatalf("GetJobLog returned error: %v", err)
+	}
+	if !strings.Contains(logBody, "worker started") {
+		t.Fatalf("expected appended log content, got %q", logBody)
+	}
+}
+
+func TestSQLiteJobStoreMarkJobFailedPersistsMessage(t *testing.T) {
+	db := openJobsTestDB(t)
+	jobStore := NewSQLiteJobStore(db, t.TempDir())
+
+	created, err := jobStore.CreateQueuedJob(CreateJobInput{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler - 2160p.mkv",
+		OutputPath:   "/remux/Nightcrawler - 2160p.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  `{"source":{"name":"Nightcrawler Disc"}}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateQueuedJob returned error: %v", err)
+	}
+
+	if err := jobStore.MarkJobRunning(created.ID); err != nil {
+		t.Fatalf("MarkJobRunning returned error: %v", err)
+	}
+	if err := jobStore.MarkJobFailed(created.ID, "mkvmerge executable not found"); err != nil {
+		t.Fatalf("MarkJobFailed returned error: %v", err)
+	}
+
+	got, err := jobStore.GetJob(created.ID)
+	if err != nil {
+		t.Fatalf("GetJob returned error: %v", err)
+	}
+	if got.Status != "failed" {
+		t.Fatalf("expected failed status, got %q", got.Status)
+	}
+	if !strings.Contains(got.Message, "not found") {
+		t.Fatalf("expected failure message to be persisted, got %q", got.Message)
+	}
+}
+
 func openJobsTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")

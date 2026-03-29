@@ -1,16 +1,27 @@
 package queue
 
-import "github.com/wangdazhuo/mkv-maker/internal/store"
+import (
+	"context"
+	"time"
 
-type Manager struct {
-	store  store.JobStore
-	worker any
+	"github.com/wangdazhuo/mkv-maker/internal/store"
+)
+
+type Worker interface {
+	ExecuteNext(ctx context.Context) (bool, error)
 }
 
-func NewManager(jobStore store.JobStore, worker any) *Manager {
+type Manager struct {
+	store        store.JobStore
+	worker       Worker
+	pollInterval time.Duration
+}
+
+func NewManager(jobStore store.JobStore, worker Worker) *Manager {
 	return &Manager{
-		store:  jobStore,
-		worker: worker,
+		store:        jobStore,
+		worker:       worker,
+		pollInterval: 1 * time.Second,
 	}
 }
 
@@ -19,4 +30,49 @@ func (m *Manager) Recover() error {
 		return nil
 	}
 	return m.store.MarkRunningJobsInterrupted()
+}
+
+func (m *Manager) Run(ctx context.Context) {
+	if m == nil {
+		return
+	}
+	if err := m.Recover(); err != nil {
+		waitForNextPoll(ctx, m.pollInterval)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if m.worker == nil {
+			waitForNextPoll(ctx, m.pollInterval)
+			continue
+		}
+
+		processed, err := m.worker.ExecuteNext(ctx)
+		if err != nil {
+			waitForNextPoll(ctx, m.pollInterval)
+			continue
+		}
+		if processed {
+			continue
+		}
+		waitForNextPoll(ctx, m.pollInterval)
+	}
+}
+
+func waitForNextPoll(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 250 * time.Millisecond
+	}
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
 }

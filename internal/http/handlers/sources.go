@@ -197,8 +197,8 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		Title:          title,
 		DVMergeEnabled: dvMergeEnabled,
 		Video:          video,
-		Audio:          buildResolveTracks("a", audioLabels, false),
-		Subtitles:      buildResolveTracks("s", subtitleLabels, true),
+		Audio:          buildResolveTracks(audioLabels, false, 0),
+		Subtitles:      buildResolveTracks(subtitleLabels, true, len(audioLabels)),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -307,11 +307,11 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func buildResolveTracks(prefix string, labels []string, subtitles bool) []resolveTrack {
+func buildResolveTracks(labels []string, subtitles bool, baseIndex int) []resolveTrack {
 	tracks := make([]resolveTrack, 0, len(labels))
 	for i, label := range labels {
 		track := resolveTrack{
-			ID:         prefix + "-" + strconv.Itoa(i+1),
+			ID:         strconv.Itoa(baseIndex + i + 1),
 			Name:       label,
 			Language:   inferLanguage(label),
 			CodecLabel: normalizeCodecLabel(label),

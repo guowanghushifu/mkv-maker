@@ -8,6 +8,7 @@ type Draft struct {
 	EnableDV   bool
 	Video      VideoTrack
 	Audio      []AudioTrack
+	Subtitles  []SubtitleTrack
 }
 
 type VideoTrack struct {
@@ -24,6 +25,15 @@ type AudioTrack struct {
 	CodecLabel string
 	Default    bool
 	Selected   bool
+}
+
+type SubtitleTrack struct {
+	ID       string
+	Name     string
+	Language string
+	Default  bool
+	Selected bool
+	Forced   bool
 }
 
 func (d Draft) DefaultSelectedAudio() (AudioTrack, bool) {

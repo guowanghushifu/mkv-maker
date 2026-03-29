@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -14,14 +15,17 @@ import (
 	httpapi "github.com/wangdazhuo/mkv-maker/internal/http"
 	"github.com/wangdazhuo/mkv-maker/internal/http/handlers"
 	"github.com/wangdazhuo/mkv-maker/internal/http/middleware"
+	"github.com/wangdazhuo/mkv-maker/internal/queue"
 	"github.com/wangdazhuo/mkv-maker/internal/store"
 )
 
 type App struct {
-	Config   config.Config
-	DB       *sql.DB
-	Sessions *store.SessionStore
-	Handler  http.Handler
+	Config      config.Config
+	DB          *sql.DB
+	Sessions    *store.SessionStore
+	Handler     http.Handler
+	queueCancel context.CancelFunc
+	queueDone   chan struct{}
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -53,7 +57,8 @@ func New(cfg config.Config) (*App, error) {
 	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, cfg.OutputDir, nil)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
-	jobsHandler := handlers.NewJobsHandler(store.NewSQLiteJobStore(db, filepath.Join(cfg.DataDir, "logs")))
+	jobStore := store.NewSQLiteJobStore(db, filepath.Join(cfg.DataDir, "logs"))
+	jobsHandler := handlers.NewJobsHandler(jobStore)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		RequireAuth:    middleware.RequireAuth(sessionStore),
@@ -73,16 +78,35 @@ func New(cfg config.Config) (*App, error) {
 
 	handler := withFrontend(router, filepath.Join("web", "dist"))
 
+	queueCtx, queueCancel := context.WithCancel(context.Background())
+	queueDone := make(chan struct{})
+	go func() {
+		manager := queue.NewManager(jobStore, queue.NewExecutor(jobStore, nil))
+		manager.Run(queueCtx)
+		close(queueDone)
+	}()
+
 	return &App{
-		Config:   cfg,
-		DB:       db,
-		Sessions: sessionStore,
-		Handler:  handler,
+		Config:      cfg,
+		DB:          db,
+		Sessions:    sessionStore,
+		Handler:     handler,
+		queueCancel: queueCancel,
+		queueDone:   queueDone,
 	}, nil
 }
 
 func (a *App) Close() error {
-	if a == nil || a.DB == nil {
+	if a == nil {
+		return nil
+	}
+	if a.queueCancel != nil {
+		a.queueCancel()
+	}
+	if a.queueDone != nil {
+		<-a.queueDone
+	}
+	if a.DB == nil {
 		return nil
 	}
 	return a.DB.Close()

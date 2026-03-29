@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -21,6 +22,8 @@ type listJobsResponse struct {
 type createJobRequest struct {
 	Source struct {
 		Name string `json:"name"`
+		Path string `json:"path"`
+		Type string `json:"type"`
 	} `json:"source"`
 	BDInfo struct {
 		PlaylistName string `json:"playlistName"`
@@ -70,15 +73,29 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req createJobRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	payloadJSON, err := json.Marshal(req)
-	if err != nil {
-		http.Error(w, "failed to encode job payload", http.StatusInternalServerError)
+
+	var req createJobRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
+	}
+	if sourceType := strings.TrimSpace(req.Source.Type); sourceType != "" && !strings.EqualFold(sourceType, "bdmv") {
+		http.Error(w, "only bdmv sources are supported", http.StatusBadRequest)
+		return
+	}
+	payloadJSON := strings.TrimSpace(string(body))
+	if payloadJSON == "" {
+		encoded, err := json.Marshal(req)
+		if err != nil {
+			http.Error(w, "failed to encode job payload", http.StatusInternalServerError)
+			return
+		}
+		payloadJSON = string(encoded)
 	}
 
 	playlistName := strings.TrimSpace(req.BDInfo.PlaylistName)
@@ -90,7 +107,7 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OutputName:   strings.TrimSpace(req.OutputFilename),
 		OutputPath:   strings.TrimSpace(req.OutputPath),
 		PlaylistName: playlistName,
-		PayloadJSON:  string(payloadJSON),
+		PayloadJSON:  payloadJSON,
 	}
 	job, err := h.Store.CreateQueuedJob(input)
 	if err != nil {

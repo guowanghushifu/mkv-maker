@@ -16,6 +16,13 @@ type JobStore interface {
 	MarkRunningJobsInterrupted() error
 }
 
+type ExecutionJob struct {
+	ID          string
+	PayloadJSON string
+	OutputPath  string
+	LogPath     string
+}
+
 type APIJob struct {
 	ID           string `json:"id"`
 	SourceName   string `json:"sourceName"`
@@ -207,6 +214,97 @@ func (s *SQLiteJobStore) GetJobLog(id string) (string, error) {
 	return buildInitialJobLog(job.PlaylistName, job.OutputPath), nil
 }
 
+func (s *SQLiteJobStore) ClaimNextQueuedJob() (ExecutionJob, bool, error) {
+	if s == nil || s.db == nil {
+		return ExecutionJob{}, false, errors.New("job store is not configured")
+	}
+
+	var job ExecutionJob
+	err := s.db.QueryRow(`
+		select id, draft_json, output_path, log_path
+		from jobs
+		where status = 'queued'
+		order by datetime(created_at) asc, id asc
+		limit 1
+	`).Scan(&job.ID, &job.PayloadJSON, &job.OutputPath, &job.LogPath)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ExecutionJob{}, false, nil
+		}
+		return ExecutionJob{}, false, err
+	}
+
+	job.ID = strings.TrimSpace(job.ID)
+	job.PayloadJSON = strings.TrimSpace(job.PayloadJSON)
+	job.OutputPath = strings.TrimSpace(job.OutputPath)
+	job.LogPath = strings.TrimSpace(job.LogPath)
+	return job, true, nil
+}
+
+func (s *SQLiteJobStore) MarkJobRunning(id string) error {
+	return s.updateStatus(strings.TrimSpace(id), "running", "", "queued")
+}
+
+func (s *SQLiteJobStore) MarkJobCompleted(id string) error {
+	return s.updateStatus(strings.TrimSpace(id), "succeeded", "", "")
+}
+
+func (s *SQLiteJobStore) MarkJobFailed(id, message string) error {
+	return s.updateStatus(strings.TrimSpace(id), "failed", strings.TrimSpace(message), "")
+}
+
+func (s *SQLiteJobStore) AppendJobLog(id, content string) error {
+	if s == nil || s.db == nil {
+		return errors.New("job store is not configured")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrJobNotFound
+	}
+	if content == "" {
+		return nil
+	}
+
+	logPath, err := s.ensureLogPath(id)
+	if err != nil {
+		return err
+	}
+	if logPath == "" {
+		return nil
+	}
+
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(content); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SQLiteJobStore) GetJobPayloadJSON(id string) (string, error) {
+	if s == nil || s.db == nil {
+		return "", errors.New("job store is not configured")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", ErrJobNotFound
+	}
+
+	var payloadJSON string
+	err := s.db.QueryRow(`select draft_json from jobs where id = ?`, id).Scan(&payloadJSON)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrJobNotFound
+		}
+		return "", err
+	}
+	return strings.TrimSpace(payloadJSON), nil
+}
+
 func (s *SQLiteJobStore) MarkRunningJobsInterrupted() error {
 	if s == nil || s.db == nil {
 		return nil
@@ -251,6 +349,88 @@ func buildAPIJob(id, status, draftJSON, outputPath, errorText, createdAt string)
 		Status:       fallback(status, "queued"),
 		Message:      strings.TrimSpace(errorText),
 	}
+}
+
+func (s *SQLiteJobStore) ensureLogPath(id string) (string, error) {
+	var logPath string
+	err := s.db.QueryRow(`select log_path from jobs where id = ?`, id).Scan(&logPath)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrJobNotFound
+		}
+		return "", err
+	}
+	logPath = strings.TrimSpace(logPath)
+	if logPath != "" {
+		return logPath, nil
+	}
+
+	if s.logsDir == "" {
+		return "", nil
+	}
+	if err := os.MkdirAll(s.logsDir, 0o755); err != nil {
+		return "", err
+	}
+	logPath = filepath.Join(s.logsDir, id+".log")
+	if _, err := s.db.Exec(`update jobs set log_path = ? where id = ?`, logPath, id); err != nil {
+		return "", err
+	}
+	return logPath, nil
+}
+
+func (s *SQLiteJobStore) updateStatus(id, status, errorText, requireCurrentStatus string) error {
+	if s == nil || s.db == nil {
+		return errors.New("job store is not configured")
+	}
+	if id == "" {
+		return ErrJobNotFound
+	}
+
+	var (
+		res sql.Result
+		err error
+	)
+	switch {
+	case status == "running":
+		if requireCurrentStatus == "" {
+			requireCurrentStatus = "queued"
+		}
+		res, err = s.db.Exec(`
+			update jobs
+			set status = ?,
+			    error_text = '',
+			    started_at = coalesce(started_at, current_timestamp),
+			    finished_at = null
+			where id = ? and status = ?
+		`, status, id, requireCurrentStatus)
+	case errorText == "":
+		res, err = s.db.Exec(`
+			update jobs
+			set status = ?,
+			    error_text = '',
+			    finished_at = current_timestamp
+			where id = ?
+		`, status, id)
+	default:
+		res, err = s.db.Exec(`
+			update jobs
+			set status = ?,
+			    error_text = ?,
+			    finished_at = current_timestamp
+			where id = ?
+		`, status, errorText, id)
+	}
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrJobNotFound
+	}
+	return nil
 }
 
 func decodeJobMetadata(value string) persistedJobMetadata {

@@ -186,6 +186,12 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if len(body.Audio) != 3 || len(body.Subtitles) != 2 {
 		t.Fatalf("expected 3 audio and 2 subtitles tracks, got %d and %d", len(body.Audio), len(body.Subtitles))
 	}
+	if body.Audio[0].ID != "1" || body.Audio[1].ID != "2" || body.Audio[2].ID != "3" {
+		t.Fatalf("expected stable numeric audio selectors 1..3, got %+v", body.Audio)
+	}
+	if body.Subtitles[0].ID != "4" || body.Subtitles[1].ID != "5" {
+		t.Fatalf("expected stable numeric subtitle selectors continuing after audio tracks, got %+v", body.Subtitles)
+	}
 	if !body.Audio[0].Default || !body.Audio[0].Selected {
 		t.Fatalf("expected first audio to be default+selected: %+v", body.Audio[0])
 	}
