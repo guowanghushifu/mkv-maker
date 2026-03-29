@@ -23,6 +23,15 @@ func (s stubSourceScanner) Scan(root string) ([]media.SourceEntry, error) {
 	return s.items, s.err
 }
 
+type stubPlaylistInspector struct {
+	result PlaylistInspection
+	err    error
+}
+
+func (s stubPlaylistInspector) Inspect(playlistPath string) (PlaylistInspection, error) {
+	return s.result, s.err
+}
+
 func TestSourcesHandlerListReturnsStructuredNotFoundError(t *testing.T) {
 	h := NewSourcesHandler("/missing/input", "/remux", stubSourceScanner{
 		err: &os.PathError{
@@ -30,7 +39,7 @@ func TestSourcesHandlerListReturnsStructuredNotFoundError(t *testing.T) {
 			Path: "/missing/input",
 			Err:  os.ErrNotExist,
 		},
-	})
+	}, stubPlaylistInspector{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sources", nil)
 	w := httptest.NewRecorder()
@@ -65,7 +74,7 @@ func TestSourcesHandlerListReturnsStructuredUnreadableError(t *testing.T) {
 			Path: "/restricted/input",
 			Err:  os.ErrPermission,
 		},
-	})
+	}, stubPlaylistInspector{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sources", nil)
 	w := httptest.NewRecorder()
@@ -113,6 +122,11 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 				Path: sourcePath,
 				Type: media.SourceBDMV,
 			},
+		},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:    []string{"2", "5", "7"},
+			SubtitleTrackIDs: []string{"9", "10"},
 		},
 	})
 
@@ -186,17 +200,17 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if len(body.Audio) != 3 || len(body.Subtitles) != 2 {
 		t.Fatalf("expected 3 audio and 2 subtitles tracks, got %d and %d", len(body.Audio), len(body.Subtitles))
 	}
-	if body.Audio[0].ID != "1" || body.Audio[1].ID != "2" || body.Audio[2].ID != "3" {
-		t.Fatalf("expected stable numeric audio selectors 1..3, got %+v", body.Audio)
-	}
-	if body.Subtitles[0].ID != "4" || body.Subtitles[1].ID != "5" {
-		t.Fatalf("expected stable numeric subtitle selectors continuing after audio tracks, got %+v", body.Subtitles)
-	}
 	if !body.Audio[0].Default || !body.Audio[0].Selected {
 		t.Fatalf("expected first audio to be default+selected: %+v", body.Audio[0])
 	}
+	if body.Audio[0].ID != "2" || body.Audio[1].ID != "5" || body.Audio[2].ID != "7" {
+		t.Fatalf("expected real audio track ids from inspector, got %+v", body.Audio)
+	}
 	if !body.Subtitles[0].Default || !body.Subtitles[0].Selected {
 		t.Fatalf("expected first subtitle to be default+selected: %+v", body.Subtitles[0])
+	}
+	if body.Subtitles[0].ID != "9" || body.Subtitles[1].ID != "10" {
+		t.Fatalf("expected real subtitle track ids from inspector, got %+v", body.Subtitles)
 	}
 }
 
@@ -217,7 +231,7 @@ func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 				Type: media.SourceBDMV,
 			},
 		},
-	})
+	}, stubPlaylistInspector{})
 
 	reqBody := `{"sourceId":"NoPlaylistDisc","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/NoPlaylistDisc/resolve", strings.NewReader(reqBody))
@@ -248,7 +262,7 @@ func TestSourcesHandlerResolveRejectsBDInfoPlaylistMismatch(t *testing.T) {
 			Path: sourcePath,
 			Type: media.SourceBDMV,
 		}},
-	})
+	}, stubPlaylistInspector{})
 
 	reqBody := `{"sourceId":"MismatchDisc","bdinfo":{"playlistName":"00999.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/MismatchDisc/resolve", strings.NewReader(reqBody))
@@ -271,7 +285,7 @@ func TestSourcesHandlerResolveRejectsUnknownSource(t *testing.T) {
 				Type: media.SourceBDMV,
 			},
 		},
-	})
+	}, stubPlaylistInspector{})
 
 	reqBody := `{"sourceId":"Missing","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/Missing/resolve", strings.NewReader(reqBody))

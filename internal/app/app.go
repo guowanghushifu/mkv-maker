@@ -54,7 +54,7 @@ func New(cfg config.Config) (*App, error) {
 		InputDir:  cfg.InputDir,
 		OutputDir: cfg.OutputDir,
 	}
-	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, cfg.OutputDir, nil)
+	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, cfg.OutputDir, nil, nil)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	jobStore := store.NewSQLiteJobStore(db, filepath.Join(cfg.DataDir, "logs"))

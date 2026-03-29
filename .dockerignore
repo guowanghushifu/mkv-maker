@@ -1,0 +1,9 @@
+.git
+.worktrees
+.superpowers
+.data
+node_modules
+web/node_modules
+web/dist
+coverage
+server

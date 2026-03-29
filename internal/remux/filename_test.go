@@ -58,3 +58,23 @@ func TestBuildFilenameAddsDVWhenEnabled(t *testing.T) {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
 }
+
+func TestBuildFilenameSanitizesIllegalCharacters(t *testing.T) {
+	draft := Draft{
+		Title: "Foo/Bar: The Cut",
+		Video: VideoTrack{
+			Resolution: "2160p",
+			Codec:      "HEVC",
+			HDRType:    "HDR",
+		},
+		Audio: []AudioTrack{
+			{CodecLabel: "DTS-HD.MA.5.1", Selected: true, Default: true},
+		},
+	}
+
+	got := BuildFilename(draft)
+	want := "FooBar The Cut - 2160p.BluRay.HDR.HEVC.DTS-HD.MA.5.1.mkv"
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}

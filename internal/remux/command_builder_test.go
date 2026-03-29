@@ -138,6 +138,9 @@ func TestBuildMKVMergeArgsIncludesSelectedSubtitlesAndTrackOrder(t *testing.T) {
 	if !strings.Contains(joined, "--forced-display-flag 12:yes") {
 		t.Fatalf("expected forced display flag for selector 12, got %q", joined)
 	}
+	if !strings.Contains(joined, "--default-track-flag 12:no") {
+		t.Fatalf("expected non-default subtitle selector 12 to be set to no, got %q", joined)
+	}
 	if !strings.Contains(joined, "--default-track-flag 13:yes") {
 		t.Fatalf("expected default track flag for subtitle selector 13, got %q", joined)
 	}
@@ -148,6 +151,26 @@ func TestBuildMKVMergeArgsIncludesSelectedSubtitlesAndTrackOrder(t *testing.T) {
 	}
 	if trackOrder != "0:0,0:7,0:12,0:13" {
 		t.Fatalf("expected track order \"0:0,0:7,0:12,0:13\", got %q", trackOrder)
+	}
+}
+
+func TestBuildMKVMergeArgsMarksNonDefaultAudioTracksAsNo(t *testing.T) {
+	draft := Draft{
+		OutputPath: "/remux/out.mkv",
+		SourcePath: "/bd_input/Nightcrawler",
+		Audio: []AudioTrack{
+			{ID: "7", Name: "English", Language: "eng", Selected: true, Default: true},
+			{ID: "8", Name: "Commentary", Language: "eng", Selected: true, Default: false},
+		},
+	}
+
+	args := BuildMKVMergeArgs(draft)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--default-track-flag 7:yes") {
+		t.Fatalf("expected selector 7 to be marked default, got %q", joined)
+	}
+	if !strings.Contains(joined, "--default-track-flag 8:no") {
+		t.Fatalf("expected selector 8 to be marked non-default, got %q", joined)
 	}
 }
 

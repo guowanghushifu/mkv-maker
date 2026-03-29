@@ -28,9 +28,11 @@ func BuildMKVMergeArgs(d Draft) []string {
 
 		args = append(args, "--language", audioSelector+":"+track.Language)
 		args = append(args, "--track-name", audioSelector+":"+track.Name)
+		defaultValue := "no"
 		if track.Default {
-			args = append(args, "--default-track-flag", audioSelector+":yes")
+			defaultValue = "yes"
 		}
+		args = append(args, "--default-track-flag", audioSelector+":"+defaultValue)
 	}
 
 	if len(audioSelectors) > 0 {
@@ -48,9 +50,11 @@ func BuildMKVMergeArgs(d Draft) []string {
 
 		args = append(args, "--language", subtitleSelector+":"+track.Language)
 		args = append(args, "--track-name", subtitleSelector+":"+track.Name)
+		defaultValue := "no"
 		if track.Default {
-			args = append(args, "--default-track-flag", subtitleSelector+":yes")
+			defaultValue = "yes"
 		}
+		args = append(args, "--default-track-flag", subtitleSelector+":"+defaultValue)
 		if track.Forced {
 			args = append(args, "--forced-display-flag", subtitleSelector+":yes")
 		}

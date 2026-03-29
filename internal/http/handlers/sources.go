@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -24,6 +25,7 @@ type SourcesHandler struct {
 	InputDir  string
 	OutputDir string
 	Scanner   SourceScanner
+	Inspector PlaylistInspector
 }
 
 type sourcesErrorResponse struct {
@@ -77,16 +79,29 @@ type resolveTrack struct {
 	Forced     bool   `json:"forced,omitempty"`
 }
 
+type PlaylistInspector interface {
+	Inspect(playlistPath string) (PlaylistInspection, error)
+}
+
+type PlaylistInspection struct {
+	AudioTrackIDs    []string
+	SubtitleTrackIDs []string
+}
+
 var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
 
-func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner) *SourcesHandler {
+func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector) *SourcesHandler {
 	if scanner == nil {
 		scanner = media.NewScanner()
+	}
+	if inspector == nil {
+		inspector = MKVMergePlaylistInspector{}
 	}
 	return &SourcesHandler{
 		InputDir:  inputDir,
 		OutputDir: outputDir,
 		Scanner:   scanner,
+		Inspector: inspector,
 	}
 }
 
@@ -172,6 +187,11 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to validate playlist", http.StatusInternalServerError)
 		return
 	}
+	inspection, err := h.Inspector.Inspect(playlistPath)
+	if err != nil {
+		http.Error(w, "failed to inspect playlist tracks", http.StatusInternalServerError)
+		return
+	}
 
 	audioLabels := compactLabels(req.BDInfo.AudioLabels)
 	if len(audioLabels) == 0 {
@@ -198,8 +218,8 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		Title:          title,
 		DVMergeEnabled: dvMergeEnabled,
 		Video:          video,
-		Audio:          buildResolveTracks(audioLabels, false, 0),
-		Subtitles:      buildResolveTracks(subtitleLabels, true, len(audioLabels)),
+		Audio:          buildResolveTracks(audioLabels, inspection.AudioTrackIDs, false),
+		Subtitles:      buildResolveTracks(subtitleLabels, inspection.SubtitleTrackIDs, true),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -308,11 +328,15 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func buildResolveTracks(labels []string, subtitles bool, baseIndex int) []resolveTrack {
+func buildResolveTracks(labels []string, trackIDs []string, subtitles bool) []resolveTrack {
 	tracks := make([]resolveTrack, 0, len(labels))
 	for i, label := range labels {
+		trackID := strconv.Itoa(i + 1)
+		if i < len(trackIDs) && strings.TrimSpace(trackIDs[i]) != "" {
+			trackID = strings.TrimSpace(trackIDs[i])
+		}
 		track := resolveTrack{
-			ID:         strconv.Itoa(baseIndex + i + 1),
+			ID:         trackID,
 			Name:       label,
 			Language:   inferLanguage(label),
 			CodecLabel: normalizeCodecLabel(label),
@@ -325,6 +349,48 @@ func buildResolveTracks(labels []string, subtitles bool, baseIndex int) []resolv
 		tracks = append(tracks, track)
 	}
 	return tracks
+}
+
+type MKVMergePlaylistInspector struct {
+	Binary string
+}
+
+type mkvmergeIdentifyPayload struct {
+	Tracks []struct {
+		ID   int    `json:"id"`
+		Type string `json:"type"`
+	} `json:"tracks"`
+}
+
+func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspection, error) {
+	binary := strings.TrimSpace(i.Binary)
+	if binary == "" {
+		binary = "mkvmerge"
+	}
+
+	output, err := exec.Command(binary, "-J", playlistPath).Output()
+	if err != nil {
+		return PlaylistInspection{}, err
+	}
+
+	var payload mkvmergeIdentifyPayload
+	if err := json.Unmarshal(output, &payload); err != nil {
+		return PlaylistInspection{}, err
+	}
+
+	result := PlaylistInspection{
+		AudioTrackIDs:    []string{},
+		SubtitleTrackIDs: []string{},
+	}
+	for _, track := range payload.Tracks {
+		switch strings.ToLower(strings.TrimSpace(track.Type)) {
+		case "audio":
+			result.AudioTrackIDs = append(result.AudioTrackIDs, strconv.Itoa(track.ID))
+		case "subtitles":
+			result.SubtitleTrackIDs = append(result.SubtitleTrackIDs, strconv.Itoa(track.ID))
+		}
+	}
+	return result, nil
 }
 
 func normalizeCodecLabel(label string) string {

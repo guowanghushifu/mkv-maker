@@ -1,6 +1,9 @@
 package remux
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 func BuildFilename(d Draft) string {
 	audioLabel := "UnknownAudio"
@@ -20,7 +23,7 @@ func BuildFilename(d Draft) string {
 		d.Video.Codec,
 		audioLabel,
 	}
-	return strings.Join(compact(parts), ".") + ".mkv"
+	return sanitizeFilename(strings.Join(compact(parts), ".")) + ".mkv"
 }
 
 func compact(in []string) []string {
@@ -31,4 +34,33 @@ func compact(in []string) []string {
 		}
 	}
 	return out
+}
+
+func sanitizeFilename(value string) string {
+	builder := strings.Builder{}
+	lastDot := false
+	lastSpace := false
+
+	for _, r := range value {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			builder.WriteRune(r)
+			lastDot = false
+			lastSpace = false
+		case r == '.' || r == '+' || r == '-':
+			if !lastDot && builder.Len() > 0 {
+				builder.WriteRune(r)
+				lastDot = r == '.'
+				lastSpace = false
+			}
+		case unicode.IsSpace(r):
+			if !lastSpace && builder.Len() > 0 {
+				builder.WriteRune(' ')
+				lastSpace = true
+				lastDot = false
+			}
+		}
+	}
+
+	return strings.Trim(builder.String(), " .")
 }
