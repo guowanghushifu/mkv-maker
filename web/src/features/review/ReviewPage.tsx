@@ -8,6 +8,8 @@ type ReviewPageProps = {
   outputFilename: string;
   outputPath: string;
   submitting: boolean;
+  startDisabled: boolean;
+  submitError: string | null;
   currentJob: Job | null;
   currentLog: string;
   onBack: () => void;
@@ -33,6 +35,8 @@ export function ReviewPage({
   outputFilename,
   outputPath,
   submitting,
+  startDisabled,
+  submitError,
   currentJob,
   currentLog,
   onBack,
@@ -95,10 +99,11 @@ export function ReviewPage({
         <button type="button" onClick={onBack}>
           Back
         </button>
-        <button type="button" onClick={() => void onSubmit()} disabled={submitting}>
+        <button type="button" onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
           {submitting ? 'Starting Remux...' : 'Start Remux'}
         </button>
       </div>
+      {submitError ? <p className="error-text">{submitError}</p> : null}
     </section>
   );
 }

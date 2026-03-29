@@ -39,6 +39,7 @@ function App() {
   const [outputFilename, setOutputFilename] = useState('');
   const [filenameEdited, setFilenameEdited] = useState(false);
   const [submittingJob, setSubmittingJob] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [currentJobLog, setCurrentJobLog] = useState('');
 
@@ -140,14 +141,19 @@ function App() {
     }
   };
 
+  const loadCurrentJobSnapshot = async () => {
+    const [nextJob, nextLog] = await Promise.all([
+      api.currentJob(token ?? undefined),
+      api.currentJobLog(token ?? undefined),
+    ]);
+    return { nextJob, nextLog: nextJob ? nextLog : '' };
+  };
+
   const refreshCurrentJob = async () => {
     try {
-      const [nextJob, nextLog] = await Promise.all([
-        api.currentJob(token ?? undefined),
-        api.currentJobLog(token ?? undefined),
-      ]);
+      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
       setCurrentJob(nextJob);
-      setCurrentJobLog(nextJob ? nextLog : '');
+      setCurrentJobLog(nextLog);
     } catch {
       // Keep current snapshot when polling fails to avoid disrupting review flow.
     }
@@ -183,8 +189,13 @@ function App() {
     if (!finalFilename) {
       return;
     }
+    if (currentJob?.status === 'running') {
+      setSubmitError('A remux is already running. Please wait for it to finish.');
+      return;
+    }
 
     setSubmittingJob(true);
+    setSubmitError(null);
     try {
       await api.submitJob(
         {
@@ -196,12 +207,12 @@ function App() {
         },
         token ?? undefined
       );
-      const nextJob = await api.currentJob(token ?? undefined);
+      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
       setCurrentJob(nextJob);
-      setCurrentJobLog('');
+      setCurrentJobLog(nextLog);
       setStep('review');
-    } catch {
-      // Submit errors are surfaced by disabled/loading state and subsequent polling.
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to start remux job.');
     } finally {
       setSubmittingJob(false);
     }
@@ -259,6 +270,8 @@ function App() {
           outputFilename={outputFilename || filenamePreview}
           outputPath={outputPath}
           submitting={submittingJob}
+          startDisabled={currentJob?.status === 'running'}
+          submitError={submitError}
           currentJob={currentJob}
           currentLog={currentJobLog}
           onBack={() => setStep('editor')}

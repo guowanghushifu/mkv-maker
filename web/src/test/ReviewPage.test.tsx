@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createApiClient } from '../api/client';
 import { ReviewPage } from '../features/review/ReviewPage';
 
 describe('ReviewPage', () => {
@@ -35,6 +36,8 @@ describe('ReviewPage', () => {
         outputFilename="Nightcrawler - 2160p.mkv"
         outputPath="/remux/Nightcrawler - 2160p.mkv"
         submitting={false}
+        startDisabled={false}
+        submitError={null}
         currentJob={{
           id: 'job-123',
           sourceName: 'Nightcrawler Disc',
@@ -53,5 +56,80 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/current remux/i)).toBeInTheDocument();
     expect(screen.getByText(/running/i)).toBeInTheDocument();
     expect(screen.getByText(/remux started/i)).toBeInTheDocument();
+  });
+
+  it('disables start while a remux is currently running', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      audio: [],
+      subtitles: [],
+    } as const;
+
+    render(
+      <ReviewPage
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled
+        submitError="A remux is already running. Please wait for it to finish."
+        currentJob={{
+          id: 'job-123',
+          sourceName: 'Nightcrawler Disc',
+          outputName: 'Nightcrawler - 2160p.mkv',
+          outputPath: '/remux/Nightcrawler - 2160p.mkv',
+          playlistName: '00800.MPLS',
+          createdAt: '2026-03-29T12:00:00Z',
+          status: 'running',
+        }}
+        currentLog=""
+        onBack={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /start remux/i })).toBeDisabled();
+    expect(screen.getByText(/already running/i)).toBeInTheDocument();
+  });
+});
+
+describe('api current job fallbacks', () => {
+  it('returns null and empty log for 404 current job endpoints', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/jobs/current')) {
+        return new Response('', { status: 404 });
+      }
+      if (url.endsWith('/api/jobs/current/log')) {
+        return new Response('', { status: 404 });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(client.currentJob('session')).resolves.toBeNull();
+    await expect(client.currentJobLog('session')).resolves.toBe('');
+
+    vi.unstubAllGlobals();
   });
 });
