@@ -2,16 +2,19 @@ package middleware
 
 import (
 	"net/http"
-
-	"github.com/guowanghushifu/mkv-maker/internal/store"
 )
 
 const SessionCookieName = "session_token"
 
-func RequireAuth(sessions *store.SessionStore) func(http.Handler) http.Handler {
+type CookieAuth interface {
+	Issue() (string, error)
+	Valid(token string) (bool, error)
+}
+
+func RequireAuth(auth CookieAuth) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if sessions == nil {
+			if auth == nil {
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
@@ -22,7 +25,7 @@ func RequireAuth(sessions *store.SessionStore) func(http.Handler) http.Handler {
 				return
 			}
 
-			valid, err := sessions.Valid(cookie.Value)
+			valid, err := auth.Valid(cookie.Value)
 			if err != nil {
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return

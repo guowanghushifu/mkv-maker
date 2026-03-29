@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
-	"github.com/guowanghushifu/mkv-maker/internal/store"
 )
 
 type AuthHandler struct {
 	AppPassword   string
-	Sessions      *store.SessionStore
+	Auth          middleware.CookieAuth
 	SessionMaxAge int
 }
 
@@ -37,7 +36,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.Sessions.Create(r.RemoteAddr)
+	if h.Auth == nil {
+		http.Error(w, "failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	token, err := h.Auth.Issue()
 	if err != nil {
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
@@ -58,15 +62,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
-	}
-
-	if h.Sessions != nil {
-		if cookie, err := r.Cookie(middleware.SessionCookieName); err == nil {
-			if err := h.Sessions.Delete(cookie.Value); err != nil {
-				http.Error(w, "failed to delete session", http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 
 	http.SetCookie(w, &http.Cookie{
