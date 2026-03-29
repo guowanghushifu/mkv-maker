@@ -39,7 +39,10 @@ RUN mkdir -p /etc/apt/keyrings && \
 ENV APP_DATA_DIR=/app/data \
     BD_INPUT_DIR=/bd_input \
     REMUX_OUTPUT_DIR=/remux \
-    LISTEN_ADDR=:8080
+    LISTEN_ADDR=:8080 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LANGUAGE=C.UTF-8
 
 COPY --from=go-build /out/server /app/server
 COPY --from=web-build /src/web/dist /app/web/dist
