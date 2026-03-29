@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
+	mediampls "github.com/guowanghushifu/mkv-maker/internal/media/mpls"
 )
 
 type SourceScanner interface {
@@ -190,7 +191,14 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to validate playlist", http.StatusInternalServerError)
 		return
 	}
-	segmentPaths := buildSegmentPaths(source.Path, parsed.StreamFiles)
+	clipNames, err := mediampls.ParseClipNames(playlistPath)
+	if err != nil {
+		log.Printf("resolve source=%s playlist=%s playlistPath=%s: mpls parse failed: %v", source.Path, playlistName, playlistPath, err)
+	}
+	if len(clipNames) == 0 {
+		clipNames = parsed.StreamFiles
+	}
+	segmentPaths := buildSegmentPaths(source.Path, clipNames)
 	inspectPath := playlistPath
 	if len(segmentPaths) > 0 {
 		inspectPath = segmentPaths[0]
@@ -206,6 +214,10 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 			segmentPaths,
 			err,
 		)
+		if len(segmentPaths) == 0 {
+			http.Error(w, "failed to inspect playlist tracks: no stream files resolved from playlist", http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, "failed to inspect playlist tracks", http.StatusInternalServerError)
 		return
 	}
@@ -451,6 +463,9 @@ func buildSegmentPaths(sourceRoot string, streamFiles []string) []string {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
+		}
+		if filepath.Ext(name) == "" {
+			name += ".m2ts"
 		}
 		path, err := findStreamFilePath(sourceRoot, name)
 		if err != nil {
