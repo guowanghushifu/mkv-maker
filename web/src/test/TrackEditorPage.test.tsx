@@ -2,72 +2,92 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TrackEditorPage } from '../features/draft/TrackEditorPage';
 
-describe('TrackEditorPage', () => {
-  it('moves a selected audio track upward in the export order', () => {
-    const onChange = vi.fn();
-    render(
-      <TrackEditorPage
-        draft={{
-          video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
-          audio: [
-            { id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true },
-            { id: 'a2', name: 'Commentary', language: 'eng', selected: true, default: false },
-          ],
-          subtitles: [],
-        }}
-        onChange={onChange}
-      />,
-    );
+function createDraft() {
+  return {
+    title: 'Demo Title',
+    video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+    audio: [
+      { id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true },
+      { id: 'a2', name: 'Commentary', language: 'eng', selected: true, default: false },
+    ],
+    subtitles: [
+      { id: 's1', name: 'English PGS', language: 'eng', selected: true, default: true },
+      { id: 's2', name: 'Signs', language: 'eng', selected: true, default: false },
+    ],
+  };
+}
 
-    fireEvent.click(screen.getByRole('button', { name: /move commentary up/i }));
-    expect(onChange).toHaveBeenCalled();
+describe('TrackEditorPage', () => {
+  it('clears the previous default audio track when a new default is checked', () => {
+    const onChange = vi.fn();
+    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /default commentary/i }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        audio: [
+          expect.objectContaining({ id: 'a1', default: false }),
+          expect.objectContaining({ id: 'a2', default: true }),
+        ],
+      }),
+    );
   });
 
-  it('updates editable track fields for names and languages', () => {
+  it('clears default when deselecting a defaulted subtitle track', () => {
     const onChange = vi.fn();
-    render(
-      <TrackEditorPage
-        draft={{
-          title: 'Demo Title',
-          video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
-          audio: [
-            { id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true },
-          ],
-          subtitles: [{ id: 's1', name: 'English PGS', language: 'eng', selected: true, default: false }],
-        }}
-        onChange={onChange}
-      />,
+    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /include english pgs/i }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        subtitles: [
+          expect.objectContaining({ id: 's1', selected: false, default: false }),
+          expect.objectContaining({ id: 's2', selected: true, default: false }),
+        ],
+      }),
     );
+  });
+
+  it('reorders audio tracks via drag and drop', () => {
+    const onChange = vi.fn();
+    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+
+    const source = screen.getByRole('row', { name: /commentary/i });
+    const target = screen.getByRole('row', { name: /english atmos/i });
+    const store = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: '',
+      setData: (type: string, value: string) => {
+        store.set(type, value);
+      },
+      getData: (type: string) => store.get(type) || '',
+    };
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(target);
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        audio: [
+          expect.objectContaining({ id: 'a2' }),
+          expect.objectContaining({ id: 'a1' }),
+        ],
+      }),
+    );
+  });
+
+  it('supports inline name and language edits', () => {
+    const onChange = vi.fn();
+    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
 
     fireEvent.change(screen.getByLabelText('Video track name'), { target: { value: 'Feature Video' } });
-    fireEvent.change(screen.getByLabelText('Language', { selector: '#audio-lang-a1' }), {
-      target: { value: 'jpn' },
-    });
-    fireEvent.change(screen.getByLabelText('Language', { selector: '#subtitle-lang-s1' }), {
-      target: { value: 'spa' },
-    });
-
-    expect(onChange).toHaveBeenCalled();
-  });
-
-  it('allows subtitle default selection and selected-track reordering', () => {
-    const onChange = vi.fn();
-    render(
-      <TrackEditorPage
-        draft={{
-          video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
-          audio: [],
-          subtitles: [
-            { id: 's1', name: 'English PGS', language: 'eng', selected: true, default: false },
-            { id: 's2', name: 'Commentary Subs', language: 'eng', selected: true, default: false },
-          ],
-        }}
-        onChange={onChange}
-      />,
-    );
-
-    fireEvent.click(screen.getAllByRole('radio', { name: /default/i })[0]);
-    fireEvent.click(screen.getByRole('button', { name: /move commentary subs up/i }));
+    fireEvent.change(screen.getByLabelText('Track name English Atmos'), { target: { value: 'English 5.1' } });
+    fireEvent.change(screen.getByLabelText('Language English Atmos'), { target: { value: 'jpn' } });
 
     expect(onChange).toHaveBeenCalled();
   });

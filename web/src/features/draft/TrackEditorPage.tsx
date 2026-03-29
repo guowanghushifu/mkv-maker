@@ -1,4 +1,7 @@
+import { useRef } from 'react';
+import type { DragEvent } from 'react';
 import type { Draft, DraftTrack } from '../../api/types';
+import { moveTrackRow, setExclusiveDefault, toggleTrackSelected } from './trackTable';
 
 type TrackEditorPageProps = {
   draft: Draft;
@@ -10,29 +13,7 @@ type TrackEditorPageProps = {
   onNext?: () => void;
 };
 
-function findPreviousSelectedIndex(tracks: DraftTrack[], index: number): number {
-  for (let i = index - 1; i >= 0; i -= 1) {
-    if (tracks[i].selected) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-function findNextSelectedIndex(tracks: DraftTrack[], index: number): number {
-  for (let i = index + 1; i < tracks.length; i += 1) {
-    if (tracks[i].selected) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-function swapTracks(tracks: DraftTrack[], from: number, to: number): DraftTrack[] {
-  const next = [...tracks];
-  [next[from], next[to]] = [next[to], next[from]];
-  return next;
-}
+type TrackGroup = 'audio' | 'subtitles';
 
 export function TrackEditorPage({
   draft,
@@ -43,6 +24,8 @@ export function TrackEditorPage({
   onBack,
   onNext,
 }: TrackEditorPageProps) {
+  const dragRef = useRef<{ group: TrackGroup; trackId: string } | null>(null);
+
   const updateVideoName = (name: string) => {
     onChange({ ...draft, video: { ...draft.video, name } });
   };
@@ -51,103 +34,149 @@ export function TrackEditorPage({
     onChange({ ...draft, title });
   };
 
+  const updateAudio = (audio: DraftTrack[]) => {
+    onChange({ ...draft, audio });
+  };
+
+  const updateSubtitles = (subtitles: DraftTrack[]) => {
+    onChange({ ...draft, subtitles });
+  };
+
   const updateAudioTrack = (trackId: string, updater: (track: DraftTrack) => DraftTrack) => {
-    const nextAudio = draft.audio.map((track) => (track.id === trackId ? updater(track) : track));
-    onChange({ ...draft, audio: nextAudio });
+    updateAudio(draft.audio.map((track) => (track.id === trackId ? updater(track) : track)));
   };
 
   const updateSubtitleTrack = (trackId: string, updater: (track: DraftTrack) => DraftTrack) => {
-    const nextSubtitles = draft.subtitles.map((track) =>
-      track.id === trackId ? updater(track) : track
-    );
-    onChange({ ...draft, subtitles: nextSubtitles });
+    updateSubtitles(draft.subtitles.map((track) => (track.id === trackId ? updater(track) : track)));
   };
 
-  const toggleAudioSelected = (trackId: string) => {
-    updateAudioTrack(trackId, (track) => {
-      const selected = !track.selected;
-      return {
-        ...track,
-        selected,
-        default: selected ? track.default : false,
-      };
-    });
+  const handleDragStart = (event: DragEvent<HTMLTableRowElement>, group: TrackGroup, trackId: string) => {
+    dragRef.current = { group, trackId };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', trackId);
   };
 
-  const toggleSubtitleSelected = (trackId: string) => {
-    updateSubtitleTrack(trackId, (track) => {
-      const selected = !track.selected;
-      return {
-        ...track,
-        selected,
-        default: selected ? track.default : false,
-      };
-    });
+  const handleDrop = (
+    event: DragEvent<HTMLTableRowElement>,
+    group: TrackGroup,
+    targetTrackId: string,
+  ) => {
+    event.preventDefault();
+    const sourceId =
+      (dragRef.current?.group === group && dragRef.current.trackId) ||
+      event.dataTransfer.getData('text/plain');
+    if (!sourceId || sourceId === targetTrackId) {
+      return;
+    }
+    if (group === 'audio') {
+      updateAudio(moveTrackRow(draft.audio, sourceId, targetTrackId));
+      return;
+    }
+    updateSubtitles(moveTrackRow(draft.subtitles, sourceId, targetTrackId));
   };
 
-  const setDefaultAudio = (trackId: string) => {
-    onChange({
-      ...draft,
-      audio: draft.audio.map((track) => ({
-        ...track,
-        default: track.id === trackId && track.selected,
-      })),
-    });
-  };
-
-  const setDefaultSubtitle = (trackId: string) => {
-    onChange({
-      ...draft,
-      subtitles: draft.subtitles.map((track) => ({
-        ...track,
-        default: track.id === trackId && track.selected,
-      })),
-    });
-  };
-
-  const moveAudioUp = (index: number) => {
-    if (!draft.audio[index].selected) {
-      return;
-    }
-    const previousIndex = findPreviousSelectedIndex(draft.audio, index);
-    if (previousIndex < 0) {
-      return;
-    }
-    onChange({ ...draft, audio: swapTracks(draft.audio, index, previousIndex) });
-  };
-
-  const moveAudioDown = (index: number) => {
-    if (!draft.audio[index].selected) {
-      return;
-    }
-    const nextIndex = findNextSelectedIndex(draft.audio, index);
-    if (nextIndex < 0) {
-      return;
-    }
-    onChange({ ...draft, audio: swapTracks(draft.audio, index, nextIndex) });
-  };
-
-  const moveSubtitleUp = (index: number) => {
-    if (!draft.subtitles[index].selected) {
-      return;
-    }
-    const previousIndex = findPreviousSelectedIndex(draft.subtitles, index);
-    if (previousIndex < 0) {
-      return;
-    }
-    onChange({ ...draft, subtitles: swapTracks(draft.subtitles, index, previousIndex) });
-  };
-
-  const moveSubtitleDown = (index: number) => {
-    if (!draft.subtitles[index].selected) {
-      return;
-    }
-    const nextIndex = findNextSelectedIndex(draft.subtitles, index);
-    if (nextIndex < 0) {
-      return;
-    }
-    onChange({ ...draft, subtitles: swapTracks(draft.subtitles, index, nextIndex) });
-  };
+  const renderTrackTable = (group: TrackGroup, tracks: DraftTrack[]) => (
+    <div className="track-table-wrap">
+      <table className="track-editor-table">
+        <thead>
+          <tr>
+            <th scope="col" aria-label="Drag" />
+            <th scope="col">Include</th>
+            <th scope="col">Track</th>
+            <th scope="col">Language</th>
+            <th scope="col">Default</th>
+            <th scope="col">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tracks.map((track) => (
+            <tr
+              key={track.id}
+              className={track.selected ? 'is-selected' : 'is-muted'}
+              draggable
+              onDragStart={(event) => handleDragStart(event, group, track.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => handleDrop(event, group, track.id)}
+            >
+              <td className="drag-cell">
+                <span className="drag-handle" aria-hidden="true">
+                  ⋮⋮
+                </span>
+              </td>
+              <td>
+                <input
+                  type="checkbox"
+                  aria-label={`Include ${track.name}`}
+                  checked={track.selected}
+                  onChange={() => {
+                    if (group === 'audio') {
+                      updateAudio(toggleTrackSelected(draft.audio, track.id));
+                      return;
+                    }
+                    updateSubtitles(toggleTrackSelected(draft.subtitles, track.id));
+                  }}
+                />
+              </td>
+              <td>
+                <input
+                  type="text"
+                  aria-label={`Track name ${track.name}`}
+                  value={track.name}
+                  onChange={(event) => {
+                    if (group === 'audio') {
+                      updateAudioTrack(track.id, (current) => ({ ...current, name: event.target.value }));
+                      return;
+                    }
+                    updateSubtitleTrack(track.id, (current) => ({ ...current, name: event.target.value }));
+                  }}
+                />
+              </td>
+              <td>
+                <input
+                  type="text"
+                  aria-label={`Language ${track.name}`}
+                  value={track.language}
+                  onChange={(event) => {
+                    if (group === 'audio') {
+                      updateAudioTrack(track.id, (current) => ({
+                        ...current,
+                        language: event.target.value,
+                      }));
+                      return;
+                    }
+                    updateSubtitleTrack(track.id, (current) => ({
+                      ...current,
+                      language: event.target.value,
+                    }));
+                  }}
+                />
+              </td>
+              <td>
+                <input
+                  type="checkbox"
+                  aria-label={`Default ${track.name}`}
+                  checked={track.default}
+                  disabled={!track.selected}
+                  onChange={() => {
+                    if (group === 'audio') {
+                      updateAudio(setExclusiveDefault(draft.audio, track.id));
+                      return;
+                    }
+                    updateSubtitles(setExclusiveDefault(draft.subtitles, track.id));
+                  }}
+                />
+              </td>
+              <td>
+                <span className="track-detail-chip">
+                  {track.codecLabel || (group === 'audio' ? 'Audio track' : 'Subtitle track')}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <section className="panel">
@@ -195,134 +224,13 @@ export function TrackEditorPage({
       ) : null}
 
       <h3>Audio</h3>
-      <ul className="track-list">
-        {draft.audio.map((track, index) => (
-          <li key={track.id}>
-            <label htmlFor={`audio-name-${track.id}`}>Name</label>
-            <input
-              id={`audio-name-${track.id}`}
-              type="text"
-              value={track.name}
-              onChange={(event) =>
-                updateAudioTrack(track.id, (current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-            />
-
-            <label htmlFor={`audio-lang-${track.id}`}>Language</label>
-            <input
-              id={`audio-lang-${track.id}`}
-              type="text"
-              value={track.language}
-              onChange={(event) =>
-                updateAudioTrack(track.id, (current) => ({ ...current, language: event.target.value }))
-              }
-            />
-
-            <label>
-              <input
-                type="checkbox"
-                checked={track.selected}
-                onChange={() => toggleAudioSelected(track.id)}
-              />
-              Selected
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="default-audio"
-                checked={track.default}
-                onChange={() => setDefaultAudio(track.id)}
-                disabled={!track.selected}
-              />
-              Default
-            </label>
-            <div className="row">
-              <button
-                type="button"
-                onClick={() => moveAudioUp(index)}
-                disabled={!track.selected || findPreviousSelectedIndex(draft.audio, index) < 0}
-              >
-                Move {track.name} up
-              </button>
-              <button
-                type="button"
-                onClick={() => moveAudioDown(index)}
-                disabled={!track.selected || findNextSelectedIndex(draft.audio, index) < 0}
-              >
-                Move {track.name} down
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {renderTrackTable('audio', draft.audio)}
 
       <h3>Subtitles</h3>
       {draft.subtitles.length === 0 ? (
         <p className="muted-text">No subtitles found in this draft.</p>
       ) : (
-        <ul className="track-list">
-          {draft.subtitles.map((track, index) => (
-            <li key={track.id}>
-              <label htmlFor={`subtitle-name-${track.id}`}>Name</label>
-              <input
-                id={`subtitle-name-${track.id}`}
-                type="text"
-                value={track.name}
-                onChange={(event) =>
-                  updateSubtitleTrack(track.id, (current) => ({ ...current, name: event.target.value }))
-                }
-              />
-
-              <label htmlFor={`subtitle-lang-${track.id}`}>Language</label>
-              <input
-                id={`subtitle-lang-${track.id}`}
-                type="text"
-                value={track.language}
-                onChange={(event) =>
-                  updateSubtitleTrack(track.id, (current) => ({ ...current, language: event.target.value }))
-                }
-              />
-
-              <label>
-                <input
-                  type="checkbox"
-                  checked={track.selected}
-                  onChange={() => toggleSubtitleSelected(track.id)}
-                />
-                Selected
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="default-subtitle"
-                  checked={track.default}
-                  onChange={() => setDefaultSubtitle(track.id)}
-                  disabled={!track.selected}
-                />
-                Default
-              </label>
-              <div className="row">
-                <button
-                  type="button"
-                  onClick={() => moveSubtitleUp(index)}
-                  disabled={!track.selected || findPreviousSelectedIndex(draft.subtitles, index) < 0}
-                >
-                  Move {track.name} up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSubtitleDown(index)}
-                  disabled={!track.selected || findNextSelectedIndex(draft.subtitles, index) < 0}
-                >
-                  Move {track.name} down
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        renderTrackTable('subtitles', draft.subtitles)
       )}
 
       {onBack || onNext ? (

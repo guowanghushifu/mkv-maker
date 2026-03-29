@@ -146,10 +146,21 @@ button:disabled {
   margin-top: 0.8rem;
 }
 
+.track-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.6rem;
+}
+
 .source-table {
   width: 100%;
   border-collapse: collapse;
   min-width: 760px;
+}
+
+.track-editor-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
 }
 
 .source-table th,
@@ -159,6 +170,51 @@ button:disabled {
   padding: 0.45rem;
   text-align: left;
   vertical-align: top;
+}
+
+.track-editor-table th,
+.track-editor-table td {
+  border: 1px solid #d6dfec;
+  background: #f9fbff;
+  padding: 0.35rem 0.4rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.track-editor-table th {
+  background: #eef4fd;
+  color: #334b67;
+  font-size: 0.83rem;
+}
+
+.track-editor-table tr.is-muted td {
+  opacity: 0.58;
+}
+
+.track-editor-table .drag-cell {
+  width: 2.2rem;
+  text-align: center;
+}
+
+.drag-handle {
+  display: inline-block;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #5d7695;
+  cursor: grab;
+  user-select: none;
+}
+
+.track-detail-chip {
+  display: inline-block;
+  border-radius: 999px;
+  border: 1px solid #cad7ea;
+  background: #f1f6ff;
+  color: #3c5574;
+  font-size: 0.78rem;
+  line-height: 1.1;
+  padding: 0.2rem 0.48rem;
+  white-space: nowrap;
 }
 
 .track-list li small,
