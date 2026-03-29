@@ -11,6 +11,16 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type singleTaskRepositoryContract interface {
+	CreateRunningJob(input CreateJobInput) (APIJob, error)
+	GetCurrentJob() (APIJob, error)
+	GetCurrentJobLog() (string, error)
+	GetExecutionJob(id string) (ExecutionJob, error)
+	MarkRunningJobsFailed(message string) error
+}
+
+var _ singleTaskRepositoryContract = (JobsRepository)(nil)
+
 func TestSQLiteJobStoreCreateListGetAndLog(t *testing.T) {
 	db := openJobsTestDB(t)
 	logsDir := t.TempDir()

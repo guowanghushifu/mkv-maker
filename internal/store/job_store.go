@@ -43,6 +43,13 @@ type CreateJobInput struct {
 }
 
 type JobsRepository interface {
+	CreateRunningJob(input CreateJobInput) (APIJob, error)
+	GetCurrentJob() (APIJob, error)
+	GetCurrentJobLog() (string, error)
+	GetExecutionJob(id string) (ExecutionJob, error)
+	MarkRunningJobsFailed(message string) error
+
+	// Queue-era APIs kept for compatibility during migration.
 	CreateQueuedJob(input CreateJobInput) (APIJob, error)
 	ListJobs() ([]APIJob, error)
 	GetJob(id string) (APIJob, error)
