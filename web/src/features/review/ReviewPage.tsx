@@ -1,18 +1,40 @@
-import type { Draft, ParsedBDInfo, SourceEntry } from '../../api/types';
+import type { Draft, DraftTrack, ParsedBDInfo, SourceEntry } from '../../api/types';
 
 type ReviewPageProps = {
   source: SourceEntry;
   bdinfo: ParsedBDInfo;
   draft: Draft;
+  outputFilename: string;
+  outputPath: string;
   submitting: boolean;
   onBack: () => void;
   onSubmit: () => Promise<void> | void;
 };
 
-export function ReviewPage({ source, bdinfo, draft, submitting, onBack, onSubmit }: ReviewPageProps) {
+function renderTrackSummary(track: DraftTrack): string {
+  const flags: string[] = [];
+  if (track.default) {
+    flags.push('default');
+  }
+  if (track.forced) {
+    flags.push('forced');
+  }
+  const suffix = flags.length > 0 ? ` [${flags.join(', ')}]` : '';
+  return `${track.name} (${track.language})${suffix}`;
+}
+
+export function ReviewPage({
+  source,
+  bdinfo,
+  draft,
+  outputFilename,
+  outputPath,
+  submitting,
+  onBack,
+  onSubmit,
+}: ReviewPageProps) {
   const selectedAudio = draft.audio.filter((track) => track.selected);
   const selectedSubtitles = draft.subtitles.filter((track) => track.selected);
-  const outputBaseName = draft.title || bdinfo.discTitle || source.name;
 
   return (
     <section className="panel">
@@ -26,16 +48,27 @@ export function ReviewPage({ source, bdinfo, draft, submitting, onBack, onSubmit
           <strong>Playlist:</strong> {bdinfo.playlistName}
         </p>
         <p>
-          <strong>Output:</strong> {outputBaseName.replace(/\s+/g, '.')}
-          .mkv
+          <strong>Filename:</strong> {outputFilename}
         </p>
         <p>
-          <strong>Selected audio tracks:</strong> {selectedAudio.length}
+          <strong>Output path:</strong> {outputPath}
         </p>
         <p>
-          <strong>Selected subtitles:</strong> {selectedSubtitles.length}
+          <strong>Dolby Vision merge enabled:</strong> {draft.dvMergeEnabled ? 'Yes' : 'No'}
         </p>
       </div>
+
+      <h3>Final Track List and Order</h3>
+      <ol className="ordered-track-list">
+        <li>Video: {draft.video.name}</li>
+        {selectedAudio.map((track) => (
+          <li key={`audio-${track.id}`}>Audio: {renderTrackSummary(track)}</li>
+        ))}
+        {selectedSubtitles.map((track) => (
+          <li key={`sub-${track.id}`}>Subtitle: {renderTrackSummary(track)}</li>
+        ))}
+      </ol>
+
       <div className="row">
         <button type="button" onClick={onBack}>
           Back

@@ -5,7 +5,8 @@ export type SourceEntry = {
   name: string;
   path: string;
   type: SourceType;
-  lastScannedAt?: string;
+  size: number;
+  modifiedAt: string;
 };
 
 export type ParsedBDInfo = {
@@ -28,6 +29,7 @@ export type DraftTrack = {
   id: string;
   name: string;
   language: string;
+  codecLabel?: string;
   selected: boolean;
   default: boolean;
   forced?: boolean;
@@ -37,6 +39,8 @@ export type Draft = {
   title?: string;
   sourceId?: string;
   playlistName?: string;
+  outputDir?: string;
+  dvMergeEnabled?: boolean;
   video: DraftVideo;
   audio: DraftTrack[];
   subtitles: DraftTrack[];
@@ -48,9 +52,9 @@ export type Job = {
   id: string;
   sourceName: string;
   outputName: string;
+  outputPath?: string;
   playlistName: string;
   createdAt: string;
   status: JobStatus;
   message?: string;
 };
-
