@@ -59,11 +59,6 @@ func resolveInputPath(d Draft) string {
 		return d.SourcePath
 	}
 
-	sourcePathLower := strings.ToLower(d.SourcePath)
-	if strings.HasSuffix(sourcePathLower, ".iso") {
-		return d.SourcePath
-	}
-
 	if strings.EqualFold(filepath.Base(d.SourcePath), "BDMV") {
 		return filepath.Join(d.SourcePath, "PLAYLIST", d.Playlist)
 	}

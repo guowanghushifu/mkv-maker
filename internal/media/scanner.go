@@ -4,14 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 )
 
 type SourceType string
 
 const (
-	SourceISO  SourceType = "iso"
 	SourceBDMV SourceType = "bdmv"
 )
 
@@ -44,17 +42,7 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 			return nil, err
 		}
 
-		switch {
-		case !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".iso"):
-			out = append(out, SourceEntry{
-				ID:         entry.Name(),
-				Name:       strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())),
-				Path:       fullPath,
-				Type:       SourceISO,
-				Size:       info.Size(),
-				ModifiedAt: info.ModTime(),
-			})
-		case entry.IsDir() && isBDMVRoot(fullPath):
+		if entry.IsDir() && isBDMVRoot(fullPath) {
 			size, err := directorySize(fullPath)
 			if err != nil {
 				return nil, err
@@ -72,7 +60,14 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 	}
 
 	slices.SortFunc(out, func(a, b SourceEntry) int {
-		return strings.Compare(a.Name, b.Name)
+		switch {
+		case a.Name < b.Name:
+			return -1
+		case a.Name > b.Name:
+			return 1
+		default:
+			return 0
+		}
 	})
 
 	return out, nil

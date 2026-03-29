@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a Linux Dockerized web tool that scans Blu-ray ISO files or extracted BDMV folders, requires the user to provide a matching BDInfo log to determine the target playlist, lets a single user edit export tracks, and produces remuxed MKV files with controlled track metadata and predictable output naming.
+Build a Linux Dockerized web tool that scans extracted BDMV folders, requires the user to provide a matching BDInfo log to determine the target playlist, lets a single user edit export tracks, and produces remuxed MKV files with controlled track metadata and predictable output naming.
 
 ## Scope
 
@@ -10,7 +10,7 @@ The first version covers:
 
 - Running as a single-container web application on Linux
 - Single-user access protected by one password
-- Input sources from a configured directory containing Blu-ray ISO files or extracted Blu-ray folders
+- Input sources from a configured directory containing extracted Blu-ray folders
 - Required BDInfo log parsing to determine the target playlist and improve track naming
 - No manual playlist selection flow; the user must provide a valid BDInfo log for the selected source
 - Track selection, naming, language editing, default-track flags, and ordering for audio and subtitle tracks
@@ -20,7 +20,7 @@ The first version covers:
 
 Out of scope for the first version:
 
-- Loop mounting ISO files inside the container
+- ISO inputs
 - Public multi-user hosting
 - Advanced role-based auth
 - Distributed workers or concurrent remux execution
@@ -29,10 +29,7 @@ Out of scope for the first version:
 ## Product Constraints
 
 - Runtime OS target is Linux inside Docker
-- The container does not mount ISO loop devices itself
-- Inputs are limited to:
-  - `.iso` files readable directly by external Blu-ray tooling
-  - extracted Blu-ray folders containing a valid `BDMV` structure
+- Inputs are limited to extracted Blu-ray folders containing a valid `BDMV` structure
 - Input directory comes from environment variable `BD_INPUT_DIR`, default `/bd_input`
 - Output directory comes from environment variable `REMUX_OUTPUT_DIR`, default `/remux`
 - Application data directory comes from environment variable `APP_DATA_DIR`, default `/app/data`
@@ -91,15 +88,12 @@ The user opens the web UI, enters the configured password, and receives an authe
 
 ### 2. Scan Sources
 
-The user clicks a scan button. The backend scans `BD_INPUT_DIR` and identifies:
-
-- files ending in `.iso`
-- directories containing `BDMV/index.bdmv` or `BDMV/PLAYLIST`
+The user clicks a scan button. The backend scans `BD_INPUT_DIR` and identifies directories containing `BDMV/index.bdmv` or `BDMV/PLAYLIST`.
 
 The UI displays the results in a list with:
 
 - display name
-- source type (`ISO` or `BDMV Folder`)
+- source type (`BDMV Folder`)
 - absolute or normalized source path
 - size
 - modification time
@@ -204,10 +198,7 @@ Jobs enter a persistent sequential queue:
 
 ### Source Scan
 
-The scan logic should traverse the configured input directory conservatively and recognize:
-
-- `.iso` files
-- directories that contain Blu-ray structure markers
+The scan logic should traverse the configured input directory conservatively and recognize directories that contain Blu-ray structure markers.
 
 The initial version should keep traversal shallow and predictable, favoring direct children or a small bounded depth rather than walking arbitrarily deep trees.
 
@@ -468,7 +459,7 @@ User-facing behavior:
 
 ### Backend Unit Tests
 
-- source scan recognition for `.iso` and valid `BDMV` directories
+- source scan recognition for valid `BDMV` directories
 - BDInfo text parsing for playlists, audio, and subtitle names
 - filename generation and sanitization
 - draft validation rules
@@ -568,7 +559,7 @@ The implementation should include:
 
 - Technology stack: Go backend + React frontend
 - Runtime model: single container on Linux
-- ISO handling: container does not perform loop mount
+- Input handling: only extracted `BDMV` folders are supported
 - Queue model: persistent sequential queue, one running job at a time
 - Playlist resolution: mandatory BDInfo input, no manual playlist fallback
 - Title source priority: user edit, then BDInfo, then cleaned source name

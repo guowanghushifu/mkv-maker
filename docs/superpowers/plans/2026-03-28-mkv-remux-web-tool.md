@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Dockerized single-user Go + React web application that scans Blu-ray ISO or extracted BDMV sources, requires matching BDInfo input to resolve the target playlist, lets the user edit export tracks, and produces remuxed MKV jobs with persistent history.
+**Goal:** Build a Dockerized single-user Go + React web application that scans extracted BDMV sources, requires matching BDInfo input to resolve the target playlist, lets the user edit export tracks, and produces remuxed MKV jobs with persistent history.
 
 **Architecture:** A Go HTTP server exposes authenticated JSON APIs, serves the React SPA, persists state in SQLite, and runs a single sequential worker for remux jobs. The frontend is a Vite React app that guides the user through scan, required BDInfo input, track editing, review, and job history flows. There is no manual playlist-selection page; the workflow resolves the target playlist exclusively from the user-provided BDInfo log.
 
@@ -17,6 +17,7 @@
 The approved workflow changed after this plan was first written. These rules supersede any conflicting older text below:
 
 - BDInfo input is required and cannot be skipped.
+- Only extracted `BDMV` folders are supported as remux inputs.
 - The target playlist is determined from the user-provided BDInfo log.
 - Manual playlist selection UI is removed from scope.
 - `GET /api/sources/{id}/playlists` is removed from scope.
@@ -461,11 +462,8 @@ import (
 	"testing"
 )
 
-func TestScannerFindsISOAndBDMVFolders(t *testing.T) {
+func TestScannerFindsBDMVFoldersOnly(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "movie.iso"), []byte("iso"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(filepath.Join(root, "DiscA", "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -475,15 +473,15 @@ func TestScannerFindsISOAndBDMVFolders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(items))
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
 	}
 }
 ```
 
 - [ ] **Step 2: Run the source scan test to verify it fails**
 
-Run: `go test ./internal/media -run TestScannerFindsISOAndBDMVFolders -v`
+Run: `go test ./internal/media -run TestScannerFindsBDMVFoldersOnly -v`
 
 Expected: FAIL because `NewScanner` or `Scan` does not exist.
 
@@ -504,7 +502,6 @@ import (
 type SourceType string
 
 const (
-	SourceISO  SourceType = "iso"
 	SourceBDMV SourceType = "bdmv"
 )
 
@@ -537,17 +534,7 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 			return nil, err
 		}
 
-		switch {
-		case !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".iso"):
-			out = append(out, SourceEntry{
-				ID:         entry.Name(),
-				Name:       strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())),
-				Path:       fullPath,
-				Type:       SourceISO,
-				Size:       info.Size(),
-				ModifiedAt: info.ModTime(),
-			})
-		case entry.IsDir() && isBDMVRoot(fullPath):
+		if entry.IsDir() && isBDMVRoot(fullPath) {
 			out = append(out, SourceEntry{
 				ID:         entry.Name(),
 				Name:       entry.Name(),
@@ -576,7 +563,7 @@ func isBDMVRoot(path string) bool {
 
 - [ ] **Step 4: Run the source scan test to verify it passes**
 
-Run: `go test ./internal/media -run TestScannerFindsISOAndBDMVFolders -v`
+Run: `go test ./internal/media -run TestScannerFindsBDMVFoldersOnly -v`
 
 Expected: PASS with the scanner returning both sources.
 
@@ -912,7 +899,7 @@ import (
 func TestBuildMKVMergeArgsIncludesTrackMetadata(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.TrueHD.7.1.Atmos.mkv",
-		SourcePath: "/bd_input/Nightcrawler.iso",
+		SourcePath: "/bd_input/Nightcrawler",
 		Playlist:   "00800.MPLS",
 		EnableDV:   true,
 		Video:      VideoTrack{Name: "Main Video"},
@@ -1465,7 +1452,7 @@ git commit -m "chore: add docker packaging and release workflow"
 - [ ] Run: `docker build -t mkv-remux-web:final .`
 - [ ] Confirm:
   - protected routes return 401 without login
-  - scan finds ISO and BDMV directories
+  - scan finds BDMV directories
   - BDInfo parsing populates playlist and track labels
   - filename preview matches the agreed naming convention
   - queue recovery marks previously running jobs as interrupted

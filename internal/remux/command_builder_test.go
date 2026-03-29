@@ -9,7 +9,7 @@ import (
 func TestBuildMKVMergeArgsIncludesTrackMetadata(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.TrueHD.7.1.Atmos.mkv",
-		SourcePath: "/bd_input/Nightcrawler.iso",
+		SourcePath: "/bd_input/Nightcrawler",
 		Playlist:   "00800.MPLS",
 		EnableDV:   true,
 		Video:      VideoTrack{Name: "Main Video"},
@@ -48,7 +48,7 @@ func TestBuildMKVMergeArgsUsesPlaylistFileForBluRayFolderSource(t *testing.T) {
 func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
-		SourcePath: "/bd_input/Nightcrawler.iso",
+		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
 			{ID: "7", Name: "English", Language: "eng", Selected: true},
 			{ID: "a1", Name: "Japanese", Language: "jpn", Selected: true},
@@ -69,7 +69,7 @@ func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T)
 func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSelectors(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
-		SourcePath: "/bd_input/Nightcrawler.iso",
+		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
 			{ID: "7", Name: "English", Language: "eng", Selected: true},
 			{ID: "8", Name: "French", Language: "fra", Selected: false},
@@ -90,7 +90,7 @@ func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSelectors(t *testing.T)
 func TestBuildMKVMergeArgsTrackOrderIsVideoThenSelectedAudiosInInputOrder(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
-		SourcePath: "/bd_input/Nightcrawler.iso",
+		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
 			{ID: "9", Name: "Commentary", Language: "eng", Selected: false},
 			{ID: "7", Name: "English", Language: "eng", Selected: true},

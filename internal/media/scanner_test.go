@@ -6,11 +6,8 @@ import (
 	"testing"
 )
 
-func TestScannerFindsISOAndBDMVFolders(t *testing.T) {
+func TestScannerFindsBDMVFoldersOnly(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "movie.iso"), []byte("iso"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(filepath.Join(root, "DiscA", "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -26,8 +23,8 @@ func TestScannerFindsISOAndBDMVFolders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(items))
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
 	}
 
 	var bdmvSize int64 = -1
