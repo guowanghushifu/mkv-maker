@@ -65,10 +65,6 @@ func BuildMKVMergeArgs(d Draft) []string {
 	}
 	args = append(args, "--track-order", strings.Join(trackOrder, ","))
 
-	if d.EnableDV {
-		args = append(args, "--engage", "merge_dolby_vision")
-	}
-
 	args = append(args, resolveInputPaths(d)...)
 	return args
 }
