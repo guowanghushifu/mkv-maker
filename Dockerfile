@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS web-build
+FROM node:24-trixie-slim AS web-build
 WORKDIR /src/web
 
 COPY web/package*.json ./
@@ -7,7 +7,7 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.21-bookworm AS go-build
+FROM golang:1.26-trixie AS go-build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -17,7 +17,7 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/server ./cmd/server
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
