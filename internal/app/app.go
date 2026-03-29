@@ -1,8 +1,6 @@
 package app
 
 import (
-	"context"
-	"database/sql"
 	"errors"
 	"io"
 	"log"
@@ -13,22 +11,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guowanghushifu/mkv-maker/internal/auth"
 	"github.com/guowanghushifu/mkv-maker/internal/config"
 	httpapi "github.com/guowanghushifu/mkv-maker/internal/http"
 	"github.com/guowanghushifu/mkv-maker/internal/http/handlers"
 	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
-	"github.com/guowanghushifu/mkv-maker/internal/queue"
-	"github.com/guowanghushifu/mkv-maker/internal/store"
+	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 type App struct {
-	Config      config.Config
-	DB          *sql.DB
-	Sessions    *store.SessionStore
-	Handler     http.Handler
-	logFile     *os.File
-	queueCancel context.CancelFunc
-	queueDone   chan struct{}
+	Config       config.Config
+	Handler      http.Handler
+	logFile      *os.File
+	remuxManager *remux.Manager
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -40,23 +35,10 @@ func New(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 
-	dbPath := filepath.Join(cfg.DataDir, "app.db")
-	db, err := store.Open(dbPath)
-	if err != nil {
-		_ = logFile.Close()
-		return nil, err
-	}
-
-	if err := store.Migrate(db); err != nil {
-		_ = db.Close()
-		_ = logFile.Close()
-		return nil, err
-	}
-
-	sessionStore := store.NewSessionStore(db, time.Duration(cfg.SessionMaxAge)*time.Second)
+	cookieAuth := auth.NewCookieAuth(cfg.AppPassword, time.Duration(cfg.SessionMaxAge)*time.Second)
 	authHandler := &handlers.AuthHandler{
 		AppPassword:   cfg.AppPassword,
-		Sessions:      sessionStore,
+		Auth:          cookieAuth,
 		SessionMaxAge: cfg.SessionMaxAge,
 	}
 	configHandler := &handlers.ConfigHandler{
@@ -66,11 +48,11 @@ func New(cfg config.Config) (*App, error) {
 	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, cfg.OutputDir, nil, nil)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
-	jobStore := store.NewSQLiteJobStore(db, filepath.Join(cfg.DataDir, "logs"))
-	jobsHandler := handlers.NewJobsHandler(jobStore, cfg.InputDir, cfg.OutputDir)
+	remuxManager := remux.NewManager(nil)
+	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		RequireAuth:    middleware.RequireAuth(sessionStore),
+		RequireAuth:    middleware.RequireAuth(cookieAuth),
 		Login:          authHandler.Login,
 		Logout:         authHandler.Logout,
 		ConfigGet:      configHandler.Get,
@@ -79,30 +61,18 @@ func New(cfg config.Config) (*App, error) {
 		SourcesResolve: sourcesHandler.Resolve,
 		BDInfoParse:    bdinfoHandler.Parse,
 		DraftsPreview:  draftsHandler.PreviewFilename,
-		JobsList:       jobsHandler.List,
 		JobsCreate:     jobsHandler.Create,
-		JobsGet:        jobsHandler.Get,
-		JobsLog:        jobsHandler.Log,
+		JobsCurrent:    jobsHandler.Current,
+		JobsCurrentLog: jobsHandler.CurrentLog,
 	})
 
 	handler := withFrontend(router, filepath.Join("web", "dist"))
 
-	queueCtx, queueCancel := context.WithCancel(context.Background())
-	queueDone := make(chan struct{})
-	go func() {
-		manager := queue.NewManager(jobStore, queue.NewExecutor(jobStore, nil))
-		manager.Run(queueCtx)
-		close(queueDone)
-	}()
-
 	return &App{
-		Config:      cfg,
-		DB:          db,
-		Sessions:    sessionStore,
-		Handler:     handler,
-		logFile:     logFile,
-		queueCancel: queueCancel,
-		queueDone:   queueDone,
+		Config:       cfg,
+		Handler:      handler,
+		logFile:      logFile,
+		remuxManager: remuxManager,
 	}, nil
 }
 
@@ -110,23 +80,12 @@ func (a *App) Close() error {
 	if a == nil {
 		return nil
 	}
-	if a.queueCancel != nil {
-		a.queueCancel()
+	if a.remuxManager != nil {
+		a.remuxManager.Close()
 	}
-	if a.queueDone != nil {
-		<-a.queueDone
-	}
-	if a.DB == nil {
-		if a.logFile != nil {
-			return a.logFile.Close()
-		}
-		return nil
-	}
-	err := a.DB.Close()
+	var err error
 	if a.logFile != nil {
-		if closeErr := a.logFile.Close(); err == nil {
-			err = closeErr
-		}
+		err = a.logFile.Close()
 	}
 	return err
 }

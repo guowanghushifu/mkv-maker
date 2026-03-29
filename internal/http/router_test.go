@@ -8,7 +8,7 @@ import (
 
 func TestProtectedRouteRejectsAnonymousRequests(t *testing.T) {
 	router := NewRouter(testDependencies())
-	req := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current", nil)
 	res := httptest.NewRecorder()
 
 	router.ServeHTTP(res, req)
@@ -23,7 +23,7 @@ func TestProtectedPostJobsUsesCreateHandler(t *testing.T) {
 		deps.JobsCreate = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 		}
-		deps.JobsList = func(w http.ResponseWriter, r *http.Request) {
+		deps.JobsCurrent = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		}
 	}))
@@ -35,6 +35,26 @@ func TestProtectedPostJobsUsesCreateHandler(t *testing.T) {
 
 	if res.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d", res.Code)
+	}
+}
+
+func TestProtectedGetCurrentJobUsesCurrentHandler(t *testing.T) {
+	router := NewRouter(testDependenciesWithAuthBypass(func(deps *Dependencies) {
+		deps.JobsCurrent = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}
+		deps.JobsCreate = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
 	}
 }
 
@@ -61,10 +81,9 @@ func testDependenciesWithAuthBypass(mutator func(*Dependencies)) Dependencies {
 		SourcesResolve: noop,
 		BDInfoParse:    noop,
 		DraftsPreview:  noop,
-		JobsList:       noop,
 		JobsCreate:     noop,
-		JobsGet:        noop,
-		JobsLog:        noop,
+		JobsCurrent:    noop,
+		JobsCurrentLog: noop,
 	}
 	if mutator != nil {
 		mutator(&deps)

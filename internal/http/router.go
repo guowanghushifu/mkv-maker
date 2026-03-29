@@ -16,10 +16,9 @@ type Dependencies struct {
 	SourcesResolve http.HandlerFunc
 	BDInfoParse    http.HandlerFunc
 	DraftsPreview  http.HandlerFunc
-	JobsList       http.HandlerFunc
 	JobsCreate     http.HandlerFunc
-	JobsGet        http.HandlerFunc
-	JobsLog        http.HandlerFunc
+	JobsCurrent    http.HandlerFunc
+	JobsCurrentLog http.HandlerFunc
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -36,10 +35,9 @@ func NewRouter(deps Dependencies) http.Handler {
 		protected.Post("/api/sources/{id}/resolve", deps.SourcesResolve)
 		protected.Post("/api/bdinfo/parse", deps.BDInfoParse)
 		protected.Post("/api/drafts/preview-filename", deps.DraftsPreview)
-		protected.Get("/api/jobs", deps.JobsList)
 		protected.Post("/api/jobs", deps.JobsCreate)
-		protected.Get("/api/jobs/{id}", deps.JobsGet)
-		protected.Get("/api/jobs/{id}/log", deps.JobsLog)
+		protected.Get("/api/jobs/current", deps.JobsCurrent)
+		protected.Get("/api/jobs/current/log", deps.JobsCurrentLog)
 	})
 
 	return r

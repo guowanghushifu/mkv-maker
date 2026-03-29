@@ -9,19 +9,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
-	"github.com/guowanghushifu/mkv-maker/internal/store"
+	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 type JobsHandler struct {
-	Store     store.JobsRepository
+	Tasks     tasksManager
 	InputDir  string
 	OutputDir string
 }
 
-type listJobsResponse struct {
-	Jobs []store.APIJob `json:"jobs"`
+type tasksManager interface {
+	Start(req remux.StartRequest) (remux.Task, error)
+	Current() (remux.Task, error)
+	CurrentLog() (string, error)
 }
 
 type createJobRequest struct {
@@ -41,34 +42,11 @@ type createJobRequest struct {
 	OutputPath     string `json:"outputPath"`
 }
 
-func NewJobsHandler(jobStore store.JobsRepository, inputDir, outputDir string) *JobsHandler {
+func NewJobsHandler(tasks tasksManager, inputDir, outputDir string) *JobsHandler {
 	return &JobsHandler{
-		Store:     jobStore,
+		Tasks:     tasks,
 		InputDir:  strings.TrimSpace(inputDir),
 		OutputDir: strings.TrimSpace(outputDir),
-	}
-}
-
-func (h *JobsHandler) List(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if h.Store == nil {
-		http.Error(w, "jobs store is not configured", http.StatusInternalServerError)
-		return
-	}
-
-	jobs, err := h.Store.ListJobs()
-	if err != nil {
-		http.Error(w, "failed to list jobs", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(listJobsResponse{Jobs: jobs}); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
@@ -78,8 +56,8 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.Store == nil {
-		http.Error(w, "jobs store is not configured", http.StatusInternalServerError)
+	if h.Tasks == nil {
+		http.Error(w, "jobs service is not configured", http.StatusInternalServerError)
 		return
 	}
 
@@ -152,81 +130,73 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 		return
 	}
-	input := store.CreateJobInput{
+	startRequest := remux.StartRequest{
 		SourceName:   strings.TrimSpace(req.Source.Name),
 		OutputName:   strings.TrimSpace(req.OutputFilename),
 		OutputPath:   strings.TrimSpace(req.OutputPath),
 		PlaylistName: playlistName,
 		PayloadJSON:  payloadJSON,
 	}
-	job, err := h.Store.CreateQueuedJob(input)
+	task, err := h.Tasks.Start(startRequest)
 	if err != nil {
+		if errors.Is(err, remux.ErrTaskAlreadyRunning) {
+			http.Error(w, "task already running", http.StatusConflict)
+			return
+		}
 		http.Error(w, "failed to create job", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	if err := json.NewEncoder(w).Encode(job); err != nil {
+	if err := json.NewEncoder(w).Encode(task); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
-func (h *JobsHandler) Get(w http.ResponseWriter, r *http.Request) {
+func (h *JobsHandler) Current(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if h.Store == nil {
-		http.Error(w, "jobs store is not configured", http.StatusInternalServerError)
+	if h.Tasks == nil {
+		http.Error(w, "jobs service is not configured", http.StatusInternalServerError)
 		return
 	}
 
-	id := strings.TrimSpace(chi.URLParam(r, "id"))
-	if id == "" {
-		http.Error(w, "missing job id", http.StatusBadRequest)
-		return
-	}
-
-	job, err := h.Store.GetJob(id)
+	task, err := h.Tasks.Current()
 	if err != nil {
-		if errors.Is(err, store.ErrJobNotFound) {
-			http.Error(w, "job not found", http.StatusNotFound)
+		if errors.Is(err, remux.ErrTaskNotFound) {
+			http.Error(w, "task not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "failed to load job", http.StatusInternalServerError)
+		http.Error(w, "failed to load current task", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(job); err != nil {
+	if err := json.NewEncoder(w).Encode(task); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
-func (h *JobsHandler) Log(w http.ResponseWriter, r *http.Request) {
+func (h *JobsHandler) CurrentLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if h.Store == nil {
-		http.Error(w, "jobs store is not configured", http.StatusInternalServerError)
+	if h.Tasks == nil {
+		http.Error(w, "jobs service is not configured", http.StatusInternalServerError)
 		return
 	}
 
-	id := strings.TrimSpace(chi.URLParam(r, "id"))
-	if id == "" {
-		http.Error(w, "missing job id", http.StatusBadRequest)
-		return
-	}
-
-	logText, err := h.Store.GetJobLog(id)
+	logText, err := h.Tasks.CurrentLog()
 	if err != nil {
-		if errors.Is(err, store.ErrJobNotFound) {
-			http.Error(w, "job not found", http.StatusNotFound)
+		if errors.Is(err, remux.ErrTaskNotFound) {
+			http.Error(w, "task not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "failed to load job log", http.StatusInternalServerError)
+		http.Error(w, "failed to load current task log", http.StatusInternalServerError)
 		return
 	}
 
