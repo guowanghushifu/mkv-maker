@@ -2,15 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Dockerized single-user Go + React web application that scans Blu-ray ISO or extracted BDMV sources, resolves playlists with optional BDInfo input, lets the user edit export tracks, and produces remuxed MKV jobs with persistent history.
+**Goal:** Build a Dockerized single-user Go + React web application that scans Blu-ray ISO or extracted BDMV sources, requires matching BDInfo input to resolve the target playlist, lets the user edit export tracks, and produces remuxed MKV jobs with persistent history.
 
-**Architecture:** A Go HTTP server exposes authenticated JSON APIs, serves the React SPA, persists state in SQLite, and runs a single sequential worker for remux jobs. The frontend is a Vite React app that guides the user through scan, BDInfo, playlist, track editing, review, and job history flows.
+**Architecture:** A Go HTTP server exposes authenticated JSON APIs, serves the React SPA, persists state in SQLite, and runs a single sequential worker for remux jobs. The frontend is a Vite React app that guides the user through scan, required BDInfo input, track editing, review, and job history flows. There is no manual playlist-selection page; the workflow resolves the target playlist exclusively from the user-provided BDInfo log.
 
 **Tech Stack:** Go, chi router, modernc SQLite driver, React, TypeScript, Vite, Vitest, Testing Library, Docker, GitHub Actions
 
 ---
 
 ## Planned Repository Structure
+
+## Requirements Update (2026-03-29)
+
+The approved workflow changed after this plan was first written. These rules supersede any conflicting older text below:
+
+- BDInfo input is required and cannot be skipped.
+- The target playlist is determined from the user-provided BDInfo log.
+- Manual playlist selection UI is removed from scope.
+- `GET /api/sources/{id}/playlists` is removed from scope.
+- `web/src/features/playlists/PlaylistPage.tsx` is removed from scope.
+- Any existing playlist-ranking helper code is secondary internal logic only; it is not part of the primary user flow.
 
 ### Root files
 
@@ -71,7 +82,6 @@
 - Create: `web/src/features/auth/LoginPage.tsx`
 - Create: `web/src/features/sources/ScanPage.tsx`
 - Create: `web/src/features/bdinfo/BDInfoPage.tsx`
-- Create: `web/src/features/playlists/PlaylistPage.tsx`
 - Create: `web/src/features/draft/TrackEditorPage.tsx`
 - Create: `web/src/features/review/ReviewPage.tsx`
 - Create: `web/src/features/jobs/JobsPage.tsx`
@@ -1096,17 +1106,16 @@ import (
 type Dependencies struct {
 	AuthMiddleware func(http.Handler) http.Handler
 	AuthHandler    http.HandlerFunc
-	LogoutHandler  http.HandlerFunc
-	ConfigHandler  http.HandlerFunc
-	ScanHandler    http.HandlerFunc
-	SourcesHandler http.HandlerFunc
-	PlaylistsHandler http.HandlerFunc
-	ResolveHandler http.HandlerFunc
-	BDInfoHandler  http.HandlerFunc
-	DraftsHandler  http.HandlerFunc
-	JobsHandler    http.HandlerFunc
+	LogoutHandler    http.HandlerFunc
+	ConfigHandler    http.HandlerFunc
+	ScanHandler      http.HandlerFunc
+	SourcesHandler   http.HandlerFunc
+	ResolveHandler   http.HandlerFunc
+	BDInfoHandler    http.HandlerFunc
+	DraftsHandler    http.HandlerFunc
+	JobsHandler      http.HandlerFunc
 	JobDetailHandler http.HandlerFunc
-	JobLogHandler http.HandlerFunc
+	JobLogHandler    http.HandlerFunc
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -1118,7 +1127,6 @@ func NewRouter(deps Dependencies) http.Handler {
 		protected.Get("/api/config", deps.ConfigHandler)
 		protected.Post("/api/sources/scan", deps.ScanHandler)
 		protected.Get("/api/sources", deps.SourcesHandler)
-		protected.Get("/api/sources/{id}/playlists", deps.PlaylistsHandler)
 		protected.Post("/api/sources/{id}/resolve", deps.ResolveHandler)
 		protected.Post("/api/bdinfo/parse", deps.BDInfoHandler)
 		protected.Post("/api/drafts/preview-filename", deps.DraftsHandler)
@@ -1173,7 +1181,6 @@ git commit -m "feat: wire authenticated api routes"
 - Create: `web/src/features/auth/LoginPage.tsx`
 - Create: `web/src/features/sources/ScanPage.tsx`
 - Create: `web/src/features/bdinfo/BDInfoPage.tsx`
-- Create: `web/src/features/playlists/PlaylistPage.tsx`
 - Create: `web/src/features/draft/TrackEditorPage.tsx`
 - Create: `web/src/features/review/ReviewPage.tsx`
 - Create: `web/src/features/jobs/JobsPage.tsx`
@@ -1281,7 +1288,7 @@ Expected: PASS with the reorder callback firing after the move-up action.
 - [ ] **Step 5: Commit the React workflow**
 
 ```bash
-git add web/src/api/client.ts web/src/api/types.ts web/src/components/Layout.tsx web/src/components/StatusBadge.tsx web/src/features/auth/LoginPage.tsx web/src/features/sources/ScanPage.tsx web/src/features/bdinfo/BDInfoPage.tsx web/src/features/playlists/PlaylistPage.tsx web/src/features/draft/TrackEditorPage.tsx web/src/features/review/ReviewPage.tsx web/src/features/jobs/JobsPage.tsx web/src/styles/app.css web/src/test/TrackEditorPage.test.tsx web/src/App.tsx
+git add web/src/api/client.ts web/src/api/types.ts web/src/components/Layout.tsx web/src/components/StatusBadge.tsx web/src/features/auth/LoginPage.tsx web/src/features/sources/ScanPage.tsx web/src/features/bdinfo/BDInfoPage.tsx web/src/features/draft/TrackEditorPage.tsx web/src/features/review/ReviewPage.tsx web/src/features/jobs/JobsPage.tsx web/src/styles/app.css web/src/test/TrackEditorPage.test.tsx web/src/App.tsx
 git commit -m "feat: add remux workflow frontend"
 ```
 
@@ -1324,11 +1331,8 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/server ./cmd/server
 
 FROM debian:bookworm-slim
-ARG INSTALL_MAKEMKV=0
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg mediainfo mkvtoolnix ca-certificates && rm -rf /var/lib/apt/lists/*
-# Keep public CI images redistributable; local full builds can replace this block with actual MakeMKV installation steps.
-RUN if [ "${INSTALL_MAKEMKV}" = "1" ]; then echo "install makemkvcon in local builds"; fi
 COPY --from=go-build /out/server /app/server
 COPY --from=web-build /app/web/dist /app/web/dist
 ENV BD_INPUT_DIR=/bd_input \
@@ -1345,8 +1349,7 @@ CMD ["/app/server"]
 set -euo pipefail
 
 IMAGE_TAG="${1:-mkv-remux-web:local}"
-INSTALL_MAKEMKV="${INSTALL_MAKEMKV:-1}"
-docker build --build-arg INSTALL_MAKEMKV="${INSTALL_MAKEMKV}" -t "${IMAGE_TAG}" .
+docker build -t "${IMAGE_TAG}" .
 ```
 
 ```bash
@@ -1425,8 +1428,8 @@ Expected: PASS with frontend build succeeding, Go tests green, and Docker image 
 
 ## Image variants
 
-- Public GitHub Actions image does not bundle `makemkvcon`
-- Local builds default to `INSTALL_MAKEMKV=1` so users can add MakeMKV installation to their private build flow
+- Public and local images use the same free CLI stack
+- BDInfo input is required to determine the target playlist
 
 ## Local run
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a Linux Dockerized web tool that scans Blu-ray ISO files or extracted BDMV folders, lets a single user choose the correct playlist and export tracks, and produces remuxed MKV files with controlled track metadata and predictable output naming.
+Build a Linux Dockerized web tool that scans Blu-ray ISO files or extracted BDMV folders, requires the user to provide a matching BDInfo log to determine the target playlist, lets a single user edit export tracks, and produces remuxed MKV files with controlled track metadata and predictable output naming.
 
 ## Scope
 
@@ -11,8 +11,8 @@ The first version covers:
 - Running as a single-container web application on Linux
 - Single-user access protected by one password
 - Input sources from a configured directory containing Blu-ray ISO files or extracted Blu-ray folders
-- Optional BDInfo log parsing to improve playlist targeting and track naming
-- Manual playlist selection when BDInfo is absent or insufficient
+- Required BDInfo log parsing to determine the target playlist and improve track naming
+- No manual playlist selection flow; the user must provide a valid BDInfo log for the selected source
 - Track selection, naming, language editing, default-track flags, and ordering for audio and subtitle tracks
 - UHD Dolby Vision enhancement-layer merge into the main video stream when supported by the source and `mkvmerge`
 - Sequential background job execution with persistent history and logs
@@ -53,23 +53,16 @@ This keeps the system small and operationally simple while still supporting the 
 
 The application orchestrates established media CLI tools instead of reimplementing Blu-ray parsing or muxing:
 
-- `makemkvcon`
-  - scans Blu-ray sources
-  - enumerates titles and stream metadata
-  - provides source structure that can be correlated to playlists
 - `mkvmerge`
   - creates the final MKV
   - applies track order, names, languages, and default flags
   - merges Dolby Vision enhancement data into the main video track when supported by the source and installed version
 - `ffprobe`
-  - verifies stream details needed for naming and summaries
+  - verifies stream details for the playlist identified by the user-provided BDInfo log
 - `mediainfo`
   - supplements HDR, audio layout, and codec labeling when needed
 
-Distribution constraint:
-
-- Public automation should build an image without bundling `makemkvcon`
-- Users build the full local image themselves with `makemkvcon` included using the provided local build flow
+BDInfo is the required source of playlist selection and preferred human-readable track labels. The backend validates that the referenced playlist exists in the scanned Blu-ray source before allowing export drafting.
 
 ## User Model and Security
 
@@ -111,9 +104,9 @@ The UI displays the results in a list with:
 - size
 - modification time
 
-### 3. Optional BDInfo Paste
+### 3. Required BDInfo Paste
 
-After selecting a source, the user may paste a BDInfo log into a text area.
+After selecting a source, the user must paste a BDInfo log into a text area.
 
 The parser attempts to extract:
 
@@ -123,21 +116,13 @@ The parser attempts to extract:
 - audio track labels, codecs, languages, channel layouts, and Atmos or DTS:X descriptors
 - subtitle labels and languages
 
-This step is optional. Parse failure is non-fatal.
+This step is mandatory. Parse failure is fatal for the workflow and the user must provide a valid BDInfo log before continuing.
 
 ### 4. Resolve Target Playlist
 
-If BDInfo provides a playlist name and it can be matched against the scanned source, the backend directly resolves that playlist and returns draft track data.
+The backend extracts the playlist name from BDInfo, validates that it can be matched against the scanned source, and directly resolves that playlist into draft track data.
 
-If BDInfo is skipped or cannot resolve the playlist, the backend lists all available playlists for the selected source, with:
-
-- playlist name
-- duration
-- estimated size
-- chapter count
-- primary video summary
-
-Playlists are sorted by a feature-candidate score derived from duration, size, and chapter count. The top item is only a recommendation. The user must still make the final selection.
+If the BDInfo log does not contain a recognizable playlist name, or if the selected source does not contain the referenced playlist, the workflow stops and the user must correct the source selection or provide a matching BDInfo log.
 
 ### 5. Edit Track Export Draft
 
@@ -228,27 +213,26 @@ The initial version should keep traversal shallow and predictable, favoring dire
 
 ### Playlist Resolution
 
-Primary source of truth for execution is tool-based source analysis, not BDInfo text alone.
+Primary source of truth for playlist selection is the user-provided BDInfo log, with the selected Blu-ray source used to validate that the referenced playlist exists.
 
-BDInfo is used to improve:
+BDInfo is used for:
 
-- playlist targeting
+- target playlist selection
 - human-friendly track names
+- Dolby Vision enhancement-layer detection cues
 
-Execution still depends on validated source analysis results from the selected Blu-ray source.
+Execution still depends on validating the selected source and applying the extracted playlist to the remux command arguments.
 
 ### Track Metadata Resolution
 
 The final draft merges data from several sources:
 
-- structural source analysis from `makemkvcon`
-- optional human-readable labels from BDInfo
+- required human-readable labels and playlist identity from BDInfo
 - technical verification from `ffprobe` and `mediainfo`
 
 Priority guidance:
 
-- structural IDs and stream existence come from actual source analysis
-- human-facing names prefer BDInfo when available
+- playlist identity and human-facing track names come from BDInfo
 - naming fields used for output filename generation may fall back to `ffprobe` or `mediainfo`
 
 ## Dolby Vision Handling
@@ -398,7 +382,6 @@ Primary views:
 - login page
 - scan page
 - BDInfo paste page
-- playlist selection page
 - track editing page
 - review and submit page
 - jobs page
@@ -407,14 +390,13 @@ Key interaction requirements:
 
 - scan results shown in a clear list or table
 - large BDInfo paste text area
-- playlist list with sortable recommendation cues
 - editable track rows for audio and subtitle tracks
 - order controls for selected audio and subtitle tracks
 - live filename preview as draft fields change
 - read-only execution summary before submit
 - job list with statuses and log viewing
 
-The UI should make the distinction between optional BDInfo assistance and mandatory source validation obvious.
+The UI should make it obvious that BDInfo is required and that the pasted log must match the selected source.
 
 ## Backend API Shape
 
@@ -426,7 +408,6 @@ Planned HTTP endpoints:
 - `POST /api/sources/scan`
 - `GET /api/sources`
 - `POST /api/bdinfo/parse`
-- `GET /api/sources/:id/playlists`
 - `POST /api/sources/:id/resolve`
 - `POST /api/drafts/preview-filename`
 - `POST /api/jobs`
@@ -437,8 +418,8 @@ Planned HTTP endpoints:
 Responsibilities:
 
 - source scan endpoints return discovered media candidates
-- BDInfo parse endpoint returns extracted metadata only
-- resolve endpoint combines source analysis and optional BDInfo hints into a concrete editable draft
+- BDInfo parse endpoint returns extracted metadata and fails when the log cannot identify a playlist
+- resolve endpoint combines source validation with required BDInfo hints into a concrete editable draft
 - preview filename endpoint applies naming rules without creating a job
 - jobs endpoints manage queue creation, listing, status retrieval, and log access
 
@@ -471,8 +452,8 @@ The system should treat these as first-class failure modes:
 - data directory missing or unwritable
 - `APP_PASSWORD` missing
 - required CLI tools not installed or not executable
-- source scan succeeds but title or playlist analysis fails
-- BDInfo parse returns incomplete data
+- source scan succeeds but the BDInfo playlist does not exist in the selected source
+- BDInfo parse returns incomplete or unrecognized data
 - user selects no audio or subtitle tracks that they later expected
 - output filename resolves to an existing file collision
 - remux command exits non-zero
@@ -480,7 +461,7 @@ The system should treat these as first-class failure modes:
 User-facing behavior:
 
 - configuration and toolchain failures should be visible early in the UI
-- BDInfo parse problems should degrade gracefully and not block manual playlist selection
+- BDInfo parse problems should stop the workflow with a clear correction path
 - remux failures should preserve logs and show concise summaries in the jobs page
 
 ## Testing Strategy
@@ -498,8 +479,7 @@ User-facing behavior:
 
 - login form behavior
 - scan result selection flow
-- BDInfo submission and skip behavior
-- playlist selection and recommendation rendering
+- BDInfo submission and validation behavior
 - track selection, default flags, and ordering
 - live filename preview updates
 - review page rendering
@@ -529,7 +509,6 @@ Dockerfile stages:
    - `mkvmerge`
    - `ffprobe`
    - `mediainfo`
-   - locally installed `makemkvcon` in the user-build scenario
 
 The application listens on one HTTP port, for example `8080`.
 
@@ -571,8 +550,8 @@ Manual inputs should include:
 
 Important release constraint:
 
-- the public CI workflow should build the base public image without bundling `makemkvcon`
-- documentation must explain that users needing full Blu-ray analysis capability build the complete local image themselves
+- the public CI workflow should build the application image with the free CLI toolchain required by the final remux flow
+- documentation must explain that BDInfo is required input and must match the selected source
 
 ## Documentation Requirements
 
@@ -591,9 +570,9 @@ The implementation should include:
 - Runtime model: single container on Linux
 - ISO handling: container does not perform loop mount
 - Queue model: persistent sequential queue, one running job at a time
-- Playlist recommendation: automatic recommendation, explicit user choice
+- Playlist resolution: mandatory BDInfo input, no manual playlist fallback
 - Title source priority: user edit, then BDInfo, then cleaned source name
-- `makemkvcon` distribution: available in local builds, not required in public CI image
+- BDInfo requirement: mandatory, no manual playlist selection fallback
 - User model: single user with password-protected login
 - Session model: login once, persisted by cookie
 - Restart behavior: running jobs become interrupted, no automatic resume
