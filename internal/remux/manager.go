@@ -12,6 +12,7 @@ import (
 
 var ErrTaskAlreadyRunning = errors.New("task already running")
 var ErrTaskNotFound = errors.New("task not found")
+var ErrManagerClosed = errors.New("manager is closed")
 
 type Task struct {
 	ID           string `json:"id"`
@@ -33,9 +34,8 @@ type StartRequest struct {
 }
 
 type taskState struct {
-	task        Task
-	payloadJSON string
-	log         string
+	task Task
+	log  string
 }
 
 type Manager struct {
@@ -43,11 +43,18 @@ type Manager struct {
 	current  *taskState
 	latest   *taskState
 	executor *JobRunner
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	closed   bool
 }
 
 func NewManager(runner CommandRunner) *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Manager{
 		executor: NewJobRunner(runner),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 }
 
@@ -57,6 +64,10 @@ func (m *Manager) Start(req StartRequest) (Task, error) {
 	}
 
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return Task{}, ErrManagerClosed
+	}
 	if m.current != nil {
 		m.mu.Unlock()
 		return Task{}, ErrTaskAlreadyRunning
@@ -78,15 +89,18 @@ func (m *Manager) Start(req StartRequest) (Task, error) {
 		Status:       "running",
 	}
 	state := &taskState{
-		task:        task,
-		payloadJSON: req.PayloadJSON,
-		log:         logLine("remux started"),
+		task: task,
+		log:  logLine("remux started"),
 	}
 	m.current = state
 	m.latest = state
+	m.wg.Add(1)
 	m.mu.Unlock()
 
-	go m.execute(state, req)
+	go func() {
+		defer m.wg.Done()
+		m.execute(state, req)
+	}()
 
 	return task, nil
 }
@@ -131,7 +145,7 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 	}
 
 	m.appendLog(state, logLine("running"))
-	output, err := m.executor.Execute(context.Background(), req)
+	output, err := m.executor.Execute(m.ctx, req)
 	if output != "" {
 		m.appendLog(state, normalizeLogChunk(output))
 	}
@@ -145,6 +159,27 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 
 	m.appendLog(state, logLine("completed"))
 	m.finish(state, "succeeded", "")
+}
+
+func (m *Manager) Close() {
+	if m == nil {
+		return
+	}
+
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		m.wg.Wait()
+		return
+	}
+	m.closed = true
+	cancel := m.cancel
+	m.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	m.wg.Wait()
 }
 
 func (m *Manager) appendLog(state *taskState, content string) {

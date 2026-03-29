@@ -3,7 +3,9 @@ package remux
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 )
 
 type stubRunner struct {
@@ -17,33 +19,70 @@ func (r *stubRunner) Run(_ context.Context, draft Draft) (string, error) {
 	return r.output, r.err
 }
 
+type controlledRunner struct {
+	output  string
+	err     error
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *controlledRunner) Run(ctx context.Context, draft Draft) (string, error) {
+	if r.started != nil {
+		select {
+		case <-r.started:
+		default:
+			close(r.started)
+		}
+	}
+
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	return r.output, r.err
+}
+
 func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
-	manager := NewManager(&stubRunner{})
+	runner := &controlledRunner{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
 	_, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  `{"source":{"name":"Nightcrawler Disc"}}`,
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("first Start returned error: %v", err)
 	}
+	<-runner.started
 
 	_, err = manager.Start(StartRequest{
 		SourceName:   "Second Disc",
 		OutputName:   "Second.mkv",
 		OutputPath:   "/remux/Second.mkv",
 		PlaylistName: "00002.MPLS",
-		PayloadJSON:  `{"source":{"name":"Second Disc"}}`,
+		PayloadJSON:  validPayloadJSON("Second Disc", "/bd_input/Second", "00002.MPLS", "/remux/Second.mkv"),
 	})
 	if !errors.Is(err, ErrTaskAlreadyRunning) {
 		t.Fatalf("expected ErrTaskAlreadyRunning, got %v", err)
 	}
+
+	close(runner.release)
 }
 
 func TestManagerCurrentReturnsRunningAndLatestLog(t *testing.T) {
 	manager := NewManager(&stubRunner{output: "mkvmerge progress"})
+	defer manager.Close()
 
 	task, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
@@ -71,4 +110,147 @@ func TestManagerCurrentReturnsRunningAndLatestLog(t *testing.T) {
 	if current.ID != task.ID {
 		t.Fatalf("expected current id %q, got %q", task.ID, current.ID)
 	}
+}
+
+func TestManagerSuccessTransitionKeepsLatestAndCompletionLog(t *testing.T) {
+	manager := NewManager(&stubRunner{output: "mkvmerge progress"})
+	defer manager.Close()
+
+	task, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.ID != task.ID {
+		t.Fatalf("expected latest task id %q, got %q", task.ID, done.ID)
+	}
+	if done.Status != "succeeded" {
+		t.Fatalf("expected succeeded status, got %q", done.Status)
+	}
+	if done.Message != "" {
+		t.Fatalf("expected empty message on success, got %q", done.Message)
+	}
+
+	logText, err := manager.CurrentLog()
+	if err != nil {
+		t.Fatalf("CurrentLog returned error: %v", err)
+	}
+	if !strings.Contains(logText, "mkvmerge progress") {
+		t.Fatalf("expected command output in log, got %q", logText)
+	}
+	if !strings.Contains(logText, "completed") {
+		t.Fatalf("expected completion line in log, got %q", logText)
+	}
+}
+
+func TestManagerFailureTransitionKeepsLatestAndFailureLog(t *testing.T) {
+	manager := NewManager(&stubRunner{
+		output: "stderr output",
+		err:    errors.New("runner exploded"),
+	})
+	defer manager.Close()
+
+	task, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.ID != task.ID {
+		t.Fatalf("expected latest task id %q, got %q", task.ID, done.ID)
+	}
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status, got %q", done.Status)
+	}
+	if !strings.Contains(done.Message, "runner exploded") {
+		t.Fatalf("expected failure message to include runner error, got %q", done.Message)
+	}
+
+	logText, err := manager.CurrentLog()
+	if err != nil {
+		t.Fatalf("CurrentLog returned error: %v", err)
+	}
+	if !strings.Contains(logText, "stderr output") {
+		t.Fatalf("expected command output in log, got %q", logText)
+	}
+	if !strings.Contains(logText, "runner exploded") {
+		t.Fatalf("expected failure line in log, got %q", logText)
+	}
+}
+
+func TestManagerCloseCancelsInFlightTask(t *testing.T) {
+	runner := &controlledRunner{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	manager := NewManager(runner)
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	closeDone := make(chan struct{})
+	go func() {
+		manager.Close()
+		close(closeDone)
+	}()
+
+	select {
+	case <-closeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not return")
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status after cancel, got %q", done.Status)
+	}
+	if !strings.Contains(strings.ToLower(done.Message), "canceled") {
+		t.Fatalf("expected canceled message after Close, got %q", done.Message)
+	}
+}
+
+func waitForTerminalTask(t *testing.T, manager *Manager) Task {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		task, err := manager.Current()
+		if err == nil && task.Status != "running" {
+			return task
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for terminal task state")
+	return Task{}
+}
+
+func validPayloadJSON(sourceName, sourcePath, playlistName, outputPath string) string {
+	return `{
+		"source":{"name":"` + sourceName + `","path":"` + sourcePath + `","type":"bdmv"},
+		"bdinfo":{"playlistName":"` + playlistName + `"},
+		"draft":{"playlistName":"` + playlistName + `","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
+		"outputPath":"` + outputPath + `"
+	}`
 }
