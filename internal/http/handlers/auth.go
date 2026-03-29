@@ -9,9 +9,13 @@ import (
 	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
 )
 
+type TokenIssuer interface {
+	Issue() (string, error)
+}
+
 type AuthHandler struct {
 	AppPassword   string
-	Auth          middleware.CookieAuth
+	Auth          TokenIssuer
 	SessionMaxAge int
 }
 

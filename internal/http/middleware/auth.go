@@ -6,12 +6,11 @@ import (
 
 const SessionCookieName = "session_token"
 
-type CookieAuth interface {
-	Issue() (string, error)
+type TokenValidator interface {
 	Valid(token string) (bool, error)
 }
 
-func RequireAuth(auth CookieAuth) func(http.Handler) http.Handler {
+func RequireAuth(auth TokenValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if auth == nil {

@@ -12,10 +12,6 @@ type stubCookieAuth struct {
 	validErr    error
 }
 
-func (s stubCookieAuth) Issue() (string, error) {
-	return "unused", nil
-}
-
 func (s stubCookieAuth) Valid(token string) (bool, error) {
 	if token == "" {
 		return false, nil
