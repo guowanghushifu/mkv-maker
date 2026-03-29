@@ -188,7 +188,23 @@ button:disabled {
 }
 
 .track-editor-table tr.is-muted td {
-  opacity: 0.58;
+  background: #fbfcff;
+}
+
+.track-editor-table tr.is-muted input[type='text'] {
+  color: #6a7f98;
+  background: #f6f9ff;
+}
+
+.track-editor-table tr.is-muted .track-detail-chip {
+  color: #637993;
+  border-color: #d9e2f1;
+  background: #f8fbff;
+}
+
+.track-editor-table tr.is-drop-target td {
+  border-top: 2px solid #1d6fd8;
+  background: #eaf3ff;
 }
 
 .track-editor-table .drag-cell {
@@ -197,12 +213,25 @@ button:disabled {
 }
 
 .drag-handle {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.7rem;
+  border: 1px solid #bfd0e6;
+  border-radius: 4px;
+  background: #f4f8ff;
+  padding: 0;
   font-weight: 700;
   letter-spacing: 1px;
   color: #5d7695;
   cursor: grab;
   user-select: none;
+}
+
+.drag-handle:focus-visible {
+  outline: 2px solid #1d6fd8;
+  outline-offset: 1px;
 }
 
 .track-detail-chip {

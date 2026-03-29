@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import type { Draft, DraftTrack } from '../../api/types';
 import { moveTrackRow, setExclusiveDefault, toggleTrackSelected } from './trackTable';
@@ -15,6 +15,18 @@ type TrackEditorPageProps = {
 
 type TrackGroup = 'audio' | 'subtitles';
 
+function moveTrackByOffset(tracks: DraftTrack[], trackId: string, offset: -1 | 1): DraftTrack[] {
+  const index = tracks.findIndex((track) => track.id === trackId);
+  const nextIndex = index + offset;
+  if (index < 0 || nextIndex < 0 || nextIndex >= tracks.length) {
+    return tracks;
+  }
+  const next = [...tracks];
+  const [moved] = next.splice(index, 1);
+  next.splice(nextIndex, 0, moved);
+  return next;
+}
+
 export function TrackEditorPage({
   draft,
   filenamePreview,
@@ -25,6 +37,7 @@ export function TrackEditorPage({
   onNext,
 }: TrackEditorPageProps) {
   const dragRef = useRef<{ group: TrackGroup; trackId: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ group: TrackGroup; trackId: string } | null>(null);
 
   const updateVideoName = (name: string) => {
     onChange({ ...draft, video: { ...draft.video, name } });
@@ -50,10 +63,15 @@ export function TrackEditorPage({
     updateSubtitles(draft.subtitles.map((track) => (track.id === trackId ? updater(track) : track)));
   };
 
-  const handleDragStart = (event: DragEvent<HTMLTableRowElement>, group: TrackGroup, trackId: string) => {
+  const handleDragStart = (event: DragEvent<HTMLButtonElement>, group: TrackGroup, trackId: string) => {
     dragRef.current = { group, trackId };
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', trackId);
+  };
+
+  const handleDragEnd = () => {
+    dragRef.current = null;
+    setDropTarget(null);
   };
 
   const handleDrop = (
@@ -65,6 +83,7 @@ export function TrackEditorPage({
     const sourceId =
       (dragRef.current?.group === group && dragRef.current.trackId) ||
       event.dataTransfer.getData('text/plain');
+    setDropTarget(null);
     if (!sourceId || sourceId === targetTrackId) {
       return;
     }
@@ -73,6 +92,18 @@ export function TrackEditorPage({
       return;
     }
     updateSubtitles(moveTrackRow(draft.subtitles, sourceId, targetTrackId));
+  };
+
+  const handleKeyboardReorder = (group: TrackGroup, trackId: string, key: string) => {
+    if (key !== 'ArrowUp' && key !== 'ArrowDown') {
+      return;
+    }
+    const offset: -1 | 1 = key === 'ArrowUp' ? -1 : 1;
+    if (group === 'audio') {
+      updateAudio(moveTrackByOffset(draft.audio, trackId, offset));
+      return;
+    }
+    updateSubtitles(moveTrackByOffset(draft.subtitles, trackId, offset));
   };
 
   const renderTrackTable = (group: TrackGroup, tracks: DraftTrack[]) => (
@@ -92,16 +123,40 @@ export function TrackEditorPage({
           {tracks.map((track) => (
             <tr
               key={track.id}
-              className={track.selected ? 'is-selected' : 'is-muted'}
-              draggable
-              onDragStart={(event) => handleDragStart(event, group, track.id)}
-              onDragOver={(event) => event.preventDefault()}
+              className={[
+                track.selected ? 'is-selected' : 'is-muted',
+                dropTarget?.group === group && dropTarget.trackId === track.id ? 'is-drop-target' : '',
+              ]
+                .join(' ')
+                .trim()}
+              onDragEnter={() => setDropTarget({ group, trackId: track.id })}
+              onDragLeave={() => setDropTarget((current) => {
+                if (current?.group === group && current.trackId === track.id) {
+                  return null;
+                }
+                return current;
+              })}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDropTarget({ group, trackId: track.id });
+                if (event.dataTransfer) {
+                  event.dataTransfer.dropEffect = 'move';
+                }
+              }}
               onDrop={(event) => handleDrop(event, group, track.id)}
             >
               <td className="drag-cell">
-                <span className="drag-handle" aria-hidden="true">
+                <button
+                  type="button"
+                  className="drag-handle"
+                  aria-label={`Drag ${track.name}`}
+                  draggable
+                  onDragStart={(event) => handleDragStart(event, group, track.id)}
+                  onDragEnd={handleDragEnd}
+                  onKeyDown={(event) => handleKeyboardReorder(group, track.id, event.key)}
+                >
                   ⋮⋮
-                </span>
+                </button>
               </td>
               <td>
                 <input

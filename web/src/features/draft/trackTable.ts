@@ -8,7 +8,8 @@ export function moveTrackRow(tracks: DraftTrack[], sourceId: string, targetId: s
   }
   const next = [...tracks];
   const [moved] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, moved);
+  const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+  next.splice(insertIndex, 0, moved);
   return next;
 }
 
