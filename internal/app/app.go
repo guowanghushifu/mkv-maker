@@ -53,7 +53,7 @@ func New(cfg config.Config) (*App, error) {
 	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, nil)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
-	jobsHandler := handlers.NewJobsHandler()
+	jobsHandler := handlers.NewJobsHandler(store.NewSQLiteJobStore(db))
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		RequireAuth:    middleware.RequireAuth(sessionStore),

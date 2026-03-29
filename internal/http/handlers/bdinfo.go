@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	mediabdinfo "github.com/wangdazhuo/mkv-maker/internal/media/bdinfo"
 )
@@ -12,6 +13,7 @@ type BDInfoHandler struct {
 }
 
 type bdinfoParseRequest struct {
+	RawText string `json:"rawText"`
 	LogText string `json:"logText"`
 }
 
@@ -38,7 +40,12 @@ func (h *BDInfoHandler) Parse(w http.ResponseWriter, r *http.Request) {
 		parse = mediabdinfo.Parse
 	}
 
-	parsed, err := parse(req.LogText)
+	input := strings.TrimSpace(req.RawText)
+	if input == "" {
+		input = req.LogText
+	}
+
+	parsed, err := parse(input)
 	if err != nil {
 		http.Error(w, "failed to parse bdinfo", http.StatusBadRequest)
 		return
