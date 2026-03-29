@@ -7,10 +7,6 @@ type SubmitJobRequest = {
   outputFilename: string;
   outputPath: string;
 };
-
-type ListJobsResponse = {
-  jobs: Job[];
-};
 const sanitizeCharsPattern = /[<>:"/\\|?*\x00-\x1f]/g;
 
 function normalizeCodecLabel(value: string): string {
@@ -103,7 +99,7 @@ function normalizeJob(partial: Partial<Job>): Job {
     outputPath: partial.outputPath || '/output/pending.mkv',
     playlistName: partial.playlistName || 'unknown',
     createdAt: partial.createdAt || new Date().toISOString(),
-    status: partial.status || 'queued',
+    status: partial.status || 'running',
     message: partial.message,
   };
 }
@@ -187,17 +183,28 @@ export function createApiClient(basePath = '/api') {
       );
     },
 
-    async listJobs(token?: string): Promise<Job[]> {
-      const payload = await requestJSON<Job[] | ListJobsResponse>(`${basePath}/jobs`, { method: 'GET' }, token);
-      const items = Array.isArray(payload) ? payload : payload.jobs;
-      return items.map((job) => normalizeJob(job));
-    },
-
-    async getJobLog(jobId: string, token?: string): Promise<string> {
-      const response = await fetch(`${basePath}/jobs/${jobId}/log`, {
+    async currentJob(token?: string): Promise<Job | null> {
+      const response = await fetch(`${basePath}/jobs/current`, {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      return normalizeJob((await response.json()) as Partial<Job>);
+    },
+
+    async currentJobLog(token?: string): Promise<string> {
+      const response = await fetch(`${basePath}/jobs/current/log`, {
+        method: 'GET',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (response.status === 404) {
+        return '';
+      }
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }

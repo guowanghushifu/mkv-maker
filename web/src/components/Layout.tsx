@@ -1,12 +1,12 @@
 import type { PropsWithChildren } from 'react';
 
-export type WorkflowStep = 'login' | 'scan' | 'bdinfo' | 'editor' | 'review' | 'jobs';
+export type WorkflowStep = 'login' | 'scan' | 'bdinfo' | 'editor' | 'review';
 
 type LayoutProps = PropsWithChildren<{
   currentStep: WorkflowStep;
 }>;
 
-const stepOrder: WorkflowStep[] = ['login', 'scan', 'bdinfo', 'editor', 'review', 'jobs'];
+const stepOrder: WorkflowStep[] = ['login', 'scan', 'bdinfo', 'editor', 'review'];
 
 const stepLabels: Record<WorkflowStep, string> = {
   login: 'Login',
@@ -14,7 +14,6 @@ const stepLabels: Record<WorkflowStep, string> = {
   bdinfo: 'BDInfo',
   editor: 'Tracks',
   review: 'Review',
-  jobs: 'Jobs',
 };
 
 export function Layout({ currentStep, children }: LayoutProps) {
@@ -43,4 +42,3 @@ export function Layout({ currentStep, children }: LayoutProps) {
     </div>
   );
 }
-

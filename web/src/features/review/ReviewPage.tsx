@@ -1,4 +1,5 @@
-import type { Draft, DraftTrack, ParsedBDInfo, SourceEntry } from '../../api/types';
+import type { Draft, DraftTrack, Job, ParsedBDInfo, SourceEntry } from '../../api/types';
+import { StatusBadge } from '../../components/StatusBadge';
 
 type ReviewPageProps = {
   source: SourceEntry;
@@ -7,6 +8,8 @@ type ReviewPageProps = {
   outputFilename: string;
   outputPath: string;
   submitting: boolean;
+  currentJob: Job | null;
+  currentLog: string;
   onBack: () => void;
   onSubmit: () => Promise<void> | void;
 };
@@ -30,6 +33,8 @@ export function ReviewPage({
   outputFilename,
   outputPath,
   submitting,
+  currentJob,
+  currentLog,
   onBack,
   onSubmit,
 }: ReviewPageProps) {
@@ -39,7 +44,7 @@ export function ReviewPage({
   return (
     <section className="panel">
       <h2>Review</h2>
-      <p>Confirm metadata and queue the remux job.</p>
+      <p>Confirm metadata and start the remux.</p>
       <div className="info-box">
         <p>
           <strong>Source:</strong> {source.name}
@@ -69,15 +74,31 @@ export function ReviewPage({
         ))}
       </ol>
 
+      {currentJob ? (
+        <section className="info-box current-job-panel">
+          <div className="row">
+            <h3>Current Remux</h3>
+            <StatusBadge status={currentJob.status} />
+          </div>
+          <p>
+            <strong>Output:</strong> {currentJob.outputName}
+          </p>
+          <p>
+            <strong>Path:</strong> {currentJob.outputPath}
+          </p>
+          {currentJob.message ? <p className="error-text">{currentJob.message}</p> : null}
+          <pre className="job-log">{currentLog || 'Waiting for log output...'}</pre>
+        </section>
+      ) : null}
+
       <div className="row">
         <button type="button" onClick={onBack}>
           Back
         </button>
         <button type="button" onClick={() => void onSubmit()} disabled={submitting}>
-          {submitting ? 'Queueing...' : 'Queue Remux Job'}
+          {submitting ? 'Starting Remux...' : 'Start Remux'}
         </button>
       </div>
     </section>
   );
 }
-

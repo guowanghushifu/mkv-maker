@@ -32,7 +32,7 @@ body {
 
 .step-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
   list-style: none;
   padding: 0;
@@ -210,11 +210,6 @@ button:disabled {
   font-weight: 600;
 }
 
-.status-queued {
-  background: #e7edf7;
-  color: #31507a;
-}
-
 .status-running {
   background: #fff3db;
   color: #7f5b0a;
@@ -235,6 +230,14 @@ button:disabled {
   border-radius: 6px;
   background: #f4f8ff;
   padding: 0.7rem;
+}
+
+.current-job-panel {
+  margin-top: 0.9rem;
+}
+
+.current-job-panel h3 {
+  margin: 0;
 }
 
 .muted-text {

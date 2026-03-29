@@ -5,7 +5,6 @@ import { Layout, type WorkflowStep } from './components/Layout';
 import { LoginPage } from './features/auth/LoginPage';
 import { BDInfoPage } from './features/bdinfo/BDInfoPage';
 import { TrackEditorPage } from './features/draft/TrackEditorPage';
-import { JobsPage } from './features/jobs/JobsPage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { ScanPage } from './features/sources/ScanPage';
 import './styles/app.css';
@@ -34,14 +33,14 @@ function App() {
   const [bdinfoError, setBdinfoError] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [jobsError, setJobsError] = useState<string | null>(null);
   const [parsingBDInfo, setParsingBDInfo] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [filenamePreview, setFilenamePreview] = useState('');
   const [outputFilename, setOutputFilename] = useState('');
   const [filenameEdited, setFilenameEdited] = useState(false);
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [submittingJob, setSubmittingJob] = useState(false);
+  const [currentJob, setCurrentJob] = useState<Job | null>(null);
+  const [currentJobLog, setCurrentJobLog] = useState('');
 
   const selectedSource = sources.find((source) => source.id === selectedSourceId) ?? null;
   const currentStep = token ? step : 'login';
@@ -141,15 +140,39 @@ function App() {
     }
   };
 
-  const refreshJobs = async () => {
+  const refreshCurrentJob = async () => {
     try {
-      const nextJobs = await api.listJobs(token ?? undefined);
-      setJobsError(null);
-      setJobs(nextJobs);
-    } catch (error) {
-      setJobsError(error instanceof Error ? error.message : 'Failed to refresh jobs.');
+      const [nextJob, nextLog] = await Promise.all([
+        api.currentJob(token ?? undefined),
+        api.currentJobLog(token ?? undefined),
+      ]);
+      setCurrentJob(nextJob);
+      setCurrentJobLog(nextJob ? nextLog : '');
+    } catch {
+      // Keep current snapshot when polling fails to avoid disrupting review flow.
     }
   };
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    void refreshCurrentJob();
+  }, [token]);
+
+  useEffect(() => {
+    if (!currentJob || currentJob.status !== 'running') {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void refreshCurrentJob();
+    }, 1500);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [currentJob, token]);
 
   const handleSubmitJob = async () => {
     if (!selectedSource || !parsedBDInfo || !draft) {
@@ -173,26 +196,15 @@ function App() {
         },
         token ?? undefined
       );
-      await refreshJobs();
-      setStep('jobs');
-      setJobsError(null);
-    } catch (error) {
-      setJobsError(error instanceof Error ? error.message : 'Failed to queue job.');
+      const nextJob = await api.currentJob(token ?? undefined);
+      setCurrentJob(nextJob);
+      setCurrentJobLog('');
+      setStep('review');
+    } catch {
+      // Submit errors are surfaced by disabled/loading state and subsequent polling.
     } finally {
       setSubmittingJob(false);
     }
-  };
-
-  const handleStartNewWorkflow = () => {
-    setStep('scan');
-    setSelectedSourceId(null);
-    setBdinfoText('');
-    setParsedBDInfo(null);
-    setBdinfoError(null);
-    setDraft(null);
-    setOutputFilename('');
-    setFilenamePreview('');
-    setFilenameEdited(false);
   };
 
   return (
@@ -247,18 +259,10 @@ function App() {
           outputFilename={outputFilename || filenamePreview}
           outputPath={outputPath}
           submitting={submittingJob}
+          currentJob={currentJob}
+          currentLog={currentJobLog}
           onBack={() => setStep('editor')}
           onSubmit={handleSubmitJob}
-        />
-      ) : null}
-
-      {step === 'jobs' ? (
-        <JobsPage
-          error={jobsError}
-          jobs={jobs}
-          onStartNew={handleStartNewWorkflow}
-          onRefresh={refreshJobs}
-          onLoadLog={(jobId) => api.getJobLog(jobId, token ?? undefined)}
         />
       ) : null}
     </Layout>

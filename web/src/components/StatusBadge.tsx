@@ -5,11 +5,9 @@ type StatusBadgeProps = {
 };
 
 const statusLabels: Record<JobStatus, string> = {
-  queued: 'Queued',
   running: 'Running',
   succeeded: 'Succeeded',
   failed: 'Failed',
-  interrupted: 'Interrupted',
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
