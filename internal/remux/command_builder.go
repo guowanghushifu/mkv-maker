@@ -10,11 +10,15 @@ func BuildMKVMergeArgs(d Draft) []string {
 	}
 
 	for index, track := range d.Audio {
+		if !track.Selected {
+			continue
+		}
+
 		audioSelector := strconv.Itoa(index + 1)
 
 		args = append(args, "--language", audioSelector+":"+track.Language)
 		args = append(args, "--track-name", audioSelector+":"+track.Name)
-		if track.Selected && track.Default {
+		if track.Default {
 			args = append(args, "--default-track-flag", audioSelector+":yes")
 		}
 	}
