@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,37 @@ import (
 
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
+
+type stubTasksManager struct {
+	startReq      remux.StartRequest
+	startCalled   bool
+	startFn       func(remux.StartRequest) (remux.Task, error)
+	currentFn     func() (remux.Task, error)
+	currentLogFn  func() (string, error)
+}
+
+func (s *stubTasksManager) Start(req remux.StartRequest) (remux.Task, error) {
+	s.startCalled = true
+	s.startReq = req
+	if s.startFn != nil {
+		return s.startFn(req)
+	}
+	return remux.Task{}, nil
+}
+
+func (s *stubTasksManager) Current() (remux.Task, error) {
+	if s.currentFn != nil {
+		return s.currentFn()
+	}
+	return remux.Task{}, remux.ErrTaskNotFound
+}
+
+func (s *stubTasksManager) CurrentLog() (string, error) {
+	if s.currentLogFn != nil {
+		return s.currentLogFn()
+	}
+	return "", remux.ErrTaskNotFound
+}
 
 type stubRunner struct {
 	output string
@@ -68,12 +100,23 @@ func TestJobsHandlerCreateReturnsAcceptedTask(t *testing.T) {
 		t.Fatalf("write file failed: %v", err)
 	}
 	outputRoot := t.TempDir()
-
-	manager := remux.NewManager(&stubRunner{})
-	defer manager.Close()
+	reqBody := validCreateBody(sourcePath, outputRoot, "Nightcrawler - 2160p.mkv", "00800.MPLS", "Nightcrawler Disc")
+	manager := &stubTasksManager{
+		startFn: func(_ remux.StartRequest) (remux.Task, error) {
+			return remux.Task{
+				ID:           "task-123",
+				SourceName:   "Nightcrawler Disc",
+				OutputName:   "Nightcrawler - 2160p.mkv",
+				OutputPath:   filepath.Join(outputRoot, "Nightcrawler - 2160p.mkv"),
+				PlaylistName: "00800.MPLS",
+				CreatedAt:    "2026-03-29T12:00:00Z",
+				Status:       "running",
+			}, nil
+		},
+	}
 	h := NewJobsHandler(manager, inputRoot, outputRoot)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(validCreateBody(sourcePath, outputRoot, "Nightcrawler - 2160p.mkv", "00800.MPLS", "Nightcrawler Disc")))
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.Create(w, req)
@@ -94,6 +137,25 @@ func TestJobsHandlerCreateReturnsAcceptedTask(t *testing.T) {
 	}
 	if body.OutputName != "Nightcrawler - 2160p.mkv" {
 		t.Fatalf("unexpected output name %q", body.OutputName)
+	}
+	if !manager.startCalled {
+		t.Fatal("expected Start to be called")
+	}
+	if manager.startReq.SourceName != "Nightcrawler Disc" {
+		t.Fatalf("unexpected forwarded source name %q", manager.startReq.SourceName)
+	}
+	if manager.startReq.OutputName != "Nightcrawler - 2160p.mkv" {
+		t.Fatalf("unexpected forwarded output name %q", manager.startReq.OutputName)
+	}
+	if manager.startReq.PlaylistName != "00800.MPLS" {
+		t.Fatalf("unexpected forwarded playlist name %q", manager.startReq.PlaylistName)
+	}
+	expectedOutputPath := filepath.Join(outputRoot, "Nightcrawler - 2160p.mkv")
+	if manager.startReq.OutputPath != expectedOutputPath {
+		t.Fatalf("unexpected forwarded output path %q", manager.startReq.OutputPath)
+	}
+	if manager.startReq.PayloadJSON != strings.TrimSpace(reqBody) {
+		t.Fatalf("expected payload json to preserve request body, got %q", manager.startReq.PayloadJSON)
 	}
 }
 
@@ -204,6 +266,75 @@ func TestJobsHandlerCurrentReturnsNotFoundWithoutTask(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestJobsHandlerCurrentReturnsTask(t *testing.T) {
+	manager := &stubTasksManager{
+		currentFn: func() (remux.Task, error) {
+			return remux.Task{
+				ID:           "task-123",
+				SourceName:   "Nightcrawler Disc",
+				OutputName:   "Nightcrawler.mkv",
+				OutputPath:   "/remux/Nightcrawler.mkv",
+				PlaylistName: "00800.MPLS",
+				CreatedAt:    "2026-03-29T12:00:00Z",
+				Status:       "running",
+			}, nil
+		},
+	}
+	h := NewJobsHandler(manager, "/bd_input", "/remux")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current", nil)
+	w := httptest.NewRecorder()
+	h.Current(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body remux.Task
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if body.ID != "task-123" {
+		t.Fatalf("unexpected task id %q", body.ID)
+	}
+}
+
+func TestJobsHandlerCurrentLogReturnsText(t *testing.T) {
+	manager := &stubTasksManager{
+		currentLogFn: func() (string, error) {
+			return "[2026-03-29T12:00:00Z] running\n", nil
+		},
+	}
+	h := NewJobsHandler(manager, "/bd_input", "/remux")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current/log", nil)
+	w := httptest.NewRecorder()
+	h.CurrentLog(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "running") {
+		t.Fatalf("unexpected log body %q", w.Body.String())
+	}
+}
+
+func TestJobsHandlerCurrentReturnsInternalServerErrorOnUnexpectedError(t *testing.T) {
+	manager := &stubTasksManager{
+		currentFn: func() (remux.Task, error) {
+			return remux.Task{}, errors.New("boom")
+		},
+	}
+	h := NewJobsHandler(manager, "/bd_input", "/remux")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current", nil)
+	w := httptest.NewRecorder()
+	h.Current(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
 	}
 }
 

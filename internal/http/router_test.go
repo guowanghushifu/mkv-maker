@@ -58,6 +58,26 @@ func TestProtectedGetCurrentJobUsesCurrentHandler(t *testing.T) {
 	}
 }
 
+func TestProtectedGetCurrentJobLogUsesCurrentLogHandler(t *testing.T) {
+	router := NewRouter(testDependenciesWithAuthBypass(func(deps *Dependencies) {
+		deps.JobsCurrentLog = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}
+		deps.JobsCurrent = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current/log", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
 func testDependencies() Dependencies {
 	return testDependenciesWithAuthBypass(nil)
 }
