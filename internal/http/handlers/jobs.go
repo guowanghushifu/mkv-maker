@@ -144,11 +144,11 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "draft playlist mismatch", http.StatusBadRequest)
 		return
 	}
-	playlistPath := filepath.Join(req.Source.Path, "PLAYLIST", playlistName)
-	if !strings.EqualFold(filepath.Base(strings.TrimSpace(req.Source.Path)), "BDMV") {
-		playlistPath = filepath.Join(req.Source.Path, "BDMV", "PLAYLIST", playlistName)
+	sourcePlaylistRoot := strings.TrimSpace(req.Source.Path)
+	if strings.EqualFold(filepath.Base(sourcePlaylistRoot), "BDMV") {
+		sourcePlaylistRoot = filepath.Dir(sourcePlaylistRoot)
 	}
-	if _, err := os.Stat(playlistPath); err != nil {
+	if _, err := findPlaylistFilePath(sourcePlaylistRoot, playlistName); err != nil {
 		http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 		return
 	}

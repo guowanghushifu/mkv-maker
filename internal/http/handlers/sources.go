@@ -178,8 +178,8 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid playlist name", http.StatusBadRequest)
 		return
 	}
-	playlistPath := filepath.Join(source.Path, "BDMV", "PLAYLIST", playlistName)
-	if _, err := os.Stat(playlistPath); err != nil {
+	playlistPath, err := findPlaylistFilePath(source.Path, playlistName)
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 			return
@@ -325,6 +325,30 @@ func resolvePathForContainment(path string, mustExist bool) (string, error) {
 func isDirectoryPath(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+func findPlaylistFilePath(sourcePath, playlistName string) (string, error) {
+	playlistDir := filepath.Join(sourcePath, "BDMV", "PLAYLIST")
+	exactPath := filepath.Join(playlistDir, playlistName)
+	if _, err := os.Stat(exactPath); err == nil {
+		return exactPath, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	entries, err := os.ReadDir(playlistDir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.EqualFold(entry.Name(), playlistName) {
+			return filepath.Join(playlistDir, entry.Name()), nil
+		}
+	}
+	return "", os.ErrNotExist
 }
 
 func compactLabels(labels []string) []string {

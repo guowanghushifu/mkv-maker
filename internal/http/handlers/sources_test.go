@@ -244,6 +244,40 @@ func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 	}
 }
 
+func TestSourcesHandlerResolveFindsPlaylistCaseInsensitively(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "CaseDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00003.mpls")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{},
+	})
+
+	reqBody := `{"sourceId":"CaseDisc","bdinfo":{"playlistName":"00003.MPLS","rawText":"PLAYLIST REPORT:\nName: 00003.MPLS"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/CaseDisc/resolve", strings.NewReader(reqBody))
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+}
+
 func TestSourcesHandlerResolveRejectsBDInfoPlaylistMismatch(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "MismatchDisc"

@@ -171,6 +171,48 @@ func TestJobsHandlerCreateRejectsSymlinkEscapeInOutputPath(t *testing.T) {
 	}
 }
 
+func TestJobsHandlerCreateAcceptsLowercasePlaylistFileOnDisk(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourcePath := filepath.Join(inputRoot, "Disc", "BDMV")
+	if err := os.MkdirAll(filepath.Join(sourcePath, "PLAYLIST"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourcePath, "PLAYLIST", "00003.mpls"), []byte("playlist"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	outputRoot := t.TempDir()
+
+	h := NewJobsHandler(stubJobsRepository{
+		createFn: func(input store.CreateJobInput) (store.APIJob, error) {
+			return store.APIJob{
+				ID:           "job-123",
+				SourceName:   input.SourceName,
+				OutputName:   input.OutputName,
+				OutputPath:   input.OutputPath,
+				PlaylistName: input.PlaylistName,
+				CreatedAt:    "2026-03-29T12:00:00Z",
+				Status:       "queued",
+			}, nil
+		},
+	}, inputRoot, outputRoot)
+
+	reqBody := `{
+		"source":{"name":"Disc","path":"` + sourcePath + `","type":"bdmv"},
+		"bdinfo":{"playlistName":"00003.MPLS","rawText":"PLAYLIST REPORT:\nName: 00003.MPLS"},
+		"draft":{"playlistName":"00003.MPLS"},
+		"outputFilename":"Disc.mkv",
+		"outputPath":"` + filepath.Join(outputRoot, "Disc.mkv") + `"
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
+	}
+}
+
 func TestJobsHandlerListGetAndLog(t *testing.T) {
 	h := NewJobsHandler(stubJobsRepository{
 		listFn: func() ([]store.APIJob, error) {
