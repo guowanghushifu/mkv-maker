@@ -1,4 +1,4 @@
-module github.com/wangdazhuo/mkv-maker
+module github.com/guowanghushifu/mkv-maker
 
 go 1.21
 

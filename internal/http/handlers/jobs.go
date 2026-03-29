@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	mediabdinfo "github.com/wangdazhuo/mkv-maker/internal/media/bdinfo"
-	"github.com/wangdazhuo/mkv-maker/internal/store"
+	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
+	"github.com/guowanghushifu/mkv-maker/internal/store"
 )
 
 type JobsHandler struct {

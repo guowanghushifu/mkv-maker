@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wangdazhuo/mkv-maker/internal/http/middleware"
-	"github.com/wangdazhuo/mkv-maker/internal/store"
+	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
+	"github.com/guowanghushifu/mkv-maker/internal/store"
 )
 
 type AuthHandler struct {

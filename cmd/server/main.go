@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/wangdazhuo/mkv-maker/internal/app"
-	"github.com/wangdazhuo/mkv-maker/internal/config"
+	"github.com/guowanghushifu/mkv-maker/internal/app"
+	"github.com/guowanghushifu/mkv-maker/internal/config"
 )
 
 func main() {

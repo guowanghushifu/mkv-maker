@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wangdazhuo/mkv-maker/internal/config"
-	httpapi "github.com/wangdazhuo/mkv-maker/internal/http"
-	"github.com/wangdazhuo/mkv-maker/internal/http/handlers"
-	"github.com/wangdazhuo/mkv-maker/internal/http/middleware"
-	"github.com/wangdazhuo/mkv-maker/internal/queue"
-	"github.com/wangdazhuo/mkv-maker/internal/store"
+	"github.com/guowanghushifu/mkv-maker/internal/config"
+	httpapi "github.com/guowanghushifu/mkv-maker/internal/http"
+	"github.com/guowanghushifu/mkv-maker/internal/http/handlers"
+	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
+	"github.com/guowanghushifu/mkv-maker/internal/queue"
+	"github.com/guowanghushifu/mkv-maker/internal/store"
 )
 
 type App struct {

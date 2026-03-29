@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/wangdazhuo/mkv-maker/internal/store"
+	"github.com/guowanghushifu/mkv-maker/internal/store"
 )
 
 type stubJobsRepository struct {

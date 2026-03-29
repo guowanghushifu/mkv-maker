@@ -13,8 +13,8 @@ import (
 	"unicode"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/wangdazhuo/mkv-maker/internal/media"
-	mediabdinfo "github.com/wangdazhuo/mkv-maker/internal/media/bdinfo"
+	"github.com/guowanghushifu/mkv-maker/internal/media"
+	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 )
 
 type SourceScanner interface {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	mediabdinfo "github.com/wangdazhuo/mkv-maker/internal/media/bdinfo"
+	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 )
 
 type BDInfoHandler struct {
