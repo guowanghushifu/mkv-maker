@@ -163,32 +163,25 @@ func (s *SQLiteJobStore) CreateRunningJob(input CreateJobInput) (APIJob, error) 
 		}
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return APIJob{}, err
-	}
-	defer tx.Rollback()
-
-	var runningCount int
-	if err := tx.QueryRow(`select count(1) from jobs where status = 'running'`).Scan(&runningCount); err != nil {
-		return APIJob{}, err
-	}
-	if runningCount > 0 {
-		return APIJob{}, ErrJobAlreadyRunning
-	}
-
-	if _, err := tx.Exec(
-		`insert into jobs(id, status, draft_json, output_path, log_path, started_at) values(?, ?, ?, ?, ?, current_timestamp)`,
+	res, err := s.db.Exec(
+		`insert into jobs(id, status, draft_json, output_path, log_path, started_at)
+		 select ?, ?, ?, ?, ?, current_timestamp
+		 where not exists (select 1 from jobs where status = 'running')`,
 		id,
 		"running",
 		draftJSON,
 		strings.TrimSpace(input.OutputPath),
 		logPath,
-	); err != nil {
+	)
+	if err != nil {
 		return APIJob{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	affected, err := res.RowsAffected()
+	if err != nil {
 		return APIJob{}, err
+	}
+	if affected == 0 {
+		return APIJob{}, ErrJobAlreadyRunning
 	}
 
 	return s.GetJob(id)
