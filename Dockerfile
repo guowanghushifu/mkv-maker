@@ -7,7 +7,9 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.26-trixie AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.26-trixie AS go-build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -15,7 +17,7 @@ RUN go mod download
 
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /out/server ./cmd/server
 
 FROM debian:trixie-slim AS runtime
 WORKDIR /app
