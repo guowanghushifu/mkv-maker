@@ -36,6 +36,21 @@ describe('createApiClient currentJob', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not send Authorization headers for protected requests', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.has('Authorization')).toBe(false);
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(client.scanSources('session')).resolves.toEqual([]);
+  });
+
   it('preserves command preview and progress percent from current job payload', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

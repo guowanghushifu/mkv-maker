@@ -74,11 +74,9 @@ function makeTrack(idPrefix: string, name: string, index: number, isDefault: boo
 }
 
 async function requestJSON<T>(url: string, init?: RequestInit, token?: string): Promise<T> {
+  void token;
   const headers = new Headers(init?.headers);
   headers.set('Content-Type', 'application/json');
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
 
   const response = await fetch(url, {
     ...init,
@@ -194,9 +192,9 @@ export function createApiClient(basePath = '/api') {
     },
 
     async currentJob(token?: string): Promise<Job | null> {
+      void token;
       const response = await fetch(`${basePath}/jobs/current`, {
         method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (response.status === 401) {
         throw new UnauthorizedError();
@@ -211,9 +209,9 @@ export function createApiClient(basePath = '/api') {
     },
 
     async currentJobLog(token?: string): Promise<string> {
+      void token;
       const response = await fetch(`${basePath}/jobs/current/log`, {
         method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (response.status === 401) {
         throw new UnauthorizedError();
