@@ -52,7 +52,7 @@ type stubRunner struct {
 	wait   time.Duration
 }
 
-func (r *stubRunner) Run(ctx context.Context, _ remux.Draft) (string, error) {
+func (r *stubRunner) Run(ctx context.Context, _ remux.Draft, emit func(string)) (string, error) {
 	wait := r.wait
 	if wait <= 0 {
 		wait = 50 * time.Millisecond
@@ -61,6 +61,9 @@ func (r *stubRunner) Run(ctx context.Context, _ remux.Draft) (string, error) {
 	defer timer.Stop()
 	select {
 	case <-timer.C:
+		if emit != nil && r.output != "" {
+			emit(r.output)
+		}
 		return r.output, r.err
 	case <-ctx.Done():
 		return "", ctx.Err()
@@ -72,7 +75,7 @@ type controlledRunner struct {
 	release chan struct{}
 }
 
-func (r *controlledRunner) Run(ctx context.Context, _ remux.Draft) (string, error) {
+func (r *controlledRunner) Run(ctx context.Context, _ remux.Draft, emit func(string)) (string, error) {
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -86,6 +89,9 @@ func (r *controlledRunner) Run(ctx context.Context, _ remux.Draft) (string, erro
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
+	}
+	if emit != nil {
+		emit("ok")
 	}
 	return "ok", nil
 }
