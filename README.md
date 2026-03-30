@@ -62,7 +62,7 @@ The container publishes `http://localhost:8080`, serves the web UI at `/`, and s
 `mkvtoolnix` is installed from the official MKVToolNix Debian repository for `trixie`, following the vendor instructions at:
 - https://mkvtoolnix.download/downloads.html#debian
 
-## Docker Hub publish workflow
+## Docker Hub + GHCR publish workflow
 
 Manual release workflow: `.github/workflows/docker-publish.yml`.
 
@@ -72,6 +72,7 @@ Configure GitHub repository secrets:
 - `DOCKERHUB_TOKEN` (Docker Hub access token)
 
 GHCR publishing uses the built-in `GITHUB_TOKEN` provided by GitHub Actions.
+Note: GHCR packages may be private on first publish by default; set package visibility/association if you expect anonymous pulls.
 
 Then run the **Docker Publish** workflow with:
 
