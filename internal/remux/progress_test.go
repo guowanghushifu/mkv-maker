@@ -9,6 +9,7 @@ import (
 func TestFormatCommandPreviewRendersReadableMultiLineCommand(t *testing.T) {
 	got := FormatCommandPreview("mkvmerge", []string{
 		"--output", "/remux/Nightcrawler.mkv",
+		"--track-name", "1:English Atmos",
 		"--audio-tracks", "2,3",
 		"/bd_input/Nightcrawler/BDMV/PLAYLIST/00003.MPLS",
 	})
@@ -16,8 +17,14 @@ func TestFormatCommandPreviewRendersReadableMultiLineCommand(t *testing.T) {
 	if !strings.HasPrefix(got, "mkvmerge\n") {
 		t.Fatalf("expected preview to start with mkvmerge, got %q", got)
 	}
-	if !strings.Contains(got, "\n  --output\n  /remux/Nightcrawler.mkv\n") {
-		t.Fatalf("expected output arg in multiline preview, got %q", got)
+	if !strings.Contains(got, "\n  --output /remux/Nightcrawler.mkv\n") {
+		t.Fatalf("expected output option and value on one line, got %q", got)
+	}
+	if !strings.Contains(got, "\n  --track-name 1:English Atmos\n") {
+		t.Fatalf("expected track-name option and value on one line, got %q", got)
+	}
+	if !strings.Contains(got, "\n  --audio-tracks 2,3\n") {
+		t.Fatalf("expected audio-tracks option and value on one line, got %q", got)
 	}
 	if !strings.Contains(got, "/bd_input/Nightcrawler/BDMV/PLAYLIST/00003.MPLS") {
 		t.Fatalf("expected input path in preview, got %q", got)

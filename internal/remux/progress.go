@@ -13,7 +13,16 @@ func FormatCommandPreview(binary string, args []string) string {
 
 	lines := make([]string, 1, len(args)+1)
 	lines[0] = "mkvmerge"
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, "--") && i+1 < len(args) {
+			next := args[i+1]
+			if next != "" && next != "+" && !strings.HasPrefix(next, "--") {
+				lines = append(lines, "  "+arg+" "+next)
+				i++
+				continue
+			}
+		}
 		lines = append(lines, "  "+arg)
 	}
 	return strings.Join(lines, "\n")
