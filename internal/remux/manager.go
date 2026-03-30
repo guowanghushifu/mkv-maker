@@ -36,8 +36,9 @@ type StartRequest struct {
 }
 
 type taskState struct {
-	task Task
-	log  string
+	task              Task
+	log               string
+	progressRemainder string
 }
 
 type Manager struct {
@@ -162,6 +163,7 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 	if !streamed && output != "" {
 		handleOutput(output)
 	}
+	m.flushProgressRemainder(state)
 
 	if err != nil {
 		message := normalizeRunnerError(err)
@@ -223,12 +225,13 @@ func (m *Manager) finish(state *taskState, status, message string) {
 }
 
 func (m *Manager) updateProgressFromOutput(state *taskState, output string) {
-	for _, line := range strings.Split(output, "\n") {
-		progress, ok := ExtractProgressPercent(line)
-		if !ok {
-			continue
-		}
-		m.setProgress(state, progress)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	percents, remainder := extractProgressPercentsFromChunk(state.progressRemainder, output)
+	state.progressRemainder = remainder
+	for _, progress := range percents {
+		state.task.ProgressPercent = progress
 	}
 }
 
@@ -236,6 +239,21 @@ func (m *Manager) setProgress(state *taskState, progress int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	state.task.ProgressPercent = progress
+}
+
+func (m *Manager) flushProgressRemainder(state *taskState) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if state.progressRemainder == "" {
+		return
+	}
+
+	percents, remainder := extractProgressPercentsFromChunk(state.progressRemainder, "\n")
+	state.progressRemainder = remainder
+	for _, progress := range percents {
+		state.task.ProgressPercent = progress
+	}
 }
 
 func generateTaskID() (string, error) {

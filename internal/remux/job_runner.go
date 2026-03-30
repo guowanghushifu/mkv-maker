@@ -1,7 +1,6 @@
 package remux
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -38,19 +38,19 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		return "", false, err
 	}
 
-	streamed := false
+	var streamed atomic.Bool
 	wrappedOutput := func(chunk string) {
 		if strings.TrimSpace(chunk) == "" {
 			return
 		}
-		streamed = true
+		streamed.Store(true)
 		if onOutput != nil {
 			onOutput(chunk)
 		}
 	}
 
 	output, runErr := r.runner.Run(ctx, draft, wrappedOutput)
-	return output, streamed, runErr
+	return output, streamed.Load(), runErr
 }
 
 func (r *JobRunner) BuildExecutionDraft(req StartRequest) (Draft, error) {
@@ -64,7 +64,7 @@ func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
 	}
 
 	args := BuildMKVMergeArgs(draft)
-	return FormatCommandPreview(r.commandBinary(), args), nil
+	return FormatCommandPreview("mkvmerge", args), nil
 }
 
 type MKVMergeRunner struct {
@@ -123,20 +123,6 @@ func (r MKVMergeRunner) runWithOutput(ctx context.Context, draft Draft, onOutput
 	return output.String(), waitErr
 }
 
-func (r *JobRunner) commandBinary() string {
-	if r == nil || r.runner == nil {
-		return "mkvmerge"
-	}
-	switch typed := r.runner.(type) {
-	case MKVMergeRunner:
-		return resolveBinaryName(typed.Binary)
-	case *MKVMergeRunner:
-		return resolveBinaryName(typed.Binary)
-	default:
-		return "mkvmerge"
-	}
-}
-
 func resolveBinaryName(binary string) string {
 	trimmed := strings.TrimSpace(binary)
 	if trimmed == "" {
@@ -146,9 +132,18 @@ func resolveBinaryName(binary string) string {
 }
 
 func streamOutput(reader io.Reader, emit func(string)) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		emit(scanner.Text() + "\n")
+	buf := make([]byte, 4096)
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			emit(string(buf[:n]))
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			return
+		}
 	}
 }
 

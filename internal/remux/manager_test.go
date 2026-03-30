@@ -65,7 +65,8 @@ func (r *streamingRunner) Run(ctx context.Context, draft Draft, onOutput func(st
 		}
 	}
 	if onOutput != nil {
-		onOutput("Progress: 42%\n")
+		onOutput("Progress: 4")
+		onOutput("2%\r")
 	}
 	if r.progress != nil {
 		select {
@@ -82,7 +83,7 @@ func (r *streamingRunner) Run(ctx context.Context, draft Draft, onOutput func(st
 		}
 	}
 	if onOutput != nil {
-		onOutput("Progress: 100%\n")
+		onOutput("Progress: 100%\r")
 	}
 	return "", nil
 }
@@ -357,6 +358,43 @@ func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
 	}
 	if current.ProgressPercent != 42 {
 		t.Fatalf("expected running progress 42 before release, got %d", current.ProgressPercent)
+	}
+
+	close(runner.release)
+	done := waitForTerminalTask(t, manager)
+	if done.ProgressPercent != 100 {
+		t.Fatalf("expected final progress 100, got %d", done.ProgressPercent)
+	}
+}
+
+func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
+	runner := &streamingRunner{
+		started:  make(chan struct{}),
+		progress: make(chan struct{}),
+		release:  make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00003.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+	<-runner.progress
+
+	current, err := manager.Current()
+	if err != nil {
+		t.Fatalf("Current returned error: %v", err)
+	}
+	if current.ProgressPercent != 42 {
+		t.Fatalf("expected carriage-return progress 42 while running, got %d", current.ProgressPercent)
 	}
 
 	close(runner.release)

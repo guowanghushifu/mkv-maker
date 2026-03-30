@@ -37,3 +37,29 @@ func ExtractProgressPercent(line string) (int, bool) {
 	}
 	return value, true
 }
+
+func extractProgressPercentsFromChunk(remainder, chunk string) ([]int, string) {
+	combined := remainder + chunk
+	if combined == "" {
+		return nil, ""
+	}
+
+	lastTerminator := strings.LastIndexAny(combined, "\r\n")
+	if lastTerminator < 0 {
+		return nil, combined
+	}
+
+	parseable := combined[:lastTerminator+1]
+	nextRemainder := combined[lastTerminator+1:]
+	parts := strings.FieldsFunc(parseable, func(r rune) bool {
+		return r == '\n' || r == '\r'
+	})
+
+	percents := make([]int, 0, len(parts))
+	for _, part := range parts {
+		if progress, ok := ExtractProgressPercent(part); ok {
+			percents = append(percents, progress)
+		}
+	}
+	return percents, nextRemainder
+}
