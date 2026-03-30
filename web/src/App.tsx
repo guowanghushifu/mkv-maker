@@ -8,6 +8,7 @@ import { TrackEditorPage } from './features/draft/TrackEditorPage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { ScanPage } from './features/sources/ScanPage';
 import { getMessages, loadStoredLocale, loadStoredToken, saveStoredLocale, saveStoredToken, type Locale } from './i18n';
+import { loadStoredWorkflowState, saveStoredWorkflowState } from './workflowState';
 import './styles/app.css';
 
 const api = createApiClient();
@@ -24,22 +25,25 @@ function normalizeDraft(nextDraft: Draft): Draft {
 }
 
 function App() {
+  const [initialWorkflow] = useState(() => loadStoredWorkflowState());
   const [locale, setLocale] = useState<Locale>(() => loadStoredLocale());
   const [token, setToken] = useState<string | null>(() => loadStoredToken());
-  const [step, setStep] = useState<WorkflowStep>(() => (loadStoredToken() ? 'scan' : 'login'));
-  const [sources, setSources] = useState<SourceEntry[]>([]);
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [step, setStep] = useState<WorkflowStep>(() =>
+    loadStoredToken() ? initialWorkflow?.step ?? 'scan' : 'login'
+  );
+  const [sources, setSources] = useState<SourceEntry[]>(() => initialWorkflow?.sources ?? []);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(() => initialWorkflow?.selectedSourceId ?? null);
   const [scanning, setScanning] = useState(false);
-  const [bdinfoText, setBdinfoText] = useState('');
-  const [parsedBDInfo, setParsedBDInfo] = useState<ParsedBDInfo | null>(null);
+  const [bdinfoText, setBdinfoText] = useState(() => initialWorkflow?.bdinfoText ?? '');
+  const [parsedBDInfo, setParsedBDInfo] = useState<ParsedBDInfo | null>(() => initialWorkflow?.parsedBDInfo ?? null);
   const [bdinfoError, setBdinfoError] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [parsingBDInfo, setParsingBDInfo] = useState(false);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [filenamePreview, setFilenamePreview] = useState('');
-  const [outputFilename, setOutputFilename] = useState('');
-  const [filenameEdited, setFilenameEdited] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(() => initialWorkflow?.draft ?? null);
+  const [filenamePreview, setFilenamePreview] = useState(() => initialWorkflow?.filenamePreview ?? '');
+  const [outputFilename, setOutputFilename] = useState(() => initialWorkflow?.outputFilename ?? '');
+  const [filenameEdited, setFilenameEdited] = useState(() => initialWorkflow?.filenameEdited ?? false);
   const [submittingJob, setSubmittingJob] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
@@ -58,6 +62,24 @@ function App() {
   useEffect(() => {
     saveStoredToken(token);
   }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      saveStoredWorkflowState(null);
+      return;
+    }
+    saveStoredWorkflowState({
+      step,
+      sources,
+      selectedSourceId,
+      bdinfoText,
+      parsedBDInfo,
+      draft,
+      filenamePreview,
+      outputFilename,
+      filenameEdited,
+    });
+  }, [token, step, sources, selectedSourceId, bdinfoText, parsedBDInfo, draft, filenamePreview, outputFilename, filenameEdited]);
 
   useEffect(() => {
     if (!draft) {
@@ -231,9 +253,10 @@ function App() {
 
     setSubmittingJob(true);
     setSubmitError(null);
+    setCurrentJob(null);
     setCurrentJobLog('');
     try {
-      await api.submitJob(
+      const startedJob = await api.submitJob(
         {
           source: selectedSource,
           bdinfo: parsedBDInfo,
@@ -243,10 +266,15 @@ function App() {
         },
         token ?? undefined
       );
-      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
-      setCurrentJob(nextJob);
-      setCurrentJobLog(nextLog);
+      setCurrentJob(startedJob);
+      setCurrentJobLog('');
       setStep('review');
+
+      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
+      if (nextJob && nextJob.id === startedJob.id) {
+        setCurrentJob(nextJob);
+        setCurrentJobLog(nextLog);
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : text.app.submitFailed);
     } finally {

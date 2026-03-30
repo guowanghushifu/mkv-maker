@@ -187,6 +187,32 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: /登录/i })).not.toBeInTheDocument();
   });
 
+  it('stays on the review step after a refresh when a remux is already running', async () => {
+    installFetchMock({
+      currentJob: {
+        id: 'job-123',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'running',
+      },
+      currentLog: '[2026-03-29T12:00:00Z] remux started',
+    });
+    const view = render(<App />);
+
+    await goToReviewStep();
+    await screen.findByText(/current remux/i);
+
+    view.unmount();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /^review$/i })).toBeInTheDocument();
+    expect(await screen.findByText(/current remux/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /scan sources/i })).not.toBeInTheDocument();
+  });
+
   it('shows submit failure message on review when start remux request fails', async () => {
     installFetchMock({ currentJob: null, currentLog: '', submitStatus: 409 });
     render(<App />);
@@ -235,7 +261,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.queryByText(/old log line/i)).not.toBeInTheDocument();
-      expect(screen.getByText(/waiting for log output/i)).toBeInTheDocument();
+      expect(screen.queryByText(/current remux/i)).not.toBeInTheDocument();
     });
 
     releaseSubmit();

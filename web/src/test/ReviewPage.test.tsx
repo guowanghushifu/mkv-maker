@@ -268,6 +268,17 @@ describe('ReviewPage', () => {
       status: 'running' as const,
     };
 
+    const scrollTopSetter = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => 240,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+      configurable: true,
+      get: () => 0,
+      set: scrollTopSetter,
+    });
+
     const { rerender } = render(
       <ReviewPage
         locale="en"
@@ -286,10 +297,6 @@ describe('ReviewPage', () => {
         onSubmit={() => {}}
       />
     );
-
-    const logPanel = screen.getByText(/\[2026-03-29T12:00:00Z\] line 1/i);
-    Object.defineProperty(logPanel, 'scrollHeight', { value: 240, configurable: true });
-    Object.defineProperty(logPanel, 'scrollTop', { value: 0, writable: true, configurable: true });
 
     rerender(
       <ReviewPage
@@ -310,7 +317,7 @@ describe('ReviewPage', () => {
       />
     );
 
-    expect(logPanel.scrollTop).toBe(240);
+    expect(scrollTopSetter).toHaveBeenCalledWith(240);
   });
 });
 
