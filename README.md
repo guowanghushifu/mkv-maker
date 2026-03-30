@@ -8,7 +8,7 @@ Current product scope is **BDMV-only input** and **BDInfo text is required** to 
 The server uses these environment variables:
 
 - `APP_PASSWORD` (required): login password for the web app
-- `APP_DATA_DIR` (default: `/app/data`): app state and SQLite DB directory
+- `APP_DATA_DIR` (default: `/app/data`): application log directory
 - `BD_INPUT_DIR` (default: `/bd_input`): mounted BDMV source directory
 - `REMUX_OUTPUT_DIR` (default: `/remux`): output directory for remuxed files
 - `LISTEN_ADDR` (default: `:8080`): HTTP listen address
@@ -35,7 +35,7 @@ APP_PASSWORD=change-me ./scripts/docker-run.sh
 
 Optional host mount overrides:
 
-- `APP_DATA_HOST_DIR` (default: `$PWD/.data`)
+- `APP_DATA_HOST_DIR` (default: `$PWD/.data`): host directory for application logs
 - `BD_INPUT_HOST_DIR` (default: `$PWD/bd_input`)
 - `REMUX_OUTPUT_HOST_DIR` (default: `$PWD/remux_output`)
 
