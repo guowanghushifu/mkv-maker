@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { localeStorageKey } from '../i18n';
+import { localeStorageKey, tokenStorageKey } from '../i18n';
 
 const source = {
   id: 'disc-1',
@@ -34,6 +34,8 @@ type BackendState = {
   submitStatus?: number;
   submitMessage?: string;
   submittedJob?: Record<string, unknown>;
+  submittedLog?: string;
+  submitDelay?: Promise<void>;
 };
 
 function installFetchMock(state: BackendState) {
@@ -87,11 +89,17 @@ function installFetchMock(state: BackendState) {
       return new Response(state.currentLog, { status: 200 });
     }
     if (url.endsWith('/api/jobs') && method === 'POST') {
+      if (state.submitDelay) {
+        await state.submitDelay;
+      }
       if (state.submitStatus && state.submitStatus >= 400) {
         return new Response(state.submitMessage || '', { status: state.submitStatus });
       }
       if (state.submittedJob) {
         state.currentJob = state.submittedJob;
+      }
+      if (typeof state.submittedLog === 'string') {
+        state.currentLog = state.submittedLog;
       }
       return new Response(JSON.stringify(state.currentJob), {
         status: 200,
@@ -139,7 +147,7 @@ describe('App', () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     render(<App />);
     expect(screen.getByRole('heading', { name: /MKV Remux Tool/i })).toBeInTheDocument();
-    expect(screen.getByText('预览')).toBeInTheDocument();
+    expect(screen.getByText('任务概览')).toBeInTheDocument();
     expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
   });
 
@@ -163,6 +171,22 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
   });
 
+  it('keeps the login session after a page refresh', async () => {
+    installFetchMock({ currentJob: null, currentLog: '' });
+    const view = render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+    await screen.findByRole('heading', { name: /扫描片源/i });
+    expect(window.localStorage.getItem(tokenStorageKey)).toBe('session');
+
+    view.unmount();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /扫描片源/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /登录/i })).not.toBeInTheDocument();
+  });
+
   it('shows submit failure message on review when start remux request fails', async () => {
     installFetchMock({ currentJob: null, currentLog: '', submitStatus: 409 });
     render(<App />);
@@ -171,6 +195,50 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /start remux/i }));
 
     expect(await screen.findByText(/request failed with status 409/i)).toBeInTheDocument();
+  });
+
+  it('clears the old log immediately when starting a new remux', async () => {
+    let releaseSubmit!: () => void;
+    const submitDelay = new Promise<void>((resolve) => {
+      releaseSubmit = resolve;
+    });
+
+    installFetchMock({
+      currentJob: {
+        id: 'job-old',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+      },
+      currentLog: '[2026-03-29T12:00:01Z] old log line',
+      submittedJob: {
+        id: 'job-new',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-30T12:00:00Z',
+        status: 'running',
+      },
+      submittedLog: '',
+      submitDelay,
+    });
+    render(<App />);
+
+    await goToReviewStep();
+    expect(screen.getByText(/old log line/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /start remux/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/old log line/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/waiting for log output/i)).toBeInTheDocument();
+    });
+
+    releaseSubmit();
   });
 
   it('hydrates current job log immediately after submit for terminal tasks', async () => {

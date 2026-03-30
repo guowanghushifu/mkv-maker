@@ -7,7 +7,7 @@ import { BDInfoPage } from './features/bdinfo/BDInfoPage';
 import { TrackEditorPage } from './features/draft/TrackEditorPage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { ScanPage } from './features/sources/ScanPage';
-import { getMessages, loadStoredLocale, saveStoredLocale, type Locale } from './i18n';
+import { getMessages, loadStoredLocale, loadStoredToken, saveStoredLocale, saveStoredToken, type Locale } from './i18n';
 import './styles/app.css';
 
 const api = createApiClient();
@@ -25,8 +25,8 @@ function normalizeDraft(nextDraft: Draft): Draft {
 
 function App() {
   const [locale, setLocale] = useState<Locale>(() => loadStoredLocale());
-  const [token, setToken] = useState<string | null>(null);
-  const [step, setStep] = useState<WorkflowStep>('login');
+  const [token, setToken] = useState<string | null>(() => loadStoredToken());
+  const [step, setStep] = useState<WorkflowStep>(() => (loadStoredToken() ? 'scan' : 'login'));
   const [sources, setSources] = useState<SourceEntry[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -54,6 +54,10 @@ function App() {
   useEffect(() => {
     saveStoredLocale(locale);
   }, [locale]);
+
+  useEffect(() => {
+    saveStoredToken(token);
+  }, [token]);
 
   useEffect(() => {
     if (!draft) {

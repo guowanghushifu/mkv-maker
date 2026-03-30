@@ -1,6 +1,7 @@
 export type Locale = 'zh' | 'en';
 
 export const localeStorageKey = 'mkv-maker-locale';
+export const tokenStorageKey = 'mkv-maker-token';
 
 type MessageSet = {
   layout: {
@@ -371,4 +372,22 @@ export function saveStoredLocale(locale: Locale): void {
     return;
   }
   window.localStorage.setItem(localeStorageKey, locale);
+}
+
+export function loadStoredToken(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window.localStorage.getItem(tokenStorageKey);
+}
+
+export function saveStoredToken(token: string | null): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (token) {
+    window.localStorage.setItem(tokenStorageKey, token);
+    return;
+  }
+  window.localStorage.removeItem(tokenStorageKey);
 }
