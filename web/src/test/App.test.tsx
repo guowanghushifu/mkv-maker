@@ -225,6 +225,7 @@ describe('App', () => {
     await goToReviewStep();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start remux/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /start next remux/i })).toBeDisabled();
     });
   });
 
@@ -252,5 +253,30 @@ describe('App', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '7');
     expect(screen.getByText(/mkvmerge/i)).toBeInTheDocument();
     expect(screen.getByText(/--output/i)).toBeInTheDocument();
+  });
+
+  it('can jump back to scan for the next remux and clears prior workflow state', async () => {
+    installFetchMock({
+      currentJob: {
+        id: 'job-999',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+      },
+      currentLog: '[2026-03-29T12:30:00Z] remux completed',
+    });
+    render(<App />);
+
+    await goToReviewStep();
+    fireEvent.click(screen.getByRole('button', { name: /start next remux/i }));
+
+    await screen.findByRole('heading', { name: /scan sources/i });
+    const sourceRadio = await screen.findByLabelText(/select nightcrawler disc/i);
+    expect(screen.queryByRole('heading', { name: /^review$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue to bdinfo/i })).toBeDisabled();
+    expect(sourceRadio).not.toBeChecked();
   });
 });

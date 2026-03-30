@@ -13,6 +13,7 @@ type ReviewPageProps = {
   currentJob: Job | null;
   currentLog: string;
   onBack: () => void;
+  onStartNextRemux: () => Promise<void> | void;
   onSubmit: () => Promise<void> | void;
 };
 
@@ -40,6 +41,7 @@ export function ReviewPage({
   currentJob,
   currentLog,
   onBack,
+  onStartNextRemux,
   onSubmit,
 }: ReviewPageProps) {
   const selectedAudio = draft.audio.filter((track) => track.selected);
@@ -124,6 +126,15 @@ export function ReviewPage({
         <button type="button" onClick={onBack}>
           Back
         </button>
+        {currentJob ? (
+          <button
+            type="button"
+            onClick={() => void onStartNextRemux()}
+            disabled={currentJob.status === 'running'}
+          >
+            Start Next Remux
+          </button>
+        ) : null}
         <button type="button" onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
           {submitting ? 'Starting Remux...' : 'Start Remux'}
         </button>

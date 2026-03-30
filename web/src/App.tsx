@@ -72,6 +72,22 @@ function App() {
     };
   }, [draft, fallbackTitle, filenameEdited, token]);
 
+  const resetWorkflowState = () => {
+    setSelectedSourceId(null);
+    setBdinfoText('');
+    setParsedBDInfo(null);
+    setBdinfoError(null);
+    setDraft(null);
+    setFilenamePreview('');
+    setOutputFilename('');
+    setFilenameEdited(false);
+    setSubmittingJob(false);
+    setSubmitError(null);
+    setCurrentJob(null);
+    setCurrentJobLog('');
+    setScanError(null);
+  };
+
   const handleLogin = async (password: string) => {
     try {
       const loginResult = await api.login(password);
@@ -83,7 +99,7 @@ function App() {
     }
   };
 
-  const handleScan = async () => {
+  const handleScan = async (preserveSelection = true) => {
     setScanning(true);
     setScanError(null);
     try {
@@ -92,6 +108,8 @@ function App() {
       );
       setSources(scannedSources);
       if (scannedSources.length === 0) {
+        setSelectedSourceId(null);
+      } else if (!preserveSelection) {
         setSelectedSourceId(null);
       } else if (!selectedSourceId || !scannedSources.some((source) => source.id === selectedSourceId)) {
         setSelectedSourceId(scannedSources[0].id);
@@ -104,6 +122,12 @@ function App() {
     } finally {
       setScanning(false);
     }
+  };
+
+  const handleStartNextRemux = async () => {
+    resetWorkflowState();
+    setStep('scan');
+    await handleScan(false);
   };
 
   const handleSourceSelect = (sourceId: string) => {
@@ -275,6 +299,7 @@ function App() {
           currentJob={currentJob}
           currentLog={currentJobLog}
           onBack={() => setStep('editor')}
+          onStartNextRemux={handleStartNextRemux}
           onSubmit={handleSubmitJob}
         />
       ) : null}
