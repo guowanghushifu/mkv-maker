@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -225,10 +226,38 @@ func resolvePlaylistPath(sourcePath, playlistName string) string {
 	if strings.EqualFold(filepath.Ext(sourcePath), ".MPLS") {
 		return sourcePath
 	}
+
+	playlistDir := filepath.Join(sourcePath, "BDMV", "PLAYLIST")
 	if strings.EqualFold(filepath.Base(sourcePath), "BDMV") {
-		return filepath.Join(sourcePath, "PLAYLIST", playlistName)
+		playlistDir = filepath.Join(sourcePath, "PLAYLIST")
 	}
-	return filepath.Join(sourcePath, "BDMV", "PLAYLIST", playlistName)
+
+	exactPath := filepath.Join(playlistDir, playlistName)
+	entries, err := os.ReadDir(playlistDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if entry.Name() == playlistName {
+				return filepath.Join(playlistDir, entry.Name())
+			}
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if strings.EqualFold(entry.Name(), playlistName) {
+				return filepath.Join(playlistDir, entry.Name())
+			}
+		}
+	}
+
+	if _, err := os.Stat(exactPath); err == nil {
+		return exactPath
+	}
+
+	return exactPath
 }
 
 func normalizeRunnerError(err error) string {
