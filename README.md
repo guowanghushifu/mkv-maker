@@ -51,6 +51,24 @@ Run:
 APP_PASSWORD=change-me ./scripts/docker-run.sh
 ```
 
+Docker Compose example:
+
+```yaml
+services:
+  mkv-remux-web:
+    image: guowanghushifu/mkv-remux-web:latest
+    container_name: mkv-remux-web
+    restart: unless-stopped
+    ports:
+      - "38080:8080"
+    environment:
+      APP_PASSWORD: "你的登录密码"
+    volumes:
+      - ./data:/app/data           # 日志目录
+      - /dld:/bd_input:rshared     # 蓝光盘存放目录，目前不支持iso
+      - /remux:/remux              # remux输出目录
+```
+
 Optional host mount overrides:
 
 - `APP_DATA_HOST_DIR` (default: `$PWD/.data`): host directory for application logs
