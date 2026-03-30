@@ -87,3 +87,20 @@ func TestCookieAuthExpiresAtBoundary(t *testing.T) {
 		t.Fatal("expected token to be invalid at expiry boundary")
 	}
 }
+
+func TestCookieAuthRejectsTokenFromPreviousInstanceWithSamePassword(t *testing.T) {
+	first := NewCookieAuth("app-password", time.Hour)
+	token, err := first.Issue()
+	if err != nil {
+		t.Fatalf("Issue returned error: %v", err)
+	}
+
+	second := NewCookieAuth("app-password", time.Hour)
+	valid, err := second.Valid(token)
+	if err != nil {
+		t.Fatalf("Valid returned error: %v", err)
+	}
+	if valid {
+		t.Fatal("expected token from previous instance to be rejected")
+	}
+}

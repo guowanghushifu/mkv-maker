@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { localeStorageKey, tokenStorageKey } from '../i18n';
+import { workflowStorageKey } from '../workflowState';
 
 const source = {
   id: 'disc-1',
@@ -107,6 +108,25 @@ function installFetchMock(state: BackendState) {
       });
     }
     return new Response('', { status: 500 });
+  });
+
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function installUnauthorizedFetchMock() {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method || 'GET';
+
+    if (url.endsWith('/api/login') && method === 'POST') {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response('', { status: 401 });
   });
 
   vi.stubGlobal('fetch', fetchMock);
@@ -221,6 +241,30 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /start remux/i }));
 
     expect(await screen.findByText(/request failed with status 409/i)).toBeInTheDocument();
+  });
+
+  it('logs out and clears local state when a protected request returns 401', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      })
+    );
+    installUnauthorizedFetchMock();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /登录/i })).toBeInTheDocument();
+    expect(window.localStorage.getItem(tokenStorageKey)).toBeNull();
+    expect(window.localStorage.getItem(workflowStorageKey)).toBeNull();
   });
 
   it('clears the old log immediately when starting a new remux', async () => {

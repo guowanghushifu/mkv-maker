@@ -9,6 +9,13 @@ type SubmitJobRequest = {
 };
 const sanitizeCharsPattern = /[<>:"/\\|?*\x00-\x1f]/g;
 
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Unauthorized');
+    this.name = 'UnauthorizedError';
+  }
+}
+
 function normalizeCodecLabel(value: string): string {
   return value
     .replace(/[()[\]]/g, ' ')
@@ -78,6 +85,9 @@ async function requestJSON<T>(url: string, init?: RequestInit, token?: string): 
     headers,
   });
 
+  if (response.status === 401) {
+    throw new UnauthorizedError();
+  }
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
@@ -188,6 +198,9 @@ export function createApiClient(basePath = '/api') {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+      if (response.status === 401) {
+        throw new UnauthorizedError();
+      }
       if (response.status === 404) {
         return null;
       }
@@ -202,6 +215,9 @@ export function createApiClient(basePath = '/api') {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+      if (response.status === 401) {
+        throw new UnauthorizedError();
+      }
       if (response.status === 404) {
         return '';
       }

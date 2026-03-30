@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { buildFilenamePreview, createApiClient } from './api/client';
+import { UnauthorizedError, buildFilenamePreview, createApiClient } from './api/client';
 import type { Draft, Job, ParsedBDInfo, SourceEntry } from './api/types';
 import { Layout, type WorkflowStep } from './components/Layout';
 import { LoginPage } from './features/auth/LoginPage';
@@ -89,13 +89,22 @@ function App() {
 
     let cancelled = false;
     const refreshFilename = async () => {
-      const suggested = await api.previewFilename(draft, fallbackTitle, token ?? undefined);
-      if (cancelled) {
-        return;
-      }
-      setFilenamePreview(suggested);
-      if (!filenameEdited) {
-        setOutputFilename(suggested);
+      try {
+        const suggested = await api.previewFilename(draft, fallbackTitle, token ?? undefined);
+        if (cancelled) {
+          return;
+        }
+        setFilenamePreview(suggested);
+        if (!filenameEdited) {
+          setOutputFilename(suggested);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          handleUnauthorized();
+        }
       }
     };
     void refreshFilename();
@@ -119,6 +128,14 @@ function App() {
     setCurrentJob(null);
     setCurrentJobLog('');
     setScanError(null);
+  };
+
+  const handleUnauthorized = () => {
+    resetWorkflowState();
+    setSources([]);
+    setLoginError(null);
+    setToken(null);
+    setStep('login');
   };
 
   const handleLogin = async (password: string) => {
@@ -151,6 +168,10 @@ function App() {
         setStep('scan');
       }
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        handleUnauthorized();
+        return;
+      }
       setScanError(error instanceof Error ? error.message : text.app.scanFailed);
     } finally {
       setScanning(false);
@@ -192,6 +213,10 @@ function App() {
       setFilenameEdited(false);
       setStep('editor');
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        handleUnauthorized();
+        return;
+      }
       setBdinfoError(error instanceof Error ? error.message : text.app.bdinfoParseFailed);
     } finally {
       setParsingBDInfo(false);
@@ -211,7 +236,11 @@ function App() {
       const { nextJob, nextLog } = await loadCurrentJobSnapshot();
       setCurrentJob(nextJob);
       setCurrentJobLog(nextLog);
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        handleUnauthorized();
+        return;
+      }
       // Keep current snapshot when polling fails to avoid disrupting review flow.
     }
   };
@@ -276,6 +305,10 @@ function App() {
         setCurrentJobLog(nextLog);
       }
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        handleUnauthorized();
+        return;
+      }
       setSubmitError(error instanceof Error ? error.message : text.app.submitFailed);
     } finally {
       setSubmittingJob(false);

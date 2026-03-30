@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/rand"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -17,7 +18,12 @@ type CookieAuth struct {
 }
 
 func NewCookieAuth(password string, maxAge time.Duration) *CookieAuth {
-	derived := sha256.Sum256([]byte(password))
+	seed := make([]byte, 32)
+	if _, err := rand.Read(seed); err != nil {
+		seed = []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
+	}
+	material := append([]byte(password), seed...)
+	derived := sha256.Sum256(material)
 	return &CookieAuth{
 		secret:   derived[:],
 		maxAge:   maxAge,
