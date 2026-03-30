@@ -231,6 +231,7 @@ function App() {
 
     setSubmittingJob(true);
     setSubmitError(null);
+    setCurrentJobLog('');
     try {
       await api.submitJob(
         {

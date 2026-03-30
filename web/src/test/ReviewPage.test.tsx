@@ -234,6 +234,84 @@ describe('ReviewPage', () => {
     expect(screen.getByRole('button', { name: /start remux/i })).toBeDisabled();
     expect(screen.getByText(/already running/i)).toBeInTheDocument();
   });
+
+  it('scrolls the log panel to the latest output when the log changes', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      audio: [],
+      subtitles: [],
+    } as const;
+    const currentJob = {
+      id: 'job-123',
+      sourceName: 'Nightcrawler Disc',
+      outputName: 'Nightcrawler - 2160p.mkv',
+      outputPath: '/remux/Nightcrawler - 2160p.mkv',
+      playlistName: '00800.MPLS',
+      createdAt: '2026-03-29T12:00:00Z',
+      status: 'running' as const,
+    };
+
+    const { rerender } = render(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={currentJob}
+        currentLog="[2026-03-29T12:00:00Z] line 1"
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    const logPanel = screen.getByText(/\[2026-03-29T12:00:00Z\] line 1/i);
+    Object.defineProperty(logPanel, 'scrollHeight', { value: 240, configurable: true });
+    Object.defineProperty(logPanel, 'scrollTop', { value: 0, writable: true, configurable: true });
+
+    rerender(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={currentJob}
+        currentLog={'[2026-03-29T12:00:00Z] line 1\n[2026-03-29T12:00:01Z] line 2'}
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(logPanel.scrollTop).toBe(240);
+  });
 });
 
 describe('api current job fallbacks', () => {

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { Draft, DraftTrack, Job, ParsedBDInfo, SourceEntry } from '../../api/types';
 import { getMessages, type Locale } from '../../i18n';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -49,12 +50,20 @@ export function ReviewPage({
   onSubmit,
 }: ReviewPageProps) {
   const text = getMessages(locale);
+  const logRef = useRef<HTMLPreElement | null>(null);
   const selectedAudio = draft.audio.filter((track) => track.selected);
   const selectedSubtitles = draft.subtitles.filter((track) => track.selected);
   const progressPercent =
     currentJob?.status === 'succeeded'
       ? 100
       : Math.max(0, Math.min(100, currentJob?.progressPercent ?? 0));
+
+  useEffect(() => {
+    if (!logRef.current) {
+      return;
+    }
+    logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [currentLog, currentJob?.id]);
 
   return (
     <section className="panel">
@@ -146,7 +155,7 @@ export function ReviewPage({
             </div>
           ) : null}
           {currentJob.message ? <p className="error-text">{currentJob.message}</p> : null}
-          <pre className="job-log scroll-panel">{currentLog || text.review.waitingForLogOutput}</pre>
+          <pre ref={logRef} className="job-log scroll-panel">{currentLog || text.review.waitingForLogOutput}</pre>
         </section>
       ) : null}
     </section>
