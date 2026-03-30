@@ -3,6 +3,7 @@ node_modules/
 web/dist/
 coverage/
 .superpowers/
+docs/superpowers/
 app.db
 .worktrees/
 .data/
