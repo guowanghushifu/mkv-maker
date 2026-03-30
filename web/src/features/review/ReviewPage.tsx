@@ -84,6 +84,29 @@ export function ReviewPage({
         ))}
       </ol>
 
+      <div className="review-actions">
+        <div className="review-actions-primary">
+          <button type="button" onClick={onBack}>
+            Back
+          </button>
+          <button type="button" onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
+            {submitting ? 'Starting Remux...' : 'Start Remux'}
+          </button>
+        </div>
+        {currentJob ? (
+          <div className="review-actions-secondary">
+            <button
+              type="button"
+              onClick={() => void onStartNextRemux()}
+              disabled={currentJob.status === 'running'}
+            >
+              Start Next Remux
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {submitError ? <p className="error-text">{submitError}</p> : null}
+
       {currentJob ? (
         <section className="info-box current-job-panel">
           <div className="row">
@@ -121,25 +144,6 @@ export function ReviewPage({
           <pre className="job-log scroll-panel">{currentLog || 'Waiting for log output...'}</pre>
         </section>
       ) : null}
-
-      <div className="row">
-        <button type="button" onClick={onBack}>
-          Back
-        </button>
-        {currentJob ? (
-          <button
-            type="button"
-            onClick={() => void onStartNextRemux()}
-            disabled={currentJob.status === 'running'}
-          >
-            Start Next Remux
-          </button>
-        ) : null}
-        <button type="button" onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
-          {submitting ? 'Starting Remux...' : 'Start Remux'}
-        </button>
-      </div>
-      {submitError ? <p className="error-text">{submitError}</p> : null}
     </section>
   );
 }

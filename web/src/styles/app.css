@@ -364,6 +364,26 @@ button:disabled {
   margin: 0;
 }
 
+.review-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.review-actions-primary,
+.review-actions-secondary {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.review-actions-secondary {
+  margin-left: auto;
+}
+
 .current-job-progress {
   display: grid;
   gap: 0.4rem;
@@ -420,5 +440,14 @@ button:disabled {
 
   .scroll-panel {
     max-height: 14rem;
+  }
+
+  .review-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .review-actions-secondary {
+    margin-left: 0;
   }
 }

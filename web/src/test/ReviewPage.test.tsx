@@ -61,6 +61,7 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/--output/i)).toBeInTheDocument();
     expect(screen.getByText(/mkvmerge/i).closest('pre')).toHaveClass('scroll-panel');
     expect(screen.getByText(/\[2026-03-30T00:00:01Z\] Progress: 42%/i)).toHaveClass('scroll-panel');
+    expect(screen.getByRole('button', { name: /start next remux/i }).closest('.review-actions-secondary')).not.toBeNull();
   });
 
   it('renders the current remux panel when a task is present', () => {
@@ -115,6 +116,9 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/current remux/i)).toBeInTheDocument();
     expect(screen.getByText(/running/i)).toBeInTheDocument();
     expect(screen.getByText(/remux started/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back/i }).compareDocumentPosition(screen.getByText(/current remux/i))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
   });
 
   it('shows 0 percent progress when current job has no progressPercent yet', () => {
