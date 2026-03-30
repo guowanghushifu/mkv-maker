@@ -317,6 +317,11 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.scroll-panel {
+  max-height: 18rem;
+  overflow: auto;
+}
+
 .ordered-track-list {
   margin-top: 0.5rem;
 }
@@ -411,5 +416,9 @@ button:disabled {
 @media (max-width: 780px) {
   .step-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .scroll-panel {
+    max-height: 14rem;
   }
 }

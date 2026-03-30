@@ -59,6 +59,8 @@ describe('ReviewPage', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
     expect(screen.getByText(/mkvmerge/i)).toBeInTheDocument();
     expect(screen.getByText(/--output/i)).toBeInTheDocument();
+    expect(screen.getByText(/mkvmerge/i).closest('pre')).toHaveClass('scroll-panel');
+    expect(screen.getByText(/\[2026-03-30T00:00:01Z\] Progress: 42%/i)).toHaveClass('scroll-panel');
   });
 
   it('renders the current remux panel when a task is present', () => {

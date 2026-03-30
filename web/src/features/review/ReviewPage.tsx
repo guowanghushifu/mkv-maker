@@ -112,11 +112,11 @@ export function ReviewPage({
           {currentJob.commandPreview ? (
             <div className="current-job-command">
               <h4>Command Preview</h4>
-              <pre className="command-preview">{currentJob.commandPreview}</pre>
+              <pre className="command-preview scroll-panel">{currentJob.commandPreview}</pre>
             </div>
           ) : null}
           {currentJob.message ? <p className="error-text">{currentJob.message}</p> : null}
-          <pre className="job-log">{currentLog || 'Waiting for log output...'}</pre>
+          <pre className="job-log scroll-panel">{currentLog || 'Waiting for log output...'}</pre>
         </section>
       ) : null}
 
