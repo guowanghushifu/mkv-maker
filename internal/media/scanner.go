@@ -29,34 +29,43 @@ func NewScanner() *Scanner {
 }
 
 func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
-	entries, err := os.ReadDir(root)
+	var out []SourceEntry
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path == root {
+			return nil
+		}
+		if !isBDMVRoot(path) {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		size, err := directorySize(path)
+		if err != nil {
+			return err
+		}
+
+		out = append(out, SourceEntry{
+			ID:         filepath.Base(path),
+			Name:       filepath.Base(path),
+			Path:       path,
+			Type:       SourceBDMV,
+			Size:       size,
+			ModifiedAt: info.ModTime(),
+		})
+
+		return filepath.SkipDir
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	var out []SourceEntry
-	for _, entry := range entries {
-		fullPath := filepath.Join(root, entry.Name())
-		info, err := entry.Info()
-		if err != nil {
-			return nil, err
-		}
-
-		if entry.IsDir() && isBDMVRoot(fullPath) {
-			size, err := directorySize(fullPath)
-			if err != nil {
-				return nil, err
-			}
-
-			out = append(out, SourceEntry{
-				ID:         entry.Name(),
-				Name:       entry.Name(),
-				Path:       fullPath,
-				Type:       SourceBDMV,
-				Size:       size,
-				ModifiedAt: info.ModTime(),
-			})
-		}
 	}
 
 	slices.SortFunc(out, func(a, b SourceEntry) int {
