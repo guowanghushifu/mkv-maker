@@ -443,3 +443,66 @@ func buildTestMPLS(clipNames []string) []byte {
 	}
 	return data
 }
+
+func TestCollectTrackIDsCollapsesTrueHDCoreMultiplexedAudioTracks(t *testing.T) {
+	payload := mkvmergeIdentifyPayload{
+		Tracks: []mkvmergeTrack{
+			{ID: 0, Type: "video"},
+			{
+				ID:    1,
+				Type:  "audio",
+				Codec: "TrueHD Atmos",
+				Properties: struct {
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
+			},
+			{
+				ID:    2,
+				Type:  "audio",
+				Codec: "AC-3",
+				Properties: struct {
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
+			},
+			{
+				ID:    3,
+				Type:  "audio",
+				Codec: "DTS-HD Master Audio",
+				Properties: struct {
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{Number: 4353, StreamID: 4353},
+			},
+			{
+				ID:    4,
+				Type:  "subtitles",
+				Codec: "HDMV PGS",
+			},
+		},
+	}
+
+	audioIDs, subtitleIDs := collectTrackIDs(payload)
+	if !equalStringSlices(audioIDs, []string{"1", "3"}) {
+		t.Fatalf("expected multiplexed audio ids to collapse to [1 3], got %+v", audioIDs)
+	}
+	if !equalStringSlices(subtitleIDs, []string{"4"}) {
+		t.Fatalf("expected subtitle ids [4], got %+v", subtitleIDs)
+	}
+}
+
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}

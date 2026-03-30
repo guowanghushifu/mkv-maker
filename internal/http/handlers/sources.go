@@ -487,11 +487,19 @@ type MKVMergePlaylistInspector struct {
 	Binary string
 }
 
+type mkvmergeTrack struct {
+	ID         int    `json:"id"`
+	Type       string `json:"type"`
+	Codec      string `json:"codec"`
+	Properties struct {
+		Number            int   `json:"number"`
+		StreamID          int   `json:"stream_id"`
+		MultiplexedTracks []int `json:"multiplexed_tracks"`
+	} `json:"properties"`
+}
+
 type mkvmergeIdentifyPayload struct {
-	Tracks []struct {
-		ID   int    `json:"id"`
-		Type string `json:"type"`
-	} `json:"tracks"`
+	Tracks []mkvmergeTrack `json:"tracks"`
 }
 
 func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspection, error) {
@@ -510,19 +518,50 @@ func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspect
 		return PlaylistInspection{}, err
 	}
 
-	result := PlaylistInspection{
-		AudioTrackIDs:    []string{},
-		SubtitleTrackIDs: []string{},
-	}
+	audioIDs, subtitleIDs := collectTrackIDs(payload)
+	return PlaylistInspection{
+		AudioTrackIDs:    audioIDs,
+		SubtitleTrackIDs: subtitleIDs,
+	}, nil
+}
+
+func collectTrackIDs(payload mkvmergeIdentifyPayload) ([]string, []string) {
+	audioIDs := make([]string, 0, len(payload.Tracks))
+	subtitleIDs := make([]string, 0, len(payload.Tracks))
+	seenMultiplexed := make(map[string]struct{}, len(payload.Tracks))
+
 	for _, track := range payload.Tracks {
 		switch strings.ToLower(strings.TrimSpace(track.Type)) {
 		case "audio":
-			result.AudioTrackIDs = append(result.AudioTrackIDs, strconv.Itoa(track.ID))
+			if key := multiplexedGroupKey(track); key != "" {
+				if _, ok := seenMultiplexed[key]; ok {
+					continue
+				}
+				seenMultiplexed[key] = struct{}{}
+			}
+			audioIDs = append(audioIDs, strconv.Itoa(track.ID))
 		case "subtitles":
-			result.SubtitleTrackIDs = append(result.SubtitleTrackIDs, strconv.Itoa(track.ID))
+			subtitleIDs = append(subtitleIDs, strconv.Itoa(track.ID))
 		}
 	}
-	return result, nil
+	return audioIDs, subtitleIDs
+}
+
+func multiplexedGroupKey(track mkvmergeTrack) string {
+	if len(track.Properties.MultiplexedTracks) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(track.Properties.MultiplexedTracks)+2)
+	if track.Properties.Number > 0 {
+		parts = append(parts, strconv.Itoa(track.Properties.Number))
+	}
+	if track.Properties.StreamID > 0 {
+		parts = append(parts, strconv.Itoa(track.Properties.StreamID))
+	}
+	for _, id := range track.Properties.MultiplexedTracks {
+		parts = append(parts, strconv.Itoa(id))
+	}
+	return strings.Join(parts, ":")
 }
 
 func normalizeCodecLabel(label string) string {
