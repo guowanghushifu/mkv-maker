@@ -64,9 +64,9 @@ export function ScanPage({
           <table className="source-table">
             <colgroup>
               <col className="col-select" />
-              <col className="col-name" />
+              <col />
               <col className="col-type" />
-              <col className="col-path" />
+              <col />
               <col className="col-size" />
               <col className="col-modified" />
             </colgroup>
@@ -92,7 +92,11 @@ export function ScanPage({
                       aria-label={text.scan.selectSource(source.name)}
                     />
                   </td>
-                  <td>{source.name}</td>
+                  <td className="source-name-cell">
+                    <span className="source-name-text" title={source.name}>
+                      {source.name}
+                    </span>
+                  </td>
                   <td>{typeLabel(source.type)}</td>
                   <td className="source-path-cell">
                     <span className="source-path-text" title={source.path}>

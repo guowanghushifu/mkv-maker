@@ -175,23 +175,19 @@ button:disabled {
 }
 
 .source-table .col-select {
-  width: 3.2rem;
-}
-
-.source-table .col-name {
-  width: 13rem;
+  width: 2.8rem;
 }
 
 .source-table .col-type {
-  width: 6.2rem;
+  width: 5.2rem;
 }
 
 .source-table .col-size {
-  width: 6.8rem;
+  width: 6rem;
 }
 
 .source-table .col-modified {
-  width: 10.8rem;
+  width: 9.8rem;
 }
 
 .track-editor-table {
@@ -239,10 +235,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+.source-name-cell,
 .source-path-cell {
   min-width: 0;
 }
 
+.source-name-text,
 .source-path-text {
   display: block;
   min-width: 0;
