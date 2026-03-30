@@ -255,7 +255,9 @@ func parseAudioTableRow(line string) (audioRow, bool) {
 		Codec:    columns[0],
 		Language: columns[1],
 	}
-	if len(columns) > 2 {
+	if len(columns) > 3 {
+		row.Description = strings.Join(columns[3:], " ")
+	} else if len(columns) > 2 {
 		row.Description = columns[len(columns)-1]
 	}
 	return row, true
@@ -448,13 +450,23 @@ func extractDescriptiveSuffix(description string) string {
 			continue
 		}
 		if isDescriptiveSegment(segment) {
-			return segment
+			return trimDescriptiveSegment(segment)
 		}
 	}
 	if isDescriptiveSegment(description) {
-		return description
+		return trimDescriptiveSegment(description)
 	}
 	return ""
+}
+
+func trimDescriptiveSegment(segment string) string {
+	segment = strings.TrimSpace(segment)
+	for i, r := range segment {
+		if unicode.In(r, unicode.Han) {
+			return strings.TrimSpace(segment[i:])
+		}
+	}
+	return segment
 }
 
 func isDescriptiveSegment(segment string) bool {

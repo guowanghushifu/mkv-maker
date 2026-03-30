@@ -134,3 +134,29 @@ SUBTITLE: Chinese / 国配简体特效
 		t.Fatalf("expected legacy subtitle label to be preserved, got %+v", parsed.SubtitleLabels)
 	}
 }
+
+func TestParseStripsEmbeddedMetadataBeforeChineseAudioSuffix(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00003.MPLS
+
+AUDIO:
+
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+Dolby TrueHD/Atmos Audio        English         3886 kbps       7.1 / 48 kHz / 3246 kbps / 16-bit (AC3 Embedded: 5.1 / 48 kHz / 640 kbps / DN -29dB)   英文次世代全景声
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(parsed.AudioLabels) != 1 {
+		t.Fatalf("expected one parsed audio label, got %+v", parsed.AudioLabels)
+	}
+	if parsed.AudioLabels[0] != "英文次世代全景声" {
+		t.Fatalf("expected cleaned chinese audio suffix, got %+v", parsed.AudioLabels)
+	}
+	if len(parsed.AudioCodecInfo) != 1 || parsed.AudioCodecInfo[0] != "TrueHD.7.1.Atmos" {
+		t.Fatalf("expected codec info TrueHD.7.1.Atmos, got %+v", parsed.AudioCodecInfo)
+	}
+}
