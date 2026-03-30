@@ -21,6 +21,8 @@ Build:
 ./scripts/docker-build.sh
 ```
 
+Local Docker builds now require Docker Buildx.
+
 Optional custom image tag:
 
 ```bash
@@ -31,7 +33,7 @@ Optional local build controls:
 
 - `NO_CACHE=1`: disable Docker layer cache
 - `PLATFORMS=linux/amd64,linux/arm64`: request a multi-arch Buildx build
-- `PUSH=1`: push the resulting image instead of loading it locally
+- `PUSH=1`: push the resulting image instead of loading it locally (requires a registry-qualified `IMAGE_TAG`)
 
 Examples:
 
