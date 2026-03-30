@@ -71,12 +71,18 @@ Configure GitHub repository secrets:
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN` (Docker Hub access token)
 
+GHCR publishing uses the built-in `GITHUB_TOKEN` provided by GitHub Actions.
+
 Then run the **Docker Publish** workflow with:
 
 - `image_tag` (for example `v0.1.0`)
 - `push_latest` (`true` to also push `latest`)
 
-Image is pushed as:
+Published images:
 
 - `${DOCKERHUB_USERNAME}/mkv-remux-web:<image_tag>`
 - `${DOCKERHUB_USERNAME}/mkv-remux-web:latest` (optional)
+- `ghcr.io/<github-owner-lowercase>/mkv-remux-web:<image_tag>`
+- `ghcr.io/<github-owner-lowercase>/mkv-remux-web:latest` (optional)
+
+The publish workflow builds a shared multi-arch manifest for `linux/amd64` and `linux/arm64`.
