@@ -107,17 +107,15 @@ export function ReviewPage({
             {submitting ? text.review.startingRemuxButton : text.review.startRemuxButton}
           </button>
         </div>
-        {currentJob ? (
-          <div className="review-actions-secondary">
-            <button
-              type="button"
-              onClick={() => void onStartNextRemux()}
-              disabled={currentJob.status === 'running'}
-            >
-              {text.review.startNextRemuxButton}
-            </button>
-          </div>
-        ) : null}
+        <div className="review-actions-secondary">
+          <button
+            type="button"
+            onClick={() => void onStartNextRemux()}
+            disabled={currentJob?.status === 'running'}
+          >
+            {text.review.startNextRemuxButton}
+          </button>
+        </div>
       </div>
       {submitError ? <p className="error-text">{submitError}</p> : null}
 

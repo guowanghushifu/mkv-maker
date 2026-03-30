@@ -235,6 +235,53 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/already running/i)).toBeInTheDocument();
   });
 
+  it('still shows start next remux when no current task snapshot is available', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      audio: [],
+      subtitles: [],
+    } as const;
+
+    render(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={null}
+        currentLog=""
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /start next remux/i })).toBeEnabled();
+    expect(screen.queryByText(/current remux/i)).not.toBeInTheDocument();
+  });
+
   it('scrolls the log panel to the latest output when the log changes', () => {
     const source = {
       id: 'disc-1',
