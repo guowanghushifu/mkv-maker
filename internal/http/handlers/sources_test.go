@@ -226,6 +226,81 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	}
 }
 
+func TestSourcesHandlerResolvePreservesAudioCodecLabelWhenDisplayLabelIsDescriptive(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "Nightcrawler"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "STREAM"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	streamPath := filepath.Join(sourcePath, "BDMV", "STREAM", "00005.m2ts")
+	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/custom/remux", stubSourceScanner{
+		items: []media.SourceEntry{
+			{
+				ID:   sourceID,
+				Name: "Nightcrawler (2014)",
+				Path: sourcePath,
+				Type: media.SourceBDMV,
+			},
+		},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs: []string{"2"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"Nightcrawler",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"discTitle":"Nightcrawler",
+			"audioLabels":["英文次世代全景声"],
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\nAUDIO:\nDolby TrueHD/Atmos Audio        English         7.1 / 48 kHz / 3984 kbps / 24-bit"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/Nightcrawler/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Name       string `json:"name"`
+			CodecLabel string `json:"codecLabel"`
+			Default    bool   `json:"default"`
+		} `json:"audio"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(body.Audio) != 1 {
+		t.Fatalf("expected 1 audio track, got %d", len(body.Audio))
+	}
+	if body.Audio[0].Name != "英文次世代全景声" {
+		t.Fatalf("expected display label to stay descriptive, got %+v", body.Audio[0])
+	}
+	if body.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" {
+		t.Fatalf("expected codec label TrueHD.7.1.Atmos, got %+v", body.Audio[0])
+	}
+}
+
 func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "NoPlaylistDisc"

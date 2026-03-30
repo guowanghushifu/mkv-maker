@@ -248,8 +248,8 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		DVMergeEnabled: dvMergeEnabled,
 		SegmentPaths:   segmentPaths,
 		Video:          video,
-		Audio:          buildResolveTracks(audioLabels, inspection.AudioTrackIDs, false),
-		Subtitles:      buildResolveTracks(subtitleLabels, inspection.SubtitleTrackIDs, true),
+		Audio:          buildResolveTracks(audioLabels, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
+		Subtitles:      buildResolveTracks(subtitleLabels, nil, inspection.SubtitleTrackIDs, true),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -434,18 +434,25 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func buildResolveTracks(labels []string, trackIDs []string, subtitles bool) []resolveTrack {
+func buildResolveTracks(labels []string, codecLabels []string, trackIDs []string, subtitles bool) []resolveTrack {
 	tracks := make([]resolveTrack, 0, len(labels))
 	for i, label := range labels {
 		trackID := strconv.Itoa(i + 1)
 		if i < len(trackIDs) && strings.TrimSpace(trackIDs[i]) != "" {
 			trackID = strings.TrimSpace(trackIDs[i])
 		}
+		codecLabel := ""
+		if i < len(codecLabels) {
+			codecLabel = strings.TrimSpace(codecLabels[i])
+		}
+		if codecLabel == "" && !subtitles {
+			codecLabel = normalizeCodecLabel(label)
+		}
 		track := resolveTrack{
 			ID:         trackID,
 			Name:       label,
 			Language:   inferLanguage(label),
-			CodecLabel: normalizeCodecLabel(label),
+			CodecLabel: codecLabel,
 			Selected:   true,
 			Default:    i == 0,
 		}

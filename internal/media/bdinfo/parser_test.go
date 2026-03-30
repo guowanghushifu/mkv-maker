@@ -80,6 +80,14 @@ func TestParseExtractsPlaylistAndFrontendFieldsFromTables(t *testing.T) {
 	if !reflect.DeepEqual(parsed.AudioLabels, expectedAudio) {
 		t.Fatalf("expected audio labels %+v, got %+v", expectedAudio, parsed.AudioLabels)
 	}
+	expectedAudioCodecInfo := []string{
+		"TrueHD.7.1.Atmos",
+		"DD.5.1",
+		"DTS-HD.MA.5.1",
+	}
+	if !reflect.DeepEqual(parsed.AudioCodecInfo, expectedAudioCodecInfo) {
+		t.Fatalf("expected audio codec info %+v, got %+v", expectedAudioCodecInfo, parsed.AudioCodecInfo)
+	}
 
 	expectedSubtitles := []string{
 		"国配简体特效",
@@ -118,6 +126,9 @@ SUBTITLE: Chinese / 国配简体特效
 	}
 	if len(parsed.AudioLabels) != 1 || parsed.AudioLabels[0] == "" {
 		t.Fatalf("expected one parsed audio label, got %+v", parsed.AudioLabels)
+	}
+	if len(parsed.AudioCodecInfo) != 1 || parsed.AudioCodecInfo[0] != "TrueHD.7.1.Atmos" {
+		t.Fatalf("expected legacy codec info to be preserved, got %+v", parsed.AudioCodecInfo)
 	}
 	if len(parsed.SubtitleLabels) != 1 || parsed.SubtitleLabels[0] != "国配简体特效" {
 		t.Fatalf("expected legacy subtitle label to be preserved, got %+v", parsed.SubtitleLabels)

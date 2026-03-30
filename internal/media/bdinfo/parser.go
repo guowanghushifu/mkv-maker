@@ -16,6 +16,7 @@ type Parsed struct {
 	DiscTitle      string   `json:"discTitle,omitempty"`
 	Duration       string   `json:"duration,omitempty"`
 	AudioLabels    []string `json:"audioLabels"`
+	AudioCodecInfo []string `json:"-"`
 	SubtitleLabels []string `json:"subtitleLabels"`
 	RawText        string   `json:"rawText"`
 	StreamFiles    []string `json:"-"`
@@ -68,6 +69,7 @@ func Parse(rawText string) (Parsed, error) {
 	parsed := Parsed{
 		RawText:        rawText,
 		AudioLabels:    []string{},
+		AudioCodecInfo: []string{},
 		SubtitleLabels: []string{},
 		Video: Video{
 			Name: "Main Video",
@@ -191,6 +193,7 @@ func Parse(rawText string) (Parsed, error) {
 		if label != "" {
 			parsed.AudioLabels = append(parsed.AudioLabels, label)
 		}
+		parsed.AudioCodecInfo = append(parsed.AudioCodecInfo, buildAudioCodecLabel(row))
 	}
 	for _, row := range subtitleRows {
 		label := buildSubtitleLabel(row)
@@ -335,6 +338,52 @@ func buildAudioLabel(row audioRow) string {
 		return suffix
 	}
 	return strings.TrimSpace(strings.Join(compactLabelParts(row.Language, row.Codec), " "))
+}
+
+func buildAudioCodecLabel(row audioRow) string {
+	combined := strings.ToUpper(strings.Join(compactLabelParts(row.Codec, row.Description), " / "))
+	if combined == "" {
+		return ""
+	}
+
+	parts := make([]string, 0, 3)
+	switch {
+	case strings.Contains(combined, "TRUEHD"):
+		parts = append(parts, "TrueHD")
+	case strings.Contains(combined, "DTS-HD MASTER"):
+		parts = append(parts, "DTS-HD.MA")
+	case strings.Contains(combined, "DTS-HD"):
+		parts = append(parts, "DTS-HD")
+	case strings.Contains(combined, "DOLBY DIGITAL PLUS"):
+		parts = append(parts, "DDP")
+	case strings.Contains(combined, "DOLBY DIGITAL"), strings.Contains(combined, "AC-3"):
+		parts = append(parts, "DD")
+	case strings.Contains(combined, "LPCM"):
+		parts = append(parts, "LPCM")
+	case strings.Contains(combined, "AAC"):
+		parts = append(parts, "AAC")
+	}
+
+	if channels := extractChannelLayout(combined); channels != "" {
+		parts = append(parts, channels)
+	}
+	switch {
+	case strings.Contains(combined, "ATMOS"):
+		parts = append(parts, "Atmos")
+	case strings.Contains(combined, "DTS:X"):
+		parts = append(parts, "DTS.X")
+	}
+
+	return strings.Join(parts, ".")
+}
+
+func extractChannelLayout(value string) string {
+	for _, candidate := range []string{"7.1", "6.1", "5.1", "2.1", "2.0", "1.0"} {
+		if strings.Contains(value, candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func buildSubtitleLabel(row subtitleRow) string {

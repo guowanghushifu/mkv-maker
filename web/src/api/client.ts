@@ -46,9 +46,7 @@ export function buildFilenamePreview(draft: Draft, fallbackTitle: string): strin
     draft.audio.find((track) => track.selected && track.default) ||
     draft.audio.find((track) => track.selected) ||
     draft.audio[0];
-  const defaultAudioCodec = normalizeCodecLabel(
-    defaultAudio?.codecLabel || defaultAudio?.name || 'UnknownAudio'
-  );
+  const defaultAudioCodec = normalizeCodecLabel(defaultAudio?.codecLabel || 'UnknownAudio');
 
   const left = [title, resolution].filter(Boolean).join(' - ');
   const parts = [left, 'BluRay', hdr, videoCodec, defaultAudioCodec].filter(
@@ -161,7 +159,7 @@ export function createApiClient(basePath = '/api') {
                 id: track.id,
                 name: track.name,
                 language: track.language,
-                codecLabel: track.codecLabel || normalizeCodecLabel(track.name),
+                codecLabel: track.codecLabel || '',
                 default: track.default,
                 selected: track.selected,
               })),
