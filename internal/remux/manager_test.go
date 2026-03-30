@@ -231,6 +231,60 @@ func TestManagerCloseCancelsInFlightTask(t *testing.T) {
 	}
 }
 
+func TestManagerSuccessTransitionSetsCommandPreviewAndHundredPercent(t *testing.T) {
+	manager := NewManager(&stubRunner{output: "Progress: 42%\nProgress: 100%"})
+	defer manager.Close()
+
+	task, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00003.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.ID != task.ID {
+		t.Fatalf("expected same task id, got %q", done.ID)
+	}
+	if done.ProgressPercent != 100 {
+		t.Fatalf("expected 100 percent, got %d", done.ProgressPercent)
+	}
+	if !strings.HasPrefix(done.CommandPreview, "mkvmerge\n") {
+		t.Fatalf("expected command preview, got %q", done.CommandPreview)
+	}
+}
+
+func TestManagerFailureKeepsLastKnownProgressPercent(t *testing.T) {
+	manager := NewManager(&stubRunner{
+		output: "Progress: 63%\nstderr output",
+		err:    errors.New("runner exploded"),
+	})
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00003.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status, got %q", done.Status)
+	}
+	if done.ProgressPercent != 63 {
+		t.Fatalf("expected last known progress 63, got %d", done.ProgressPercent)
+	}
+}
+
 func waitForTerminalTask(t *testing.T, manager *Manager) Task {
 	t.Helper()
 

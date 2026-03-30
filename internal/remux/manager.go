@@ -15,14 +15,16 @@ var ErrTaskNotFound = errors.New("task not found")
 var ErrManagerClosed = errors.New("manager is closed")
 
 type Task struct {
-	ID           string `json:"id"`
-	SourceName   string `json:"sourceName"`
-	OutputName   string `json:"outputName"`
-	OutputPath   string `json:"outputPath"`
-	PlaylistName string `json:"playlistName"`
-	CreatedAt    string `json:"createdAt"`
-	Status       string `json:"status"`
-	Message      string `json:"message,omitempty"`
+	ID              string `json:"id"`
+	SourceName      string `json:"sourceName"`
+	OutputName      string `json:"outputName"`
+	OutputPath      string `json:"outputPath"`
+	PlaylistName    string `json:"playlistName"`
+	CommandPreview  string `json:"commandPreview,omitempty"`
+	ProgressPercent int    `json:"progressPercent"`
+	CreatedAt       string `json:"createdAt"`
+	Status          string `json:"status"`
+	Message         string `json:"message,omitempty"`
 }
 
 type StartRequest struct {
@@ -78,15 +80,22 @@ func (m *Manager) Start(req StartRequest) (Task, error) {
 		m.mu.Unlock()
 		return Task{}, err
 	}
+	commandPreview, err := m.executor.CommandPreview(req)
+	if err != nil {
+		m.mu.Unlock()
+		return Task{}, err
+	}
 
 	task := Task{
-		ID:           id,
-		SourceName:   strings.TrimSpace(req.SourceName),
-		OutputName:   strings.TrimSpace(req.OutputName),
-		OutputPath:   strings.TrimSpace(req.OutputPath),
-		PlaylistName: strings.TrimSpace(req.PlaylistName),
-		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
-		Status:       "running",
+		ID:              id,
+		SourceName:      strings.TrimSpace(req.SourceName),
+		OutputName:      strings.TrimSpace(req.OutputName),
+		OutputPath:      strings.TrimSpace(req.OutputPath),
+		PlaylistName:    strings.TrimSpace(req.PlaylistName),
+		CommandPreview:  commandPreview,
+		ProgressPercent: 0,
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+		Status:          "running",
 	}
 	state := &taskState{
 		task: task,
@@ -147,6 +156,7 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 	m.appendLog(state, logLine("running"))
 	output, err := m.executor.Execute(m.ctx, req)
 	if output != "" {
+		m.updateProgressFromOutput(state, output)
 		m.appendLog(state, normalizeLogChunk(output))
 	}
 
@@ -157,6 +167,7 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 		return
 	}
 
+	m.setProgress(state, 100)
 	m.appendLog(state, logLine("completed"))
 	m.finish(state, "succeeded", "")
 }
@@ -206,6 +217,22 @@ func (m *Manager) finish(state *taskState, status, message string) {
 	if m.current == state {
 		m.current = nil
 	}
+}
+
+func (m *Manager) updateProgressFromOutput(state *taskState, output string) {
+	for _, line := range strings.Split(output, "\n") {
+		progress, ok := ExtractProgressPercent(line)
+		if !ok {
+			continue
+		}
+		m.setProgress(state, progress)
+	}
+}
+
+func (m *Manager) setProgress(state *taskState, progress int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state.task.ProgressPercent = progress
 }
 
 func generateTaskID() (string, error) {

@@ -30,11 +30,25 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest) (string, erro
 		return "", errors.New("runner is not configured")
 	}
 
-	draft, err := buildExecutionDraft(req)
+	draft, err := r.BuildExecutionDraft(req)
 	if err != nil {
 		return "", err
 	}
 	return r.runner.Run(ctx, draft)
+}
+
+func (r *JobRunner) BuildExecutionDraft(req StartRequest) (Draft, error) {
+	return buildExecutionDraft(req)
+}
+
+func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
+	draft, err := r.BuildExecutionDraft(req)
+	if err != nil {
+		return "", err
+	}
+
+	args := BuildMKVMergeArgs(draft)
+	return FormatCommandPreview(r.commandBinary(), args), nil
 }
 
 type MKVMergeRunner struct {
@@ -42,15 +56,34 @@ type MKVMergeRunner struct {
 }
 
 func (r MKVMergeRunner) Run(ctx context.Context, draft Draft) (string, error) {
-	binary := strings.TrimSpace(r.Binary)
-	if binary == "" {
-		binary = "mkvmerge"
-	}
+	binary := resolveBinaryName(r.Binary)
 
 	args := BuildMKVMergeArgs(draft)
 	cmd := exec.CommandContext(ctx, binary, args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+func (r *JobRunner) commandBinary() string {
+	if r == nil || r.runner == nil {
+		return "mkvmerge"
+	}
+	switch typed := r.runner.(type) {
+	case MKVMergeRunner:
+		return resolveBinaryName(typed.Binary)
+	case *MKVMergeRunner:
+		return resolveBinaryName(typed.Binary)
+	default:
+		return "mkvmerge"
+	}
+}
+
+func resolveBinaryName(binary string) string {
+	trimmed := strings.TrimSpace(binary)
+	if trimmed == "" {
+		return "mkvmerge"
+	}
+	return trimmed
 }
 
 type executionPayload struct {
