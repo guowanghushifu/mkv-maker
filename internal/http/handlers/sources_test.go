@@ -27,9 +27,13 @@ func (s stubSourceScanner) Scan(root string) ([]media.SourceEntry, error) {
 type stubPlaylistInspector struct {
 	result PlaylistInspection
 	err    error
+	path   *string
 }
 
 func (s stubPlaylistInspector) Inspect(playlistPath string) (PlaylistInspection, error) {
+	if s.path != nil {
+		*s.path = playlistPath
+	}
 	return s.result, s.err
 }
 
@@ -122,6 +126,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 		t.Fatalf("write file failed: %v", err)
 	}
 
+	var inspectedPath string
 	h := NewSourcesHandler(inputRoot, "/custom/remux", stubSourceScanner{
 		items: []media.SourceEntry{
 			{
@@ -136,6 +141,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			AudioTrackIDs:    []string{"2", "5", "7"},
 			SubtitleTrackIDs: []string{"9", "10"},
 		},
+		path: &inspectedPath,
 	})
 
 	reqBody := `{
@@ -193,6 +199,9 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	}
 	if body.PlaylistName != "00800.MPLS" {
 		t.Fatalf("expected playlist 00800.MPLS, got %q", body.PlaylistName)
+	}
+	if inspectedPath != playlistPath {
+		t.Fatalf("expected inspector to receive playlist path %q, got %q", playlistPath, inspectedPath)
 	}
 	if body.OutputDir != "/custom/remux" {
 		t.Fatalf("expected outputDir /custom/remux, got %q", body.OutputDir)

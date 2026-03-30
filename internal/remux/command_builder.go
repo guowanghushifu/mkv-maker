@@ -35,10 +35,6 @@ func BuildMKVMergeArgs(d Draft) []string {
 		args = append(args, "--default-track-flag", audioSelector+":"+defaultValue)
 	}
 
-	if len(audioSelectors) > 0 {
-		args = append(args, "--audio-tracks", strings.Join(audioSelectors, ","))
-	}
-
 	for index, track := range d.Subtitles {
 		if !track.Selected {
 			continue
@@ -60,12 +56,17 @@ func BuildMKVMergeArgs(d Draft) []string {
 		}
 	}
 
+	if len(audioSelectors) > 0 {
+		args = append(args, "--audio-tracks", strings.Join(audioSelectors, ","))
+	}
 	if len(subtitleSelectors) > 0 {
 		args = append(args, "--subtitle-tracks", strings.Join(subtitleSelectors, ","))
 	}
 	args = append(args, "--track-order", strings.Join(trackOrder, ","))
 
-	args = append(args, resolveInputPaths(d)...)
+	if inputPath := resolveInputPath(d); inputPath != "" {
+		args = append(args, inputPath)
+	}
 	return args
 }
 
@@ -89,41 +90,22 @@ func resolveTrackSelector(trackID string, index int) string {
 	return strconv.Itoa(index + 1)
 }
 
-func resolveInputPaths(d Draft) []string {
-	if len(d.SegmentPaths) > 0 {
-		args := make([]string, 0, len(d.SegmentPaths)*2-1)
-		for i, path := range d.SegmentPaths {
-			if strings.TrimSpace(path) == "" {
-				continue
-			}
-			if len(args) > 0 {
-				args = append(args, "+")
-			}
-			args = append(args, path)
-			if i == len(d.SegmentPaths)-1 {
-				break
-			}
-		}
-		if len(args) > 0 {
-			return args
-		}
-	}
-
+func resolveInputPath(d Draft) string {
 	sourcePath := strings.TrimSpace(d.SourcePath)
 	if sourcePath == "" {
-		return nil
+		return ""
 	}
 	if strings.EqualFold(filepath.Ext(sourcePath), ".MPLS") {
-		return []string{sourcePath}
+		return sourcePath
 	}
 	if d.Playlist == "" {
-		return []string{sourcePath}
+		return sourcePath
 	}
 	playlist := strings.TrimSpace(d.Playlist)
 
 	if strings.EqualFold(filepath.Base(sourcePath), "BDMV") {
-		return []string{filepath.Join(sourcePath, "PLAYLIST", playlist)}
+		return filepath.Join(sourcePath, "PLAYLIST", playlist)
 	}
 
-	return []string{filepath.Join(sourcePath, "BDMV", "PLAYLIST", playlist)}
+	return filepath.Join(sourcePath, "BDMV", "PLAYLIST", playlist)
 }

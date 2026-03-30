@@ -199,18 +199,13 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		clipNames = parsed.StreamFiles
 	}
 	segmentPaths := buildSegmentPaths(source.Path, clipNames)
-	inspectPath := playlistPath
-	if len(segmentPaths) > 0 {
-		inspectPath = segmentPaths[0]
-	}
-	inspection, err := h.Inspector.Inspect(inspectPath)
+	inspection, err := h.Inspector.Inspect(playlistPath)
 	if err != nil {
 		log.Printf(
-			"resolve source=%s playlist=%s playlistPath=%s inspectPath=%s segments=%q: playlist inspection failed: %v",
+			"resolve source=%s playlist=%s playlistPath=%s segments=%q: playlist inspection failed: %v",
 			source.Path,
 			playlistName,
 			playlistPath,
-			inspectPath,
 			segmentPaths,
 			err,
 		)

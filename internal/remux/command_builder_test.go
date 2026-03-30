@@ -45,7 +45,7 @@ func TestBuildMKVMergeArgsUsesPlaylistFileForBluRayFolderSource(t *testing.T) {
 	}
 }
 
-func TestBuildMKVMergeArgsUsesSegmentPathsWhenPresent(t *testing.T) {
+func TestBuildMKVMergeArgsUsesPlaylistInputEvenWhenSegmentPathsArePresent(t *testing.T) {
 	draft := Draft{
 		OutputPath:   "/remux/out.mkv",
 		SourcePath:   "/bd_input/Nightcrawler",
@@ -54,9 +54,19 @@ func TestBuildMKVMergeArgsUsesSegmentPathsWhenPresent(t *testing.T) {
 	}
 
 	args := BuildMKVMergeArgs(draft)
+	if len(args) == 0 {
+		t.Fatalf("expected args to be non-empty")
+	}
+
+	wantInput := filepath.Join("/bd_input/Nightcrawler", "BDMV", "PLAYLIST", "00800.MPLS")
+	gotInput := args[len(args)-1]
+	if gotInput != wantInput {
+		t.Fatalf("expected playlist input %q, got %q", wantInput, gotInput)
+	}
+
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "/bd_input/Nightcrawler/BDMV/STREAM/00005.m2ts + /bd_input/Nightcrawler/BDMV/STREAM/00006.m2ts") {
-		t.Fatalf("expected segment paths to be used for input, got %q", joined)
+	if strings.Contains(joined, "/BDMV/STREAM/00005.m2ts") || strings.Contains(joined, "/BDMV/STREAM/00006.m2ts") {
+		t.Fatalf("expected segment paths to be excluded from mkvmerge input, got %q", joined)
 	}
 }
 
