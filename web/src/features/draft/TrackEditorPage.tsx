@@ -109,14 +109,22 @@ export function TrackEditorPage({
   const renderTrackTable = (group: TrackGroup, tracks: DraftTrack[]) => (
     <div className="track-table-wrap">
       <table className="track-editor-table">
+        <colgroup>
+          <col className="col-drag" />
+          <col className="col-id" />
+          <col className="col-track" />
+          <col className="col-language" />
+          <col className="col-include" />
+          <col className="col-default" />
+        </colgroup>
         <thead>
           <tr>
             <th scope="col" aria-label="Drag" />
-            <th scope="col">Include</th>
+            <th scope="col">ID</th>
             <th scope="col">Track</th>
             <th scope="col">Language</th>
+            <th scope="col">Include</th>
             <th scope="col">Default</th>
-            <th scope="col">Details</th>
           </tr>
         </thead>
         <tbody>
@@ -158,23 +166,11 @@ export function TrackEditorPage({
                   ⋮⋮
                 </button>
               </td>
-              <td>
-                <input
-                  type="checkbox"
-                  aria-label={`Include ${track.name}`}
-                  checked={track.selected}
-                  onChange={() => {
-                    if (group === 'audio') {
-                      updateAudio(toggleTrackSelected(draft.audio, track.id));
-                      return;
-                    }
-                    updateSubtitles(toggleTrackSelected(draft.subtitles, track.id));
-                  }}
-                />
-              </td>
+              <td className="track-id-cell">{track.id}</td>
               <td>
                 <input
                   type="text"
+                  className="track-name-input"
                   aria-label={`Track name ${track.name}`}
                   value={track.name}
                   onChange={(event) => {
@@ -189,6 +185,7 @@ export function TrackEditorPage({
               <td>
                 <input
                   type="text"
+                  className="track-language-input"
                   aria-label={`Language ${track.name}`}
                   value={track.language}
                   onChange={(event) => {
@@ -209,6 +206,20 @@ export function TrackEditorPage({
               <td>
                 <input
                   type="checkbox"
+                  aria-label={`Include ${track.name}`}
+                  checked={track.selected}
+                  onChange={() => {
+                    if (group === 'audio') {
+                      updateAudio(toggleTrackSelected(draft.audio, track.id));
+                      return;
+                    }
+                    updateSubtitles(toggleTrackSelected(draft.subtitles, track.id));
+                  }}
+                />
+              </td>
+              <td>
+                <input
+                  type="checkbox"
                   aria-label={`Default ${track.name}`}
                   checked={track.default}
                   disabled={!track.selected}
@@ -220,11 +231,6 @@ export function TrackEditorPage({
                     updateSubtitles(setExclusiveDefault(draft.subtitles, track.id));
                   }}
                 />
-              </td>
-              <td>
-                <span className="track-detail-chip">
-                  {track.codecLabel || (group === 'audio' ? 'Audio track' : 'Subtitle track')}
-                </span>
               </td>
             </tr>
           ))}

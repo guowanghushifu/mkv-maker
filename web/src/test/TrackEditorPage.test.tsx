@@ -18,6 +18,28 @@ function createDraft() {
 }
 
 describe('TrackEditorPage', () => {
+  it('shows original track ids in a dedicated column and removes the details column', () => {
+    render(<TrackEditorPage draft={createDraft()} onChange={vi.fn()} />);
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
+      '',
+      'ID',
+      'Track',
+      'Language',
+      'Include',
+      'Default',
+      '',
+      'ID',
+      'Track',
+      'Language',
+      'Include',
+      'Default',
+    ]);
+    expect(screen.getByText('a1')).toBeInTheDocument();
+    expect(screen.getByText('a2')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Details' })).not.toBeInTheDocument();
+  });
+
   it('clears the previous default audio track when a new default is checked', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);

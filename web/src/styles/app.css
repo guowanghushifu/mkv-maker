@@ -161,6 +161,24 @@ button:disabled {
   width: 100%;
   border-collapse: collapse;
   min-width: 720px;
+  table-layout: fixed;
+}
+
+.track-editor-table .col-drag {
+  width: 2.6rem;
+}
+
+.track-editor-table .col-id {
+  width: 4.8rem;
+}
+
+.track-editor-table .col-language {
+  width: 6.2rem;
+}
+
+.track-editor-table .col-include,
+.track-editor-table .col-default {
+  width: 5.4rem;
 }
 
 .source-table th,
@@ -210,6 +228,22 @@ button:disabled {
 .track-editor-table .drag-cell {
   width: 2.2rem;
   text-align: center;
+}
+
+.track-editor-table .track-id-cell {
+  width: 4.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  color: #425973;
+  white-space: nowrap;
+}
+
+.track-editor-table .track-name-input {
+  min-width: 0;
+}
+
+.track-editor-table .track-language-input {
+  width: 5rem;
+  min-width: 0;
 }
 
 .drag-handle {
