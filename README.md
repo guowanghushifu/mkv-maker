@@ -27,6 +27,22 @@ Optional custom image tag:
 IMAGE_TAG=mkv-remux-web:test ./scripts/docker-build.sh
 ```
 
+Optional local build controls:
+
+- `NO_CACHE=1`: disable Docker layer cache
+- `PLATFORMS=linux/amd64,linux/arm64`: request a multi-arch Buildx build
+- `PUSH=1`: push the resulting image instead of loading it locally
+
+Examples:
+
+```bash
+./scripts/docker-build.sh
+PLATFORMS=linux/amd64 ./scripts/docker-build.sh
+PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scripts/docker-build.sh
+```
+
+Note: multi-arch builds are not loaded into the local Docker daemon. Use `PUSH=1` for multi-arch output, or build a single platform.
+
 Run:
 
 ```bash
