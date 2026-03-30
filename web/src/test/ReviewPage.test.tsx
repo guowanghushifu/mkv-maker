@@ -30,6 +30,7 @@ describe('ReviewPage', () => {
 
     render(
       <ReviewPage
+        locale="en"
         source={source}
         bdinfo={bdinfo}
         draft={draft}
@@ -51,6 +52,7 @@ describe('ReviewPage', () => {
         }}
         currentLog="[2026-03-30T00:00:01Z] Progress: 42%"
         onBack={() => {}}
+        onStartNextRemux={() => {}}
         onSubmit={() => {}}
       />
     );
@@ -90,6 +92,7 @@ describe('ReviewPage', () => {
 
     render(
       <ReviewPage
+        locale="en"
         source={source}
         bdinfo={bdinfo}
         draft={draft}
@@ -109,6 +112,7 @@ describe('ReviewPage', () => {
         }}
         currentLog="[2026-03-29T12:00:00Z] remux started"
         onBack={() => {}}
+        onStartNextRemux={() => {}}
         onSubmit={() => {}}
       />
     );
@@ -147,6 +151,7 @@ describe('ReviewPage', () => {
 
     render(
       <ReviewPage
+        locale="en"
         source={source}
         bdinfo={bdinfo}
         draft={draft}
@@ -166,6 +171,7 @@ describe('ReviewPage', () => {
         }}
         currentLog="[2026-03-29T12:00:00Z] remux started"
         onBack={() => {}}
+        onStartNextRemux={() => {}}
         onSubmit={() => {}}
       />
     );
@@ -200,6 +206,7 @@ describe('ReviewPage', () => {
 
     render(
       <ReviewPage
+        locale="en"
         source={source}
         bdinfo={bdinfo}
         draft={draft}
@@ -219,6 +226,7 @@ describe('ReviewPage', () => {
         }}
         currentLog=""
         onBack={() => {}}
+        onStartNextRemux={() => {}}
         onSubmit={() => {}}
       />
     );

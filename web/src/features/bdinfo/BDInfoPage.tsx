@@ -1,6 +1,8 @@
 import type { ParsedBDInfo, SourceEntry } from '../../api/types';
+import { getMessages, type Locale } from '../../i18n';
 
 type BDInfoPageProps = {
+  locale?: Locale;
   source: SourceEntry;
   bdinfoText: string;
   parsed: ParsedBDInfo | null;
@@ -12,6 +14,7 @@ type BDInfoPageProps = {
 };
 
 export function BDInfoPage({
+  locale = 'zh',
   source,
   bdinfoText,
   parsed,
@@ -21,38 +24,39 @@ export function BDInfoPage({
   onTextChange,
   onSubmit,
 }: BDInfoPageProps) {
+  const text = getMessages(locale);
+
   return (
     <section className="panel">
-      <h2>Required BDInfo</h2>
+      <h2>{text.bdinfo.title}</h2>
       <p>
-        Selected source: <strong>{source.name}</strong>
+        {text.bdinfo.selectedSource}: <strong>{source.name}</strong>
       </p>
-      <p>Paste the BDInfo log. This step is required and cannot be skipped.</p>
+      <p>{text.bdinfo.description}</p>
       <textarea
         value={bdinfoText}
         onChange={(event) => onTextChange(event.target.value)}
         rows={12}
-        placeholder="Paste full BDInfo text here"
+        placeholder={text.bdinfo.placeholder}
       />
       {error ? <p className="error-text">{error}</p> : null}
       {parsed ? (
         <div className="info-box">
           <p>
-            Playlist: <strong>{parsed.playlistName}</strong>
+            {text.bdinfo.playlist}: <strong>{parsed.playlistName}</strong>
           </p>
-          <p>Audio labels found: {parsed.audioLabels.length}</p>
-          <p>Subtitle labels found: {parsed.subtitleLabels.length}</p>
+          <p>{text.bdinfo.audioLabelsFound}: {parsed.audioLabels.length}</p>
+          <p>{text.bdinfo.subtitleLabelsFound}: {parsed.subtitleLabels.length}</p>
         </div>
       ) : null}
       <div className="row">
         <button type="button" onClick={onBack}>
-          Back
+          {text.bdinfo.backButton}
         </button>
         <button type="button" onClick={() => void onSubmit()} disabled={!bdinfoText.trim() || loading}>
-          {loading ? 'Parsing...' : 'Parse BDInfo and Continue'}
+          {loading ? text.bdinfo.submittingButton : text.bdinfo.submitButton}
         </button>
       </div>
     </section>
   );
 }
-

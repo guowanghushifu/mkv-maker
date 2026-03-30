@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import type { Draft, DraftTrack } from '../../api/types';
+import { getMessages, type Locale } from '../../i18n';
 import { moveTrackRow, setExclusiveDefault, toggleTrackSelected } from './trackTable';
 
 type TrackEditorPageProps = {
+  locale?: Locale;
   draft: Draft;
   filenamePreview?: string;
   outputFilename?: string;
@@ -28,6 +30,7 @@ function moveTrackByOffset(tracks: DraftTrack[], trackId: string, offset: -1 | 1
 }
 
 export function TrackEditorPage({
+  locale = 'zh',
   draft,
   filenamePreview,
   outputFilename,
@@ -36,6 +39,7 @@ export function TrackEditorPage({
   onBack,
   onNext,
 }: TrackEditorPageProps) {
+  const text = getMessages(locale);
   const dragRef = useRef<{ group: TrackGroup; trackId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ group: TrackGroup; trackId: string } | null>(null);
 
@@ -119,12 +123,12 @@ export function TrackEditorPage({
         </colgroup>
         <thead>
           <tr>
-            <th scope="col" aria-label="Drag" />
-            <th scope="col">ID</th>
-            <th scope="col">Track</th>
-            <th scope="col">Language</th>
-            <th scope="col">Include</th>
-            <th scope="col">Default</th>
+            <th scope="col" aria-label={text.editor.columns.drag} />
+            <th scope="col">{text.editor.columns.id}</th>
+            <th scope="col">{text.editor.columns.track}</th>
+            <th scope="col">{text.editor.columns.language}</th>
+            <th scope="col">{text.editor.columns.include}</th>
+            <th scope="col">{text.editor.columns.default}</th>
           </tr>
         </thead>
         <tbody>
@@ -157,7 +161,7 @@ export function TrackEditorPage({
                 <button
                   type="button"
                   className="drag-handle"
-                  aria-label={`Drag ${track.name}`}
+                  aria-label={text.editor.dragTrack(track.name)}
                   draggable
                   onDragStart={(event) => handleDragStart(event, group, track.id)}
                   onDragEnd={handleDragEnd}
@@ -171,7 +175,7 @@ export function TrackEditorPage({
                 <input
                   type="text"
                   className="track-name-input"
-                  aria-label={`Track name ${track.name}`}
+                  aria-label={text.editor.trackName(track.name)}
                   value={track.name}
                   onChange={(event) => {
                     if (group === 'audio') {
@@ -186,7 +190,7 @@ export function TrackEditorPage({
                 <input
                   type="text"
                   className="track-language-input"
-                  aria-label={`Language ${track.name}`}
+                  aria-label={text.editor.language(track.name)}
                   value={track.language}
                   onChange={(event) => {
                     if (group === 'audio') {
@@ -206,7 +210,7 @@ export function TrackEditorPage({
               <td>
                 <input
                   type="checkbox"
-                  aria-label={`Include ${track.name}`}
+                  aria-label={text.editor.include(track.name)}
                   checked={track.selected}
                   onChange={() => {
                     if (group === 'audio') {
@@ -220,7 +224,7 @@ export function TrackEditorPage({
               <td>
                 <input
                   type="checkbox"
-                  aria-label={`Default ${track.name}`}
+                  aria-label={text.editor.default(track.name)}
                   checked={track.default}
                   disabled={!track.selected}
                   onChange={() => {
@@ -241,17 +245,17 @@ export function TrackEditorPage({
 
   return (
     <section className="panel">
-      <h2>Track Editor</h2>
+      <h2>{text.editor.title}</h2>
 
       <div className="stack">
-        <label htmlFor="draft-title">Title</label>
+        <label htmlFor="draft-title">{text.editor.titleLabel}</label>
         <input
           id="draft-title"
           type="text"
           value={draft.title || ''}
           onChange={(event) => updateTitle(event.target.value)}
         />
-        <label htmlFor="video-track-name">Video track name</label>
+        <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
         <input
           id="video-track-name"
           type="text"
@@ -261,18 +265,18 @@ export function TrackEditorPage({
       </div>
 
       <p>
-        Video source attributes: {draft.video.codec} / {draft.video.resolution}
+        {text.editor.videoSourceAttributes}: {draft.video.codec} / {draft.video.resolution}
         {draft.video.hdrType ? ` / ${draft.video.hdrType}` : ''}
       </p>
 
       {typeof filenamePreview === 'string' ? (
         <div className="info-box">
           <p>
-            <strong>Live filename preview:</strong> {filenamePreview}
+            <strong>{text.editor.liveFilenamePreview}:</strong> {filenamePreview}
           </p>
           {onFilenameChange ? (
             <>
-              <label htmlFor="output-filename">Output filename</label>
+              <label htmlFor="output-filename">{text.editor.outputFilename}</label>
               <input
                 id="output-filename"
                 type="text"
@@ -284,12 +288,12 @@ export function TrackEditorPage({
         </div>
       ) : null}
 
-      <h3>Audio</h3>
+      <h3>{text.editor.audioHeading}</h3>
       {renderTrackTable('audio', draft.audio)}
 
-      <h3>Subtitles</h3>
+      <h3>{text.editor.subtitlesHeading}</h3>
       {draft.subtitles.length === 0 ? (
-        <p className="muted-text">No subtitles found in this draft.</p>
+        <p className="muted-text">{text.editor.noSubtitles}</p>
       ) : (
         renderTrackTable('subtitles', draft.subtitles)
       )}
@@ -298,12 +302,12 @@ export function TrackEditorPage({
         <div className="row">
           {onBack ? (
             <button type="button" onClick={onBack}>
-              Back
+              {text.editor.backButton}
             </button>
           ) : null}
           {onNext ? (
             <button type="button" onClick={onNext}>
-              Continue to Review
+              {text.editor.nextButton}
             </button>
           ) : null}
         </div>

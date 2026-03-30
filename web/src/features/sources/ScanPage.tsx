@@ -1,6 +1,8 @@
 import type { SourceEntry } from '../../api/types';
+import { getMessages, type Locale } from '../../i18n';
 
 type ScanPageProps = {
+  locale?: Locale;
   loading: boolean;
   error?: string | null;
   sources: SourceEntry[];
@@ -24,6 +26,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function ScanPage({
+  locale = 'zh',
   loading,
   error,
   sources,
@@ -32,39 +35,41 @@ export function ScanPage({
   onSelectSource,
   onNext,
 }: ScanPageProps) {
+  const text = getMessages(locale);
+
   const typeLabel = (type: SourceEntry['type']) => {
     if (type === 'bdmv') {
-      return 'BDMV Folder';
+      return text.scan.typeBDMV;
     }
     return type;
   };
 
   return (
     <section className="panel">
-      <h2>Scan Sources</h2>
-      <p>Only extracted BDMV folders are accepted as workflow input.</p>
+      <h2>{text.scan.title}</h2>
+      <p>{text.scan.subtitle}</p>
       <div className="row">
         <button type="button" onClick={() => void onScan()} disabled={loading}>
-          {loading ? 'Scanning...' : 'Scan Sources (POST /api/sources/scan)'}
+          {loading ? text.scan.scanningButton : text.scan.scanButton}
         </button>
         <button type="button" onClick={onNext} disabled={!selectedSourceId}>
-          Continue to BDInfo
+          {text.scan.nextButton}
         </button>
       </div>
       {error ? <p className="error-text">{error}</p> : null}
       {sources.length === 0 ? (
-        <p className="muted-text">No sources yet. Run scan to discover BDMV directories.</p>
+        <p className="muted-text">{text.scan.empty}</p>
       ) : (
         <div className="source-table-wrap">
           <table className="source-table">
             <thead>
               <tr>
-                <th>Select</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Path</th>
-                <th>Size</th>
-                <th>Modified</th>
+                <th>{text.scan.columns.select}</th>
+                <th>{text.scan.columns.name}</th>
+                <th>{text.scan.columns.type}</th>
+                <th>{text.scan.columns.path}</th>
+                <th>{text.scan.columns.size}</th>
+                <th>{text.scan.columns.modified}</th>
               </tr>
             </thead>
             <tbody>
@@ -76,14 +81,14 @@ export function ScanPage({
                       name="source"
                       checked={source.id === selectedSourceId}
                       onChange={() => onSelectSource(source.id)}
-                      aria-label={`Select ${source.name}`}
+                      aria-label={text.scan.selectSource(source.name)}
                     />
                   </td>
                   <td>{source.name}</td>
                   <td>{typeLabel(source.type)}</td>
                   <td>{source.path}</td>
                   <td>{formatBytes(source.size)}</td>
-                  <td>{new Date(source.modifiedAt).toLocaleString()}</td>
+                  <td>{new Date(source.modifiedAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}</td>
                 </tr>
               ))}
             </tbody>

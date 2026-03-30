@@ -1,7 +1,9 @@
 import type { Draft, DraftTrack, Job, ParsedBDInfo, SourceEntry } from '../../api/types';
+import { getMessages, type Locale } from '../../i18n';
 import { StatusBadge } from '../../components/StatusBadge';
 
 type ReviewPageProps = {
+  locale?: Locale;
   source: SourceEntry;
   bdinfo: ParsedBDInfo;
   draft: Draft;
@@ -17,19 +19,21 @@ type ReviewPageProps = {
   onSubmit: () => Promise<void> | void;
 };
 
-function renderTrackSummary(track: DraftTrack): string {
+function renderTrackSummaryWithLocale(track: DraftTrack, locale: Locale): string {
+  const text = getMessages(locale);
   const flags: string[] = [];
   if (track.default) {
-    flags.push('default');
+    flags.push(text.review.defaultFlag);
   }
   if (track.forced) {
-    flags.push('forced');
+    flags.push(text.review.forcedFlag);
   }
   const suffix = flags.length > 0 ? ` [${flags.join(', ')}]` : '';
   return `${track.name} (${track.language})${suffix}`;
 }
 
 export function ReviewPage({
+  locale = 'zh',
   source,
   bdinfo,
   draft,
@@ -44,6 +48,7 @@ export function ReviewPage({
   onStartNextRemux,
   onSubmit,
 }: ReviewPageProps) {
+  const text = getMessages(locale);
   const selectedAudio = draft.audio.filter((track) => track.selected);
   const selectedSubtitles = draft.subtitles.filter((track) => track.selected);
   const progressPercent =
@@ -53,44 +58,44 @@ export function ReviewPage({
 
   return (
     <section className="panel">
-      <h2>Review</h2>
-      <p>Confirm metadata and start the remux.</p>
+      <h2>{text.review.title}</h2>
+      <p>{text.review.description}</p>
       <div className="info-box">
         <p>
-          <strong>Source:</strong> {source.name}
+          <strong>{text.review.source}:</strong> {source.name}
         </p>
         <p>
-          <strong>Playlist:</strong> {bdinfo.playlistName}
+          <strong>{text.review.playlist}:</strong> {bdinfo.playlistName}
         </p>
         <p>
-          <strong>Filename:</strong> {outputFilename}
+          <strong>{text.review.filename}:</strong> {outputFilename}
         </p>
         <p>
-          <strong>Output path:</strong> {outputPath}
+          <strong>{text.review.outputPath}:</strong> {outputPath}
         </p>
         <p>
-          <strong>Dolby Vision merge enabled:</strong> {draft.dvMergeEnabled ? 'Yes' : 'No'}
+          <strong>{text.review.dolbyVisionMergeEnabled}:</strong> {draft.dvMergeEnabled ? text.review.yes : text.review.no}
         </p>
       </div>
 
-      <h3>Final Track List and Order</h3>
+      <h3>{text.review.finalTrackList}</h3>
       <ol className="ordered-track-list">
-        <li>Video: {draft.video.name}</li>
+        <li>{text.review.video}: {draft.video.name}</li>
         {selectedAudio.map((track) => (
-          <li key={`audio-${track.id}`}>Audio: {renderTrackSummary(track)}</li>
+          <li key={`audio-${track.id}`}>{text.review.audio}: {renderTrackSummaryWithLocale(track, locale)}</li>
         ))}
         {selectedSubtitles.map((track) => (
-          <li key={`sub-${track.id}`}>Subtitle: {renderTrackSummary(track)}</li>
+          <li key={`sub-${track.id}`}>{text.review.subtitle}: {renderTrackSummaryWithLocale(track, locale)}</li>
         ))}
       </ol>
 
       <div className="review-actions">
         <div className="review-actions-primary">
           <button type="button" onClick={onBack}>
-            Back
+            {text.review.backButton}
           </button>
           <button type="button" onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
-            {submitting ? 'Starting Remux...' : 'Start Remux'}
+            {submitting ? text.review.startingRemuxButton : text.review.startRemuxButton}
           </button>
         </div>
         {currentJob ? (
@@ -100,7 +105,7 @@ export function ReviewPage({
               onClick={() => void onStartNextRemux()}
               disabled={currentJob.status === 'running'}
             >
-              Start Next Remux
+              {text.review.startNextRemuxButton}
             </button>
           </div>
         ) : null}
@@ -110,18 +115,18 @@ export function ReviewPage({
       {currentJob ? (
         <section className="info-box current-job-panel">
           <div className="row">
-            <h3>Current Remux</h3>
-            <StatusBadge status={currentJob.status} />
+            <h3>{text.review.currentRemux}</h3>
+            <StatusBadge status={currentJob.status} locale={locale} />
           </div>
           <p>
-            <strong>Output:</strong> {currentJob.outputName}
+            <strong>{text.review.output}:</strong> {currentJob.outputName}
           </p>
           <p>
-            <strong>Path:</strong> {currentJob.outputPath}
+            <strong>{text.review.path}:</strong> {currentJob.outputPath}
           </p>
           <div className="current-job-progress">
             <div className="row">
-              <h4>Progress</h4>
+              <h4>{text.review.progress}</h4>
               <strong>{progressPercent}%</strong>
             </div>
             <div
@@ -136,12 +141,12 @@ export function ReviewPage({
           </div>
           {currentJob.commandPreview ? (
             <div className="current-job-command">
-              <h4>Command Preview</h4>
+              <h4>{text.review.commandPreview}</h4>
               <pre className="command-preview scroll-panel">{currentJob.commandPreview}</pre>
             </div>
           ) : null}
           {currentJob.message ? <p className="error-text">{currentJob.message}</p> : null}
-          <pre className="job-log scroll-panel">{currentLog || 'Waiting for log output...'}</pre>
+          <pre className="job-log scroll-panel">{currentLog || text.review.waitingForLogOutput}</pre>
         </section>
       ) : null}
     </section>

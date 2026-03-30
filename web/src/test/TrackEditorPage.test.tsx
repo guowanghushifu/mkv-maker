@@ -19,7 +19,7 @@ function createDraft() {
 
 describe('TrackEditorPage', () => {
   it('shows original track ids in a dedicated column and removes the details column', () => {
-    render(<TrackEditorPage draft={createDraft()} onChange={vi.fn()} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
       '',
@@ -42,7 +42,7 @@ describe('TrackEditorPage', () => {
 
   it('clears the previous default audio track when a new default is checked', () => {
     const onChange = vi.fn();
-    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /default commentary/i }));
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -58,7 +58,7 @@ describe('TrackEditorPage', () => {
 
   it('clears default when deselecting a defaulted subtitle track', () => {
     const onChange = vi.fn();
-    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /include english pgs/i }));
 
@@ -75,7 +75,7 @@ describe('TrackEditorPage', () => {
 
   it('reorders audio tracks via drag and drop', () => {
     const onChange = vi.fn();
-    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
     const source = screen.getByRole('button', { name: /drag commentary/i });
     const target = screen.getByRole('row', { name: /english atmos/i });
@@ -107,6 +107,7 @@ describe('TrackEditorPage', () => {
     const onChange = vi.fn();
     render(
       <TrackEditorPage
+        locale="en"
         draft={{
           ...createDraft(),
           audio: [
@@ -148,7 +149,7 @@ describe('TrackEditorPage', () => {
 
   it('supports keyboard reorder from drag handle controls', () => {
     const onChange = vi.fn();
-    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
     fireEvent.keyDown(screen.getByRole('button', { name: /drag commentary/i }), { key: 'ArrowUp' });
 
@@ -165,7 +166,7 @@ describe('TrackEditorPage', () => {
 
   it('shows drop target highlight during drag over', () => {
     const onChange = vi.fn();
-    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
     const source = screen.getByRole('button', { name: /drag commentary/i });
     const target = screen.getByRole('row', { name: /english atmos/i });
@@ -187,7 +188,7 @@ describe('TrackEditorPage', () => {
 
   it('supports inline name and language edits', () => {
     const onChange = vi.fn();
-    render(<TrackEditorPage draft={createDraft()} onChange={onChange} />);
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
     fireEvent.change(screen.getByLabelText('Video track name'), { target: { value: 'Feature Video' } });
     fireEvent.change(screen.getByLabelText('Track name English Atmos'), { target: { value: 'English 5.1' } });

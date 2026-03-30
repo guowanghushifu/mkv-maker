@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { localeStorageKey } from '../i18n';
 
 const source = {
   id: 'disc-1',
@@ -105,6 +106,9 @@ function installFetchMock(state: BackendState) {
 }
 
 async function goToReviewStep() {
+  fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
+  await screen.findByRole('heading', { name: /Login/i });
+
   fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } });
   fireEvent.click(screen.getByRole('button', { name: /continue/i }));
   await screen.findByRole('heading', { name: /scan sources/i });
@@ -127,6 +131,7 @@ async function goToReviewStep() {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+  window.localStorage.clear();
 });
 
 describe('App', () => {
@@ -134,8 +139,28 @@ describe('App', () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     render(<App />);
     expect(screen.getByRole('heading', { name: /MKV Remux Tool/i })).toBeInTheDocument();
-    expect(screen.getByText('Review')).toBeInTheDocument();
+    expect(screen.getByText('预览')).toBeInTheDocument();
     expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
+  });
+
+  it('defaults to Chinese and persists the selected locale', async () => {
+    installFetchMock({ currentJob: null, currentLog: '' });
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: /登录/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
+
+    expect(await screen.findByRole('heading', { name: /Login/i })).toBeInTheDocument();
+    expect(window.localStorage.getItem(localeStorageKey)).toBe('en');
+  });
+
+  it('restores the saved locale from localStorage on load', () => {
+    window.localStorage.setItem(localeStorageKey, 'en');
+    installFetchMock({ currentJob: null, currentLog: '' });
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: /Login/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
   });
 
   it('shows submit failure message on review when start remux request fails', async () => {

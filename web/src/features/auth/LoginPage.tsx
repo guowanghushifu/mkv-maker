@@ -1,18 +1,21 @@
 import { FormEvent, useState } from 'react';
+import { getMessages, type Locale } from '../../i18n';
 
 type LoginPageProps = {
+  locale?: Locale;
   onSuccess: (password: string) => Promise<void> | void;
   error?: string | null;
 };
 
-export function LoginPage({ onSuccess, error: externalError }: LoginPageProps) {
+export function LoginPage({ locale = 'zh', onSuccess, error: externalError }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const text = getMessages(locale);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!password.trim()) {
-      setError('Password is required.');
+      setError(text.login.passwordRequired);
       return;
     }
 
@@ -22,20 +25,20 @@ export function LoginPage({ onSuccess, error: externalError }: LoginPageProps) {
 
   return (
     <section className="panel">
-      <h2>Login</h2>
-      <p>Single-user local access.</p>
+      <h2>{text.login.title}</h2>
+      <p>{text.login.subtitle}</p>
       <form onSubmit={handleSubmit} className="stack">
-        <label htmlFor="password">Password</label>
+        <label htmlFor="password">{text.login.passwordLabel}</label>
         <input
           id="password"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          placeholder="Enter password"
+          placeholder={text.login.passwordPlaceholder}
         />
         {error ? <p className="error-text">{error}</p> : null}
         {externalError ? <p className="error-text">{externalError}</p> : null}
-        <button type="submit">Continue</button>
+        <button type="submit">{text.login.continueButton}</button>
       </form>
     </section>
   );

@@ -1,15 +1,12 @@
 import type { JobStatus } from '../api/types';
+import { getMessages, type Locale } from '../i18n';
 
 type StatusBadgeProps = {
   status: JobStatus;
+  locale?: Locale;
 };
 
-const statusLabels: Record<JobStatus, string> = {
-  running: 'Running',
-  succeeded: 'Succeeded',
-  failed: 'Failed',
-};
-
-export function StatusBadge({ status }: StatusBadgeProps) {
-  return <span className={`status-badge status-${status}`}>{statusLabels[status]}</span>;
+export function StatusBadge({ status, locale = 'zh' }: StatusBadgeProps) {
+  const text = getMessages(locale);
+  return <span className={`status-badge status-${status}`}>{text.status[status]}</span>;
 }

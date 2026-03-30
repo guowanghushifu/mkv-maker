@@ -7,6 +7,7 @@ import { BDInfoPage } from './features/bdinfo/BDInfoPage';
 import { TrackEditorPage } from './features/draft/TrackEditorPage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { ScanPage } from './features/sources/ScanPage';
+import { getMessages, loadStoredLocale, saveStoredLocale, type Locale } from './i18n';
 import './styles/app.css';
 
 const api = createApiClient();
@@ -23,6 +24,7 @@ function normalizeDraft(nextDraft: Draft): Draft {
 }
 
 function App() {
+  const [locale, setLocale] = useState<Locale>(() => loadStoredLocale());
   const [token, setToken] = useState<string | null>(null);
   const [step, setStep] = useState<WorkflowStep>('login');
   const [sources, setSources] = useState<SourceEntry[]>([]);
@@ -43,10 +45,15 @@ function App() {
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [currentJobLog, setCurrentJobLog] = useState('');
 
+  const text = getMessages(locale);
   const selectedSource = sources.find((source) => source.id === selectedSourceId) ?? null;
   const currentStep = token ? step : 'login';
   const fallbackTitle = draft?.title || parsedBDInfo?.discTitle || selectedSource?.name || 'Untitled';
   const outputPath = `${draft?.outputDir || '/output'}/${outputFilename || filenamePreview}`;
+
+  useEffect(() => {
+    saveStoredLocale(locale);
+  }, [locale]);
 
   useEffect(() => {
     if (!draft) {
@@ -95,7 +102,7 @@ function App() {
       setToken(loginResult.token);
       setStep('scan');
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : 'Login failed.');
+      setLoginError(error instanceof Error ? error.message : text.app.loginFailed);
     }
   };
 
@@ -118,7 +125,7 @@ function App() {
         setStep('scan');
       }
     } catch (error) {
-      setScanError(error instanceof Error ? error.message : 'Source scan failed.');
+      setScanError(error instanceof Error ? error.message : text.app.scanFailed);
     } finally {
       setScanning(false);
     }
@@ -159,7 +166,7 @@ function App() {
       setFilenameEdited(false);
       setStep('editor');
     } catch (error) {
-      setBdinfoError(error instanceof Error ? error.message : 'BDInfo parse failed.');
+      setBdinfoError(error instanceof Error ? error.message : text.app.bdinfoParseFailed);
     } finally {
       setParsingBDInfo(false);
     }
@@ -214,7 +221,7 @@ function App() {
       return;
     }
     if (currentJob?.status === 'running') {
-      setSubmitError('A remux is already running. Please wait for it to finish.');
+      setSubmitError(text.app.currentJobRunning);
       return;
     }
 
@@ -236,18 +243,23 @@ function App() {
       setCurrentJobLog(nextLog);
       setStep('review');
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Failed to start remux job.');
+      setSubmitError(error instanceof Error ? error.message : text.app.submitFailed);
     } finally {
       setSubmittingJob(false);
     }
   };
 
   return (
-    <Layout currentStep={currentStep}>
-      {step === 'login' ? <LoginPage onSuccess={handleLogin} error={loginError} /> : null}
+    <Layout
+      currentStep={currentStep}
+      locale={locale}
+      onToggleLocale={() => setLocale((current) => (current === 'zh' ? 'en' : 'zh'))}
+    >
+      {step === 'login' ? <LoginPage locale={locale} onSuccess={handleLogin} error={loginError} /> : null}
 
       {step === 'scan' ? (
         <ScanPage
+          locale={locale}
           loading={scanning}
           error={scanError}
           sources={sources}
@@ -260,6 +272,7 @@ function App() {
 
       {step === 'bdinfo' && selectedSource ? (
         <BDInfoPage
+          locale={locale}
           source={selectedSource}
           bdinfoText={bdinfoText}
           parsed={parsedBDInfo}
@@ -273,6 +286,7 @@ function App() {
 
       {step === 'editor' && draft ? (
         <TrackEditorPage
+          locale={locale}
           draft={draft}
           filenamePreview={filenamePreview}
           outputFilename={outputFilename}
@@ -288,6 +302,7 @@ function App() {
 
       {step === 'review' && selectedSource && parsedBDInfo && draft ? (
         <ReviewPage
+          locale={locale}
           source={selectedSource}
           bdinfo={parsedBDInfo}
           draft={draft}

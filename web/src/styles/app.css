@@ -30,6 +30,20 @@ body {
   color: #3f5874;
 }
 
+.app-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.locale-toggle {
+  border-color: #bfd0e6;
+  background: #f4f8ff;
+  color: #1d4e89;
+  white-space: nowrap;
+}
+
 .step-list {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -434,6 +448,11 @@ button:disabled {
 }
 
 @media (max-width: 780px) {
+  .app-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .step-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
