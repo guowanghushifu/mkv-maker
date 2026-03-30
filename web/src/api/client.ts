@@ -98,6 +98,8 @@ function normalizeJob(partial: Partial<Job>): Job {
     playlistName: partial.playlistName || 'unknown',
     createdAt: partial.createdAt || new Date().toISOString(),
     status: partial.status || 'running',
+    progressPercent: partial.progressPercent,
+    commandPreview: partial.commandPreview,
     message: partial.message,
   };
 }

@@ -115,6 +115,59 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/remux started/i)).toBeInTheDocument();
   });
 
+  it('shows 0 percent progress when current job has no progressPercent yet', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      audio: [],
+      subtitles: [],
+    } as const;
+
+    render(
+      <ReviewPage
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={{
+          id: 'job-123',
+          sourceName: 'Nightcrawler Disc',
+          outputName: 'Nightcrawler - 2160p.mkv',
+          outputPath: '/remux/Nightcrawler - 2160p.mkv',
+          playlistName: '00800.MPLS',
+          createdAt: '2026-03-29T12:00:00Z',
+          status: 'running',
+        }}
+        currentLog="[2026-03-29T12:00:00Z] remux started"
+        onBack={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  });
+
   it('disables start while a remux is currently running', () => {
     const source = {
       id: 'disc-1',

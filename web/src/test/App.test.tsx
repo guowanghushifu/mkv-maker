@@ -121,7 +121,7 @@ async function goToReviewStep() {
 
   await screen.findByRole('heading', { name: /track editor/i });
   fireEvent.click(screen.getByRole('button', { name: /continue to review/i }));
-  await screen.findByRole('heading', { name: /review/i });
+  await screen.findByRole('heading', { name: /^review$/i });
 }
 
 afterEach(() => {
@@ -226,5 +226,31 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start remux/i })).toBeDisabled();
     });
+  });
+
+  it('hydrates running current task snapshot with command preview and progress', async () => {
+    installFetchMock({
+      currentJob: {
+        id: 'job-123',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'running',
+        progressPercent: 7,
+        commandPreview: 'mkvmerge\n  --output\n  /remux/Nightcrawler - 2160p.mkv',
+      },
+      currentLog: '[2026-03-29T12:00:00Z] remux started',
+    });
+    render(<App />);
+
+    await goToReviewStep();
+
+    await screen.findByText(/current remux/i);
+    expect(await screen.findByText('7%')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '7');
+    expect(screen.getByText(/mkvmerge/i)).toBeInTheDocument();
+    expect(screen.getByText(/--output/i)).toBeInTheDocument();
   });
 });
