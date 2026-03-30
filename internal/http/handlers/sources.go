@@ -492,6 +492,7 @@ type mkvmergeTrack struct {
 	Type       string `json:"type"`
 	Codec      string `json:"codec"`
 	Properties struct {
+		AudioChannels     int   `json:"audio_channels"`
 		Number            int   `json:"number"`
 		StreamID          int   `json:"stream_id"`
 		MultiplexedTracks []int `json:"multiplexed_tracks"`
@@ -528,21 +529,35 @@ func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspect
 func collectTrackIDs(payload mkvmergeIdentifyPayload) ([]string, []string) {
 	audioIDs := make([]string, 0, len(payload.Tracks))
 	subtitleIDs := make([]string, 0, len(payload.Tracks))
-	seenMultiplexed := make(map[string]struct{}, len(payload.Tracks))
+	groupBest := make(map[string]mkvmergeTrack, len(payload.Tracks))
+	audioOrder := make([]string, 0, len(payload.Tracks))
 
 	for _, track := range payload.Tracks {
 		switch strings.ToLower(strings.TrimSpace(track.Type)) {
 		case "audio":
 			if key := multiplexedGroupKey(track); key != "" {
-				if _, ok := seenMultiplexed[key]; ok {
+				if _, ok := groupBest[key]; !ok {
+					audioOrder = append(audioOrder, key)
+					groupBest[key] = track
 					continue
 				}
-				seenMultiplexed[key] = struct{}{}
+				if shouldPreferMultiplexedTrack(track, groupBest[key]) {
+					groupBest[key] = track
+				}
+				continue
 			}
-			audioIDs = append(audioIDs, strconv.Itoa(track.ID))
+			audioOrder = append(audioOrder, strconv.Itoa(track.ID))
 		case "subtitles":
 			subtitleIDs = append(subtitleIDs, strconv.Itoa(track.ID))
 		}
+	}
+
+	for _, entry := range audioOrder {
+		if track, ok := groupBest[entry]; ok {
+			audioIDs = append(audioIDs, strconv.Itoa(track.ID))
+			continue
+		}
+		audioIDs = append(audioIDs, entry)
 	}
 	return audioIDs, subtitleIDs
 }
@@ -562,6 +577,13 @@ func multiplexedGroupKey(track mkvmergeTrack) string {
 		parts = append(parts, strconv.Itoa(id))
 	}
 	return strings.Join(parts, ":")
+}
+
+func shouldPreferMultiplexedTrack(candidate, current mkvmergeTrack) bool {
+	if candidate.Properties.AudioChannels != current.Properties.AudioChannels {
+		return candidate.Properties.AudioChannels > current.Properties.AudioChannels
+	}
+	return false
 }
 
 func normalizeCodecLabel(label string) string {

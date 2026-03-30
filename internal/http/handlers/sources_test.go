@@ -453,30 +453,33 @@ func TestCollectTrackIDsCollapsesTrueHDCoreMultiplexedAudioTracks(t *testing.T) 
 				Type:  "audio",
 				Codec: "TrueHD Atmos",
 				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
 					Number            int   `json:"number"`
 					StreamID          int   `json:"stream_id"`
 					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
+				}{AudioChannels: 8, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
 			},
 			{
 				ID:    2,
 				Type:  "audio",
 				Codec: "AC-3",
 				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
 					Number            int   `json:"number"`
 					StreamID          int   `json:"stream_id"`
 					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
+				}{AudioChannels: 6, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
 			},
 			{
 				ID:    3,
 				Type:  "audio",
 				Codec: "DTS-HD Master Audio",
 				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
 					Number            int   `json:"number"`
 					StreamID          int   `json:"stream_id"`
 					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{Number: 4353, StreamID: 4353},
+				}{AudioChannels: 6, Number: 4353, StreamID: 4353},
 			},
 			{
 				ID:    4,
@@ -492,6 +495,74 @@ func TestCollectTrackIDsCollapsesTrueHDCoreMultiplexedAudioTracks(t *testing.T) 
 	}
 	if !equalStringSlices(subtitleIDs, []string{"4"}) {
 		t.Fatalf("expected subtitle ids [4], got %+v", subtitleIDs)
+	}
+}
+
+func TestCollectTrackIDsPrefersHigherChannelCountWithinMultiplexedGroup(t *testing.T) {
+	payload := mkvmergeIdentifyPayload{
+		Tracks: []mkvmergeTrack{
+			{
+				ID:    1,
+				Type:  "audio",
+				Codec: "AC-3",
+				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{AudioChannels: 2, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
+			},
+			{
+				ID:    2,
+				Type:  "audio",
+				Codec: "DTS-HD Master Audio",
+				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{AudioChannels: 6, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
+			},
+		},
+	}
+
+	audioIDs, _ := collectTrackIDs(payload)
+	if !equalStringSlices(audioIDs, []string{"2"}) {
+		t.Fatalf("expected higher channel track id [2], got %+v", audioIDs)
+	}
+}
+
+func TestCollectTrackIDsKeepsFirstTrackWhenChannelCountMatches(t *testing.T) {
+	payload := mkvmergeIdentifyPayload{
+		Tracks: []mkvmergeTrack{
+			{
+				ID:    7,
+				Type:  "audio",
+				Codec: "DTS-HD Master Audio",
+				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
+			},
+			{
+				ID:    8,
+				Type:  "audio",
+				Codec: "AC-3",
+				Properties: struct {
+					AudioChannels     int   `json:"audio_channels"`
+					Number            int   `json:"number"`
+					StreamID          int   `json:"stream_id"`
+					MultiplexedTracks []int `json:"multiplexed_tracks"`
+				}{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
+			},
+		},
+	}
+
+	audioIDs, _ := collectTrackIDs(payload)
+	if !equalStringSlices(audioIDs, []string{"7"}) {
+		t.Fatalf("expected first track id [7] when channel counts match, got %+v", audioIDs)
 	}
 }
 
