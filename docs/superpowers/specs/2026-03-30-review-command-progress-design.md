@@ -15,6 +15,8 @@ This builds on the existing in-memory single-task design. It does not reintroduc
 
 The review page should show the exact `mkvmerge` command corresponding to the current task.
 
+It should not be shown before task start. The command appears only after the user clicks `Start Remux` and the task has been accepted, so the UI always reflects the final actual command for that task.
+
 Display format:
 
 - multi-line
@@ -53,6 +55,8 @@ The in-memory remux task state should be extended with two additional fields:
 This is a formatted, multi-line representation of the final command derived from the current remux draft.
 
 It should be computed when the task starts, before `mkvmerge` is executed, using the same underlying argument construction used for real execution.
+
+This field should represent the actual command for the accepted task instance, not a speculative pre-submit preview.
 
 ### progressPercent
 
@@ -103,6 +107,8 @@ Suggested order inside the current-task panel:
 - raw log viewer
 
 The progress bar and command block should be visually secondary to the task status, but more prominent than the raw log.
+
+Both sections live inside the existing `Current Remux` panel and therefore only appear after the task has started.
 
 ## Error Handling
 
