@@ -9,13 +9,10 @@ import (
 var progressPercentPattern = regexp.MustCompile(`(?i)(?:^|\s)(?:progress:|#GUI#progress)\s*([0-9]{1,3})%`)
 
 func FormatCommandPreview(binary string, args []string) string {
-	name := strings.TrimSpace(binary)
-	if name == "" {
-		name = "mkvmerge"
-	}
+	_ = binary
 
 	lines := make([]string, 1, len(args)+1)
-	lines[0] = name
+	lines[0] = "mkvmerge"
 	for _, arg := range args {
 		lines = append(lines, "  "+arg)
 	}

@@ -14,8 +14,11 @@ type stubRunner struct {
 	err       error
 }
 
-func (r *stubRunner) Run(_ context.Context, draft Draft) (string, error) {
+func (r *stubRunner) Run(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
 	r.lastDraft = draft
+	if onOutput != nil && r.output != "" {
+		onOutput(r.output)
+	}
 	return r.output, r.err
 }
 
@@ -26,7 +29,7 @@ type controlledRunner struct {
 	release chan struct{}
 }
 
-func (r *controlledRunner) Run(ctx context.Context, draft Draft) (string, error) {
+func (r *controlledRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -44,6 +47,44 @@ func (r *controlledRunner) Run(ctx context.Context, draft Draft) (string, error)
 	}
 
 	return r.output, r.err
+}
+
+type streamingRunner struct {
+	started  chan struct{}
+	progress chan struct{}
+	release  chan struct{}
+}
+
+func (r *streamingRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+	_ = draft
+	if r.started != nil {
+		select {
+		case <-r.started:
+		default:
+			close(r.started)
+		}
+	}
+	if onOutput != nil {
+		onOutput("Progress: 42%\n")
+	}
+	if r.progress != nil {
+		select {
+		case <-r.progress:
+		default:
+			close(r.progress)
+		}
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	if onOutput != nil {
+		onOutput("Progress: 100%\n")
+	}
+	return "", nil
 }
 
 func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
@@ -282,6 +323,46 @@ func TestManagerFailureKeepsLastKnownProgressPercent(t *testing.T) {
 	}
 	if done.ProgressPercent != 63 {
 		t.Fatalf("expected last known progress 63, got %d", done.ProgressPercent)
+	}
+}
+
+func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
+	runner := &streamingRunner{
+		started:  make(chan struct{}),
+		progress: make(chan struct{}),
+		release:  make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00003.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+	<-runner.progress
+
+	current, err := manager.Current()
+	if err != nil {
+		t.Fatalf("Current returned error: %v", err)
+	}
+	if current.Status != "running" {
+		t.Fatalf("expected running status before release, got %q", current.Status)
+	}
+	if current.ProgressPercent != 42 {
+		t.Fatalf("expected running progress 42 before release, got %d", current.ProgressPercent)
+	}
+
+	close(runner.release)
+	done := waitForTerminalTask(t, manager)
+	if done.ProgressPercent != 100 {
+		t.Fatalf("expected final progress 100, got %d", done.ProgressPercent)
 	}
 }
 

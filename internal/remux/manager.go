@@ -154,10 +154,13 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 	}
 
 	m.appendLog(state, logLine("running"))
-	output, err := m.executor.Execute(m.ctx, req)
-	if output != "" {
-		m.updateProgressFromOutput(state, output)
-		m.appendLog(state, normalizeLogChunk(output))
+	handleOutput := func(chunk string) {
+		m.updateProgressFromOutput(state, chunk)
+		m.appendLog(state, normalizeLogChunk(chunk))
+	}
+	output, streamed, err := m.executor.Execute(m.ctx, req, handleOutput)
+	if !streamed && output != "" {
+		handleOutput(output)
 	}
 
 	if err != nil {

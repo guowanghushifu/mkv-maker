@@ -41,3 +41,10 @@ func TestExtractProgressPercentParsesExplicitMkvmmergePercentages(t *testing.T) 
 		}
 	}
 }
+
+func TestFormatCommandPreviewAlwaysUsesLiteralMkvmergeBinary(t *testing.T) {
+	got := FormatCommandPreview("/opt/homebrew/bin/mkvmerge", []string{"--output", "/remux/out.mkv"})
+	if !strings.HasPrefix(got, "mkvmerge\n") {
+		t.Fatalf("expected preview to start with literal mkvmerge, got %q", got)
+	}
+}

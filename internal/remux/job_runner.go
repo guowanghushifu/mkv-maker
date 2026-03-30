@@ -1,17 +1,20 @@
 package remux
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 type CommandRunner interface {
-	Run(ctx context.Context, draft Draft) (string, error)
+	Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error)
 }
 
 type JobRunner struct {
@@ -25,16 +28,29 @@ func NewJobRunner(runner CommandRunner) *JobRunner {
 	return &JobRunner{runner: runner}
 }
 
-func (r *JobRunner) Execute(ctx context.Context, req StartRequest) (string, error) {
+func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func(string)) (string, bool, error) {
 	if r == nil || r.runner == nil {
-		return "", errors.New("runner is not configured")
+		return "", false, errors.New("runner is not configured")
 	}
 
 	draft, err := r.BuildExecutionDraft(req)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	return r.runner.Run(ctx, draft)
+
+	streamed := false
+	wrappedOutput := func(chunk string) {
+		if strings.TrimSpace(chunk) == "" {
+			return
+		}
+		streamed = true
+		if onOutput != nil {
+			onOutput(chunk)
+		}
+	}
+
+	output, runErr := r.runner.Run(ctx, draft, wrappedOutput)
+	return output, streamed, runErr
 }
 
 func (r *JobRunner) BuildExecutionDraft(req StartRequest) (Draft, error) {
@@ -55,13 +71,56 @@ type MKVMergeRunner struct {
 	Binary string
 }
 
-func (r MKVMergeRunner) Run(ctx context.Context, draft Draft) (string, error) {
+func (r MKVMergeRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+	return r.runWithOutput(ctx, draft, onOutput)
+}
+
+func (r MKVMergeRunner) runWithOutput(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
 	binary := resolveBinaryName(r.Binary)
 
 	args := BuildMKVMergeArgs(draft)
 	cmd := exec.CommandContext(ctx, binary, args...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	var outputMu sync.Mutex
+	var output strings.Builder
+	appendChunk := func(chunk string) {
+		if chunk == "" {
+			return
+		}
+		outputMu.Lock()
+		output.WriteString(chunk)
+		outputMu.Unlock()
+		if onOutput != nil {
+			onOutput(chunk)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		streamOutput(stdout, appendChunk)
+	}()
+	go func() {
+		defer wg.Done()
+		streamOutput(stderr, appendChunk)
+	}()
+
+	waitErr := cmd.Wait()
+	wg.Wait()
+	return output.String(), waitErr
 }
 
 func (r *JobRunner) commandBinary() string {
@@ -84,6 +143,13 @@ func resolveBinaryName(binary string) string {
 		return "mkvmerge"
 	}
 	return trimmed
+}
+
+func streamOutput(reader io.Reader, emit func(string)) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		emit(scanner.Text() + "\n")
+	}
 }
 
 type executionPayload struct {
