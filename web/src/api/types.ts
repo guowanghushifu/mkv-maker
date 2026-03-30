@@ -57,5 +57,7 @@ export type Job = {
   playlistName: string;
   createdAt: string;
   status: JobStatus;
+  progressPercent?: number;
+  commandPreview?: string;
   message?: string;
 };

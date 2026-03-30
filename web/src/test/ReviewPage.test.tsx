@@ -4,6 +4,63 @@ import { createApiClient } from '../api/client';
 import { ReviewPage } from '../features/review/ReviewPage';
 
 describe('ReviewPage', () => {
+  it('renders progress percentage, progress bar, and formatted command preview', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-30T00:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00003.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      audio: [],
+      subtitles: [],
+    } as const;
+
+    render(
+      <ReviewPage
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={{
+          id: 'job-123',
+          sourceName: 'Nightcrawler Disc',
+          outputName: 'Nightcrawler - 2160p.mkv',
+          outputPath: '/remux/Nightcrawler - 2160p.mkv',
+          playlistName: '00003.MPLS',
+          createdAt: '2026-03-30T00:00:00Z',
+          status: 'running',
+          progressPercent: 42,
+          commandPreview: 'mkvmerge\n  --output\n  /remux/Nightcrawler - 2160p.mkv',
+        }}
+        currentLog="[2026-03-30T00:00:01Z] Progress: 42%"
+        onBack={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByText('42%')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+    expect(screen.getByText(/mkvmerge/i)).toBeInTheDocument();
+    expect(screen.getByText(/--output/i)).toBeInTheDocument();
+  });
+
   it('renders the current remux panel when a task is present', () => {
     const source = {
       id: 'disc-1',

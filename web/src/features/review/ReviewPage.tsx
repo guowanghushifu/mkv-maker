@@ -44,6 +44,10 @@ export function ReviewPage({
 }: ReviewPageProps) {
   const selectedAudio = draft.audio.filter((track) => track.selected);
   const selectedSubtitles = draft.subtitles.filter((track) => track.selected);
+  const progressPercent =
+    currentJob?.status === 'succeeded'
+      ? 100
+      : Math.max(0, Math.min(100, currentJob?.progressPercent ?? 0));
 
   return (
     <section className="panel">
@@ -90,6 +94,27 @@ export function ReviewPage({
           <p>
             <strong>Path:</strong> {currentJob.outputPath}
           </p>
+          <div className="current-job-progress">
+            <div className="row">
+              <h4>Progress</h4>
+              <strong>{progressPercent}%</strong>
+            </div>
+            <div
+              className="progress-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPercent}
+            >
+              <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+          {currentJob.commandPreview ? (
+            <div className="current-job-command">
+              <h4>Command Preview</h4>
+              <pre className="command-preview">{currentJob.commandPreview}</pre>
+            </div>
+          ) : null}
           {currentJob.message ? <p className="error-text">{currentJob.message}</p> : null}
           <pre className="job-log">{currentLog || 'Waiting for log output...'}</pre>
         </section>

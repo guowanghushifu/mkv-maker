@@ -176,6 +176,37 @@ describe('App', () => {
     expect(screen.queryByText(/waiting for log output/i)).not.toBeInTheDocument();
   });
 
+  it('hydrates terminal tasks with command preview and 100 percent progress', async () => {
+    const terminalJob = {
+      id: 'job-999',
+      sourceName: 'Nightcrawler Disc',
+      outputName: 'Nightcrawler - 2160p.mkv',
+      outputPath: '/remux/Nightcrawler - 2160p.mkv',
+      playlistName: '00003.MPLS',
+      createdAt: '2026-03-30T00:00:00Z',
+      status: 'succeeded',
+      progressPercent: 100,
+      commandPreview: 'mkvmerge\n  --output\n  /remux/Nightcrawler - 2160p.mkv',
+    };
+    installFetchMock({
+      currentJob: null,
+      currentLog: '[2026-03-30T00:00:01Z] Progress: 100%\n[2026-03-30T00:00:02Z] completed',
+      submittedJob: terminalJob,
+      submitStatus: 200,
+      submitMessage: '',
+    });
+    render(<App />);
+
+    await goToReviewStep();
+    fireEvent.click(screen.getByRole('button', { name: /start remux/i }));
+
+    await screen.findByText(/current remux/i);
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByText(/mkvmerge/i)).toBeInTheDocument();
+    expect(screen.getByText(/--output/i)).toBeInTheDocument();
+  });
+
   it('disables start remux while a current task is already running', async () => {
     installFetchMock({
       currentJob: {

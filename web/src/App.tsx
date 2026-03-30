@@ -141,9 +141,23 @@ function App() {
     }
   };
 
+  const loadCurrentJob = async (): Promise<Job | null> => {
+    const response = await fetch('/api/jobs/current', {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+    return (await response.json()) as Job;
+  };
+
   const loadCurrentJobSnapshot = async () => {
     const [nextJob, nextLog] = await Promise.all([
-      api.currentJob(token ?? undefined),
+      loadCurrentJob(),
       api.currentJobLog(token ?? undefined),
     ]);
     return { nextJob, nextLog: nextJob ? nextLog : '' };
