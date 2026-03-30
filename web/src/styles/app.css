@@ -158,6 +158,7 @@ button:disabled {
 .source-table-wrap {
   overflow-x: auto;
   margin-top: 0.8rem;
+  max-width: 100%;
 }
 
 .track-table-wrap {
@@ -167,8 +168,30 @@ button:disabled {
 
 .source-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  table-layout: fixed;
+  font-size: 0.84rem;
+}
+
+.source-table .col-select {
+  width: 3.2rem;
+}
+
+.source-table .col-name {
+  width: 13rem;
+}
+
+.source-table .col-type {
+  width: 6.2rem;
+}
+
+.source-table .col-size {
+  width: 6.8rem;
+}
+
+.source-table .col-modified {
+  width: 10.8rem;
 }
 
 .track-editor-table {
@@ -199,9 +222,33 @@ button:disabled {
 .source-table td {
   border: 1px solid #d6dfec;
   background: #f9fbff;
-  padding: 0.45rem;
+  padding: 0.38rem 0.45rem;
   text-align: left;
   vertical-align: top;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.source-table th {
+  background: #eef4fd;
+  color: #334b67;
+  font-size: 0.8rem;
+}
+
+.source-table-nowrap {
+  white-space: nowrap;
+}
+
+.source-path-cell {
+  min-width: 0;
+}
+
+.source-path-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .track-editor-table th,

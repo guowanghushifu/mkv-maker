@@ -62,6 +62,14 @@ export function ScanPage({
       ) : (
         <div className="source-table-wrap">
           <table className="source-table">
+            <colgroup>
+              <col className="col-select" />
+              <col className="col-name" />
+              <col className="col-type" />
+              <col className="col-path" />
+              <col className="col-size" />
+              <col className="col-modified" />
+            </colgroup>
             <thead>
               <tr>
                 <th>{text.scan.columns.select}</th>
@@ -86,9 +94,15 @@ export function ScanPage({
                   </td>
                   <td>{source.name}</td>
                   <td>{typeLabel(source.type)}</td>
-                  <td>{source.path}</td>
-                  <td>{formatBytes(source.size)}</td>
-                  <td>{new Date(source.modifiedAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}</td>
+                  <td className="source-path-cell">
+                    <span className="source-path-text" title={source.path}>
+                      {source.path}
+                    </span>
+                  </td>
+                  <td className="source-table-nowrap">{formatBytes(source.size)}</td>
+                  <td className="source-table-nowrap">
+                    {new Date(source.modifiedAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}
+                  </td>
                 </tr>
               ))}
             </tbody>
