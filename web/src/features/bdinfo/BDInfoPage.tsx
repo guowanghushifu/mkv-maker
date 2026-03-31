@@ -57,7 +57,7 @@ export function BDInfoPage({
           </div>
         </div>
 
-        <aside className="bdinfo-sidebar">
+        <aside className="bdinfo-sidebar supporting-card">
           <SummaryCard
             className="bdinfo-source-card supporting-card"
             label={text.bdinfo.selectedSource}

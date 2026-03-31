@@ -29,7 +29,7 @@ describe('BDInfoPage', () => {
 
     expect(container.querySelector('.workspace-card.bdinfo-workspace')).not.toBeNull();
     expect(container.querySelector('.bdinfo-layout')).not.toBeNull();
-    expect(container.querySelector('.bdinfo-sidebar')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-sidebar.supporting-card')).not.toBeNull();
     expect(screen.getByText(/bdinfo example/i).closest('.supporting-card')).not.toBeNull();
   });
 
