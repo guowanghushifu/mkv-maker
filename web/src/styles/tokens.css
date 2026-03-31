@@ -20,6 +20,7 @@
   --danger: #dc4c64;
   --shadow-lg: 0 28px 70px rgba(74, 96, 134, 0.16);
   --shadow-md: 0 18px 40px rgba(99, 118, 154, 0.1);
+  font-family: var(--font-body);
   color: var(--text);
   background: var(--bg);
 }
@@ -31,6 +32,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(130, 162, 255, 0.12), transparent 26%),
     linear-gradient(180deg, #f7f9fd 0%, #f1f5fb 100%);

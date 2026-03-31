@@ -20,9 +20,21 @@ describe('Layout', () => {
       </Layout>
     );
 
+    expect(container.querySelector('.admin-shell')).not.toBeNull();
+    expect(container.querySelector('.shell-brand')).not.toBeNull();
+    expect(container.querySelector('.shell-brand-mark')).not.toBeNull();
+    expect(container.querySelector('.shell-brand-copy')).not.toBeNull();
+    expect(container.querySelector('.shell-session-card')).not.toBeNull();
     expect(container.querySelector('.workflow-summary-row')).not.toBeNull();
+    expect(container.querySelector('.shell-page')).not.toBeNull();
+    expect(container.querySelector('.workflow-page-main')).not.toBeNull();
     expect(container.querySelectorAll('.workflow-summary-card')).toHaveLength(4);
+    expect(container.querySelectorAll('.workflow-summary-card .summary-label')).toHaveLength(4);
+    expect(container.querySelectorAll('.workflow-summary-card .summary-value')).toHaveLength(4);
     expect(container.querySelector('.workflow-page-aside')).not.toBeNull();
+    expect(container.querySelectorAll('.workflow-page-aside .context-card')).toHaveLength(4);
+    expect(container.querySelectorAll('.workflow-page-aside .context-card-value-clamp')).toHaveLength(4);
+    expect(container.querySelectorAll('.shell-nav-index')).toHaveLength(4);
     expect(container.querySelector('.shell-sidebar')).not.toBeNull();
   });
 
