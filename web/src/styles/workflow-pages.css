@@ -135,6 +135,22 @@ textarea:focus {
   padding: 0.8rem 0.9rem;
 }
 
+.login-card .login-form-field input {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.login-card .login-form-field input::placeholder {
+  color: var(--text-dim);
+}
+
+.login-card .login-form-field input:focus {
+  border-color: rgba(75, 93, 255, 0.5);
+  box-shadow: 0 0 0 4px rgba(75, 93, 255, 0.12);
+  background: #fff;
+}
+
 .login-form .error-text {
   margin: 0;
   text-align: center;
@@ -340,6 +356,7 @@ textarea:focus {
 
 .bdinfo-sample {
   margin-top: 0.7rem;
+  padding: 0.95rem 1rem;
 }
 
 .bdinfo-sample pre,
