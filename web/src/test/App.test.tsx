@@ -175,12 +175,9 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: /登录/i })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: /继续/i }));
-    await screen.findByRole('heading', { name: /扫描片源/i });
     fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
 
-    expect(await screen.findByRole('heading', { name: /Scan Sources/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Login/i })).toBeInTheDocument();
     expect(window.localStorage.getItem(localeStorageKey)).toBe('en');
   });
 
@@ -195,9 +192,10 @@ describe('App', () => {
 
   it('keeps login outside the admin shell and renders the shell only after authentication', async () => {
     installFetchMock({ currentJob: null, currentLog: '' });
-    render(<App />);
+    const view = render(<App />);
 
     expect(screen.getByRole('heading', { name: /登录/i }).closest('.login-panel')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /中文 \/ EN/i })).toBeInTheDocument();
     expect(document.querySelector('.admin-shell')).toBeNull();
 
     fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
@@ -206,6 +204,8 @@ describe('App', () => {
     await screen.findByRole('heading', { name: /扫描片源/i });
     expect(document.querySelector('.admin-shell')).not.toBeNull();
     expect(screen.getByRole('navigation', { name: /工作流分区/i })).toBeInTheDocument();
+
+    view.unmount();
   });
 
   it('keeps the login session after a page refresh', async () => {
