@@ -5,7 +5,7 @@ import { TrackEditorPage } from '../features/draft/TrackEditorPage';
 function createDraft() {
   return {
     title: 'Demo Title',
-    video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+    video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
     audio: [
       {
         id: 'a1',
@@ -54,6 +54,13 @@ describe('TrackEditorPage', () => {
     expect(screen.getByText('TrueHD.7.1.Atmos')).toBeInTheDocument();
     expect(screen.getByText('DTS-HD.MA.7.1')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Details' })).not.toBeInTheDocument();
+  });
+
+  it('renders dolby vision video attributes directly from the unified DV.HDR hdrType', () => {
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
+
+    expect(screen.getByText(/video source attributes: hevc \/ 2160p \/ dv\.hdr/i)).toBeInTheDocument();
+    expect(screen.queryByText(/video source attributes: hevc \/ 2160p \/ hdr\.dv/i)).not.toBeInTheDocument();
   });
 
   it('clears the previous default audio track when a new default is checked', () => {

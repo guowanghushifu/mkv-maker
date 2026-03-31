@@ -215,7 +215,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if len(body.SegmentPaths) != 1 || !strings.HasSuffix(strings.ToLower(body.SegmentPaths[0]), "/bdmv/stream/00005.m2ts") {
 		t.Fatalf("expected segment path from FILES section, got %+v", body.SegmentPaths)
 	}
-	if body.Video.Codec != "HEVC" || body.Video.Resolution != "2160p" || body.Video.HDRType != "HDR.DV" {
+	if body.Video.Codec != "HEVC" || body.Video.Resolution != "2160p" || body.Video.HDRType != "DV.HDR" {
 		t.Fatalf("unexpected video %+v", body.Video)
 	}
 	if len(body.Audio) != 3 || len(body.Subtitles) != 2 {

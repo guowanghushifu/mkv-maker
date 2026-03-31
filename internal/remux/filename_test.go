@@ -8,7 +8,7 @@ func TestBuildFilenameIncludesHDRAndDefaultAudio(t *testing.T) {
 		Video: VideoTrack{
 			Resolution: "2160p",
 			Codec:      "HEVC",
-			HDRType:    "HDR.DV",
+			HDRType:    "DV.HDR",
 		},
 		Audio: []AudioTrack{
 			{Name: "English", CodecLabel: "TrueHD.7.1.Atmos", Default: true, Selected: true},
@@ -28,7 +28,7 @@ func TestBuildFilenameUsesSelectedAudioWhenNoSelectedDefault(t *testing.T) {
 		Video: VideoTrack{
 			Resolution: "2160p",
 			Codec:      "HEVC",
-			HDRType:    "HDR.DV",
+			HDRType:    "DV.HDR",
 		},
 		Audio: []AudioTrack{
 			{Name: "English", CodecLabel: "DTS-HD.MA.5.1", Selected: true},

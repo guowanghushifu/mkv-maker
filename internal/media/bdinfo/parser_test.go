@@ -65,8 +65,8 @@ func TestParseExtractsPlaylistAndFrontendFieldsFromTables(t *testing.T) {
 	if parsed.Video.Resolution != "2160p" {
 		t.Fatalf("expected 2160p resolution, got %q", parsed.Video.Resolution)
 	}
-	if parsed.Video.HDRType != "HDR.DV" {
-		t.Fatalf("expected HDR.DV type, got %q", parsed.Video.HDRType)
+	if parsed.Video.HDRType != "DV.HDR" {
+		t.Fatalf("expected DV.HDR type, got %q", parsed.Video.HDRType)
 	}
 	if !parsed.DVMergeEnabled {
 		t.Fatal("expected DV merge to be enabled when hidden DV enhancement row exists")

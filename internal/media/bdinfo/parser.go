@@ -556,7 +556,7 @@ func extractResolution(description string) string {
 func inferHDRType(input string, dvDetected bool) string {
 	upper := strings.ToUpper(input)
 	if dvDetected || strings.Contains(upper, "HDR.DV") || strings.Contains(upper, "DOLBY VISION") {
-		return "HDR.DV"
+		return "DV.HDR"
 	}
 	if strings.Contains(upper, "HDR") {
 		return "HDR"

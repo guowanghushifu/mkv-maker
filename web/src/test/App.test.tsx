@@ -24,7 +24,7 @@ const draft = {
   title: 'Nightcrawler',
   outputDir: '/remux',
   dvMergeEnabled: true,
-  video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+  video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
   audio: [{ id: 'a1', name: 'English', language: 'eng', selected: true, default: true }],
   subtitles: [{ id: 's1', name: 'English', language: 'eng', selected: true, default: true }],
 };

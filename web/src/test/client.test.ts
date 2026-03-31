@@ -11,7 +11,7 @@ describe('buildFilenamePreview', () => {
           name: 'Main Video',
           codec: 'HEVC',
           resolution: '2160p',
-          hdrType: 'HDR.DV',
+          hdrType: 'DV.HDR',
         },
         audio: [
           {

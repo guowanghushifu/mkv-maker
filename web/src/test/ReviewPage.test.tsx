@@ -23,7 +23,7 @@ describe('ReviewPage', () => {
       title: 'Nightcrawler',
       outputDir: '/remux',
       dvMergeEnabled: true,
-      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
       audio: [],
       subtitles: [],
     } as const;
@@ -85,7 +85,7 @@ describe('ReviewPage', () => {
       title: 'Nightcrawler',
       outputDir: '/remux',
       dvMergeEnabled: true,
-      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
       audio: [],
       subtitles: [],
     } as const;
@@ -144,7 +144,7 @@ describe('ReviewPage', () => {
       title: 'Nightcrawler',
       outputDir: '/remux',
       dvMergeEnabled: true,
-      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
       audio: [],
       subtitles: [],
     } as const;
@@ -199,7 +199,7 @@ describe('ReviewPage', () => {
       title: 'Nightcrawler',
       outputDir: '/remux',
       dvMergeEnabled: true,
-      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
       audio: [],
       subtitles: [],
     } as const;
@@ -254,7 +254,7 @@ describe('ReviewPage', () => {
       title: 'Nightcrawler',
       outputDir: '/remux',
       dvMergeEnabled: true,
-      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
       audio: [],
       subtitles: [],
     } as const;
@@ -301,7 +301,7 @@ describe('ReviewPage', () => {
       title: 'Nightcrawler',
       outputDir: '/remux',
       dvMergeEnabled: true,
-      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
       audio: [],
       subtitles: [],
     } as const;

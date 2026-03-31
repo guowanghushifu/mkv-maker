@@ -8,7 +8,7 @@ import (
 
 func TestBuildMKVMergeArgsIncludesTrackMetadata(t *testing.T) {
 	draft := Draft{
-		OutputPath: "/remux/Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.TrueHD.7.1.Atmos.mkv",
+		OutputPath: "/remux/Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.TrueHD.7.1.Atmos.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Playlist:   "00800.MPLS",
 		EnableDV:   true,
