@@ -531,6 +531,33 @@
   box-shadow: 0 10px 20px rgba(74, 96, 134, 0.22);
 }
 
+.login-state {
+  min-height: 100vh;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.login-state-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.login-state .locale-toggle,
+.login-state .ui-button-subtle {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(74, 96, 134, 0.12);
+}
+
+.login-state .locale-toggle:hover:not(:disabled),
+.login-state .ui-button-subtle:hover:not(:disabled) {
+  border-color: rgba(74, 144, 245, 0.56);
+  box-shadow: 0 12px 24px rgba(74, 96, 134, 0.18);
+}
+
 @media (max-width: 1100px) {
   .admin-shell {
     grid-template-columns: 1fr;
@@ -593,6 +620,10 @@
 }
 
 @media (max-width: 760px) {
+  .login-state-actions {
+    justify-content: flex-start;
+  }
+
   .shell-nav-list {
     display: grid;
     grid-template-columns: 1fr;
