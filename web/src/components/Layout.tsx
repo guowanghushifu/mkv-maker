@@ -64,28 +64,32 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
           <SummaryCard
             className="context-card"
             labelClassName="context-card-label"
-            valueClassName="context-card-value"
+            valueClassName="context-card-value context-card-value-clamp"
+            valueProps={{ title: context.source }}
             label={text.layout.contextLabels.source}
             value={context.source}
           />
           <SummaryCard
             className="context-card"
             labelClassName="context-card-label"
-            valueClassName="context-card-value"
+            valueClassName="context-card-value context-card-value-clamp"
+            valueProps={{ title: context.playlist }}
             label={text.layout.contextLabels.playlist}
             value={context.playlist}
           />
           <SummaryCard
             className="context-card"
             labelClassName="context-card-label"
-            valueClassName="context-card-value"
+            valueClassName="context-card-value context-card-value-clamp"
+            valueProps={{ title: context.output }}
             label={text.layout.contextLabels.output}
             value={context.output}
           />
           <SummaryCard
             className="context-card"
             labelClassName="context-card-label"
-            valueClassName="context-card-value"
+            valueClassName="context-card-value context-card-value-clamp"
+            valueProps={{ title: context.task }}
             label={text.layout.contextLabels.task}
             value={context.task}
           />

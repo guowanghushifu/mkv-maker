@@ -33,7 +33,7 @@ function createDraft() {
 
 describe('TrackEditorPage', () => {
   it('shows audio format only in the audio table and keeps subtitle headers unchanged', () => {
-    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
+    const { container } = render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
 
     const [audioTable, subtitleTable] = screen.getAllByRole('table');
     expect(within(audioTable).getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
@@ -54,6 +54,7 @@ describe('TrackEditorPage', () => {
     expect(screen.getByText('TrueHD.7.1.Atmos')).toBeInTheDocument();
     expect(screen.getByText('DTS-HD.MA.7.1')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Details' })).not.toBeInTheDocument();
+    expect(container.querySelector('.track-editor-table .col-drag')).toHaveClass('col-drag');
   });
 
   it('renders dolby vision video attributes directly from the unified DV.HDR hdrType', () => {

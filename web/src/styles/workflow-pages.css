@@ -386,7 +386,7 @@ textarea:focus {
 }
 
 .track-editor-table .col-drag {
-  width: 2.4rem;
+  width: 3.2rem;
 }
 
 .track-editor-table .col-id {
@@ -394,7 +394,7 @@ textarea:focus {
 }
 
 .track-editor-table .col-language {
-  width: 5.6rem;
+  width: 7rem;
 }
 
 .track-editor-table .col-audio-format {
@@ -489,7 +489,8 @@ textarea:focus {
 }
 
 .track-editor-table .track-language-input {
-  width: 5rem;
+  width: 100%;
+  min-width: 6.2rem;
 }
 
 .track-editor-table .track-audio-format-cell {
@@ -501,8 +502,8 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.95rem;
-  height: 1.85rem;
+  width: 2.3rem;
+  height: 2.1rem;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
   background: rgba(7, 14, 21, 0.88);

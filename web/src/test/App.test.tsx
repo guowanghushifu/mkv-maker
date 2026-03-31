@@ -456,5 +456,15 @@ describe('App', () => {
     expect(screen.getAllByText(/nightcrawler disc/i).some((node) => node.closest('.context-card'))).toBe(true);
     expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.context-card'))).toBe(true);
     expect(screen.getAllByText(/nightcrawler - 2160p\.mkv/i).some((node) => node.closest('.context-card'))).toBe(true);
+    const contextValues = Array.from(document.querySelectorAll('.context-card-value'));
+    expect(contextValues.length).toBeGreaterThan(0);
+    expect(contextValues.every((node) => node.classList.contains('context-card-value-clamp'))).toBe(true);
+    expect(
+      contextValues.some(
+        (node) =>
+          node.getAttribute('title') === 'Nightcrawler Disc' ||
+          node.getAttribute('title') === 'Nightcrawler - 2160p.mkv'
+      )
+    ).toBe(true);
   });
 });
