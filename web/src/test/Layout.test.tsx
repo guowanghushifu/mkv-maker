@@ -3,6 +3,29 @@ import { describe, expect, it, vi } from 'vitest';
 import { Layout } from '../components/Layout';
 
 describe('Layout', () => {
+  it('renders summary cards and the aside context stack required by the light shell', () => {
+    const { container } = render(
+      <Layout
+        currentStep="scan"
+        locale="en"
+        onToggleLocale={vi.fn()}
+        context={{
+          source: 'Nightcrawler Disc',
+          playlist: 'Waiting',
+          output: 'Nightcrawler - 2160p.mkv',
+          task: 'Ready',
+        }}
+      >
+        <div>scan body</div>
+      </Layout>
+    );
+
+    expect(container.querySelector('.workflow-summary-row')).not.toBeNull();
+    expect(container.querySelectorAll('.workflow-summary-card')).toHaveLength(4);
+    expect(container.querySelector('.workflow-page-aside')).not.toBeNull();
+    expect(container.querySelector('.shell-sidebar')).not.toBeNull();
+  });
+
   it('renders the post-login shell with sidebar items and wrap opportunities in the context panel', () => {
     const { container } = render(
       <Layout
