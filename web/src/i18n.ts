@@ -5,17 +5,26 @@ export const tokenStorageKey = 'mkv-maker-token';
 
 type MessageSet = {
   layout: {
-    appEyebrow: string;
     appTitle: string;
     appSubtitle: string;
-    workflowStepsAria: string;
-    localeToggle: string;
     contextTitle: string;
     contextLabels: {
       source: string;
       playlist: string;
       output: string;
       task: string;
+    };
+    localeToggle: string;
+    shellNavAria: string;
+    shellSessionTitle: string;
+    shellSessionSubtitle: string;
+    stepNumbers: Record<'scan' | 'bdinfo' | 'editor' | 'review', string>;
+    stepDescriptions: Record<'scan' | 'bdinfo' | 'editor' | 'review', string>;
+    summaryLabels: {
+      step: string;
+      source: string;
+      playlist: string;
+      status: string;
     };
     readyState: string;
     lockedState: string;
@@ -134,17 +143,36 @@ type MessageSet = {
 export const messages: Record<Locale, MessageSet> = {
   zh: {
     layout: {
-      appEyebrow: 'Media Mastering Console',
       appTitle: 'MKV Remux Tool',
-      appSubtitle: '针对蓝光 Remux 工作流的精确控制台，串联 BDInfo、轨道整理与任务执行。',
-      workflowStepsAria: '工作流步骤',
-      localeToggle: '中文 / EN',
+      appSubtitle: 'Blu-ray remux workflow console',
       contextTitle: '当前会话',
       contextLabels: {
         source: '片源',
         playlist: '播放列表',
         output: '输出',
         task: '任务',
+      },
+      localeToggle: '中文 / EN',
+      shellNavAria: 'Workflow sections',
+      shellSessionTitle: 'Remux Session',
+      shellSessionSubtitle: 'Current operator context',
+      stepNumbers: {
+        scan: '01',
+        bdinfo: '02',
+        editor: '03',
+        review: '04',
+      },
+      stepDescriptions: {
+        scan: 'Detect input sources and choose a working disc.',
+        bdinfo: 'Paste and validate required BDInfo text.',
+        editor: 'Review titles, languages, defaults, and output naming.',
+        review: 'Confirm the final track set and monitor remux execution.',
+      },
+      summaryLabels: {
+        step: 'Current Step',
+        source: 'Selected Source',
+        playlist: 'Playlist',
+        status: 'Task State',
       },
       readyState: '就绪',
       lockedState: '未登录',
@@ -267,17 +295,36 @@ export const messages: Record<Locale, MessageSet> = {
   },
   en: {
     layout: {
-      appEyebrow: 'Media Mastering Console',
       appTitle: 'MKV Remux Tool',
-      appSubtitle: 'A precision workflow for BDInfo parsing, track curation, and remux execution.',
-      workflowStepsAria: 'Workflow steps',
-      localeToggle: '中文 / EN',
+      appSubtitle: 'Blu-ray remux workflow console',
       contextTitle: 'Current Session',
       contextLabels: {
         source: 'Source',
         playlist: 'Playlist',
         output: 'Output',
         task: 'Task',
+      },
+      localeToggle: '中文 / EN',
+      shellNavAria: 'Workflow sections',
+      shellSessionTitle: 'Remux Session',
+      shellSessionSubtitle: 'Current operator context',
+      stepNumbers: {
+        scan: '01',
+        bdinfo: '02',
+        editor: '03',
+        review: '04',
+      },
+      stepDescriptions: {
+        scan: 'Detect input sources and choose a working disc.',
+        bdinfo: 'Paste and validate required BDInfo text.',
+        editor: 'Review titles, languages, defaults, and output naming.',
+        review: 'Confirm the final track set and monitor remux execution.',
+      },
+      summaryLabels: {
+        step: 'Current Step',
+        source: 'Selected Source',
+        playlist: 'Playlist',
+        status: 'Task State',
       },
       readyState: 'Ready',
       lockedState: 'Locked',

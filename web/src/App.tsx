@@ -9,6 +9,10 @@ import { useRemuxWorkflow } from './useRemuxWorkflow';
 function App() {
   const workflow = useRemuxWorkflow();
 
+  if (workflow.step === 'login') {
+    return <LoginPage locale={workflow.locale} onSuccess={workflow.handleLogin} error={workflow.loginError} />;
+  }
+
   return (
     <Layout
       currentStep={workflow.currentStep}
@@ -16,10 +20,6 @@ function App() {
       onToggleLocale={workflow.toggleLocale}
       context={workflow.layoutContext}
     >
-      {workflow.step === 'login' ? (
-        <LoginPage locale={workflow.locale} onSuccess={workflow.handleLogin} error={workflow.loginError} />
-      ) : null}
-
       {workflow.step === 'scan' ? (
         <ScanPage
           locale={workflow.locale}

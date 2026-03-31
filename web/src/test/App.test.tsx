@@ -134,11 +134,11 @@ function installUnauthorizedFetchMock() {
 }
 
 async function goToReviewStep() {
-  fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
-  await screen.findByRole('heading', { name: /Login/i });
+  fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+  fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+  await screen.findByRole('heading', { name: /扫描片源/i });
 
-  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } });
-  fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+  fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
   await screen.findByRole('heading', { name: /scan sources/i });
 
   fireEvent.click(screen.getByRole('button', { name: /scan sources/i }));
@@ -153,7 +153,7 @@ async function goToReviewStep() {
 
   await screen.findByRole('heading', { name: /track editor/i });
   fireEvent.click(screen.getByRole('button', { name: /continue to review/i }));
-  await screen.findByRole('heading', { name: /^review$/i });
+  await screen.findByRole('heading', { name: /^review$/i, level: 2 });
 }
 
 afterEach(() => {
@@ -166,10 +166,8 @@ describe('App', () => {
   it('renders the application shell title', () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     render(<App />);
-    expect(screen.getByRole('heading', { name: /MKV Remux Tool/i })).toBeInTheDocument();
-    expect(screen.queryByText(/Media Mastering Console/i)).not.toBeInTheDocument();
-    expect(screen.getByText('任务概览')).toBeInTheDocument();
-    expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /登录/i })).toBeInTheDocument();
+    expect(document.querySelector('.admin-shell')).toBeNull();
   });
 
   it('defaults to Chinese and persists the selected locale', async () => {
@@ -177,9 +175,12 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: /登录/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+    await screen.findByRole('heading', { name: /扫描片源/i });
     fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
 
-    expect(await screen.findByRole('heading', { name: /Login/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Scan Sources/i })).toBeInTheDocument();
     expect(window.localStorage.getItem(localeStorageKey)).toBe('en');
   });
 
@@ -190,6 +191,21 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: /Login/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+  });
+
+  it('keeps login outside the admin shell and renders the shell only after authentication', async () => {
+    installFetchMock({ currentJob: null, currentLog: '' });
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: /登录/i }).closest('.login-panel')).not.toBeNull();
+    expect(document.querySelector('.admin-shell')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+
+    await screen.findByRole('heading', { name: /扫描片源/i });
+    expect(document.querySelector('.admin-shell')).not.toBeNull();
+    expect(screen.getByRole('navigation', { name: /workflow sections/i })).toBeInTheDocument();
   });
 
   it('keeps the login session after a page refresh', async () => {
@@ -229,7 +245,7 @@ describe('App', () => {
     view.unmount();
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /^review$/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^review$/i, level: 2 })).toBeInTheDocument();
     expect(await screen.findByText(/current remux/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /scan sources/i })).not.toBeInTheDocument();
   });
@@ -450,9 +466,7 @@ describe('App', () => {
 
     await goToReviewStep();
 
-    expect(screen.getByText(/current session/i)).toBeInTheDocument();
-    const context = screen.getByText(/current session/i).closest('.workflow-context');
-    expect(context).not.toBeNull();
+    expect(document.querySelector('.workflow-summary-row[aria-label="Current Session"]')).not.toBeNull();
     expect(screen.getAllByText(/nightcrawler disc/i).some((node) => node.closest('.context-card'))).toBe(true);
     expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.context-card'))).toBe(true);
     expect(screen.getAllByText(/nightcrawler - 2160p\.mkv/i).some((node) => node.closest('.context-card'))).toBe(true);
