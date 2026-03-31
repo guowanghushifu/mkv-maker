@@ -144,7 +144,7 @@ export const messages: Record<Locale, MessageSet> = {
   zh: {
     layout: {
       appTitle: 'MKV Remux Tool',
-      appSubtitle: 'Blu-ray remux workflow console',
+      appSubtitle: '蓝光 Remux 工作流控制台',
       contextTitle: '当前会话',
       contextLabels: {
         source: '片源',
@@ -153,9 +153,9 @@ export const messages: Record<Locale, MessageSet> = {
         task: '任务',
       },
       localeToggle: '中文 / EN',
-      shellNavAria: 'Workflow sections',
-      shellSessionTitle: 'Remux Session',
-      shellSessionSubtitle: 'Current operator context',
+      shellNavAria: '工作流分区',
+      shellSessionTitle: 'Remux 会话',
+      shellSessionSubtitle: '当前操作上下文',
       stepNumbers: {
         scan: '01',
         bdinfo: '02',
@@ -163,16 +163,16 @@ export const messages: Record<Locale, MessageSet> = {
         review: '04',
       },
       stepDescriptions: {
-        scan: 'Detect input sources and choose a working disc.',
-        bdinfo: 'Paste and validate required BDInfo text.',
-        editor: 'Review titles, languages, defaults, and output naming.',
-        review: 'Confirm the final track set and monitor remux execution.',
+        scan: '检测输入片源并选择要处理的光盘。',
+        bdinfo: '粘贴并校验必填的 BDInfo 文本。',
+        editor: '检查标题、语言、默认轨与输出命名。',
+        review: '确认最终轨道集合并监控 Remux 执行。',
       },
       summaryLabels: {
-        step: 'Current Step',
-        source: 'Selected Source',
-        playlist: 'Playlist',
-        status: 'Task State',
+        step: '当前步骤',
+        source: '已选片源',
+        playlist: '播放列表',
+        status: '任务状态',
       },
       readyState: '就绪',
       lockedState: '未登录',

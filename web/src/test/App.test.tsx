@@ -205,7 +205,7 @@ describe('App', () => {
 
     await screen.findByRole('heading', { name: /扫描片源/i });
     expect(document.querySelector('.admin-shell')).not.toBeNull();
-    expect(screen.getByRole('navigation', { name: /workflow sections/i })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: /工作流分区/i })).toBeInTheDocument();
   });
 
   it('keeps the login session after a page refresh', async () => {
