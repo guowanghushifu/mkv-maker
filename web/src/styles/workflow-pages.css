@@ -186,6 +186,10 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.workspace-header {
+  margin-bottom: 0.9rem;
+}
+
 .supporting-card {
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid var(--line);
@@ -330,6 +334,10 @@ textarea:focus {
   display: grid;
   gap: 0.7rem;
   align-content: start;
+}
+
+.bdinfo-sidebar.supporting-card {
+  padding: 0.8rem;
 }
 
 .bdinfo-source-card,

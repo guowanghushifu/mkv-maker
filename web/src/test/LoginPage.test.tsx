@@ -21,4 +21,16 @@ describe('LoginPage', () => {
     expect(onSuccess).not.toHaveBeenCalled();
     expect(screen.getByText(/password is required/i)).toBeInTheDocument();
   });
+
+  it('submits a trimmed password from the redesigned login card', () => {
+    const onSuccess = vi.fn();
+    render(<LoginPage locale="en" onSuccess={onSuccess} />);
+
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: '  my-secret  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    expect(onSuccess).toHaveBeenCalledWith('my-secret');
+  });
 });
