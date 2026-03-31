@@ -92,15 +92,21 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
             </article>
             <article className="workflow-summary-card">
               <span className="summary-label">{text.layout.summaryLabels.source}</span>
-              <strong className="summary-value">{context.source}</strong>
+              <strong className="summary-value" title={context.source}>
+                {renderContextValue(context.source)}
+              </strong>
             </article>
             <article className="workflow-summary-card">
               <span className="summary-label">{text.layout.summaryLabels.playlist}</span>
-              <strong className="summary-value">{context.playlist}</strong>
+              <strong className="summary-value" title={context.playlist}>
+                {renderContextValue(context.playlist)}
+              </strong>
             </article>
             <article className="workflow-summary-card">
               <span className="summary-label">{text.layout.summaryLabels.status}</span>
-              <strong className="summary-value">{context.task}</strong>
+              <strong className="summary-value" title={context.task}>
+                {renderContextValue(context.task)}
+              </strong>
             </article>
           </section>
           <section className="workflow-page-grid">

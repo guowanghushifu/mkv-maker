@@ -24,6 +24,7 @@ describe('Layout', () => {
     expect(container.querySelectorAll('.shell-nav-item')).toHaveLength(4);
     expect(container.querySelector('.shell-nav-item.is-active')).not.toBeNull();
     expect(container.querySelector('.topbar')).not.toBeNull();
+    expect(container.querySelectorAll('.workflow-summary-row .summary-value wbr').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('.context-card-value-clamp wbr').length).toBeGreaterThan(0);
   });
 
