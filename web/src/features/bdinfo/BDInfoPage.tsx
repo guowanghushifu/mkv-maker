@@ -30,8 +30,8 @@ export function BDInfoPage({
   const text = getMessages(locale);
 
   return (
-    <section className="panel page-panel bdinfo-panel">
-      <div className="panel-header">
+    <section className="workspace-card page-panel bdinfo-workspace">
+      <div className="workspace-header">
         <div>
           <h2>{text.bdinfo.title}</h2>
           <p className="panel-description">{text.bdinfo.description}</p>
@@ -39,7 +39,7 @@ export function BDInfoPage({
       </div>
 
       <div className="bdinfo-layout">
-        <div className="bdinfo-composer">
+        <div className="bdinfo-composer supporting-card">
           <textarea
             value={bdinfoText}
             onChange={(event) => onTextChange(event.target.value)}
@@ -57,9 +57,9 @@ export function BDInfoPage({
           </div>
         </div>
 
-        <aside className="bdinfo-sidebar">
+        <aside className="bdinfo-sidebar supporting-card">
           <SummaryCard
-            className="bdinfo-source-card"
+            className="bdinfo-source-card supporting-card"
             label={text.bdinfo.selectedSource}
             value={source.name}
           >
@@ -70,7 +70,7 @@ export function BDInfoPage({
 
           {parsed ? (
             <SummaryCard
-              className="bdinfo-summary-card"
+              className="bdinfo-summary-card supporting-card"
               label={text.bdinfo.playlist}
               value={parsed.playlistName}
             >
@@ -81,7 +81,7 @@ export function BDInfoPage({
         </aside>
       </div>
 
-      <section className="bdinfo-sample">
+      <section className="bdinfo-sample supporting-card">
         <h3>{text.bdinfo.sampleTitle}</h3>
         <pre>{sampleBDInfo}</pre>
       </section>

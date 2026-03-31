@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ScanPage } from '../features/sources/ScanPage';
 
@@ -19,6 +19,25 @@ const secondSource = {
 };
 
 describe('ScanPage', () => {
+  it('renders scan content inside the workspace card and toolbar layout', () => {
+    const { container } = render(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[longPathSource, secondSource]}
+        selectedSourceId={null}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.workspace-card.scan-workspace')).not.toBeNull();
+    expect(container.querySelector('.workspace-toolbar')).not.toBeNull();
+    expect(container.querySelector('.source-grid')).not.toBeNull();
+  });
+
   it('renders sources as selectable cards before the table details', () => {
     const { container } = render(
       <ScanPage
@@ -110,5 +129,47 @@ describe('ScanPage', () => {
     );
 
     expect(container.querySelector('.source-card.is-selected')).not.toBeNull();
+  });
+
+  it('keeps next disabled until a source is selected and forwards selection changes', () => {
+    const onSelectSource = vi.fn();
+    const onNext = vi.fn();
+    const { rerender } = render(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[longPathSource, secondSource]}
+        selectedSourceId={null}
+        onScan={vi.fn()}
+        onSelectSource={onSelectSource}
+        onNext={onNext}
+      />,
+    );
+
+    const nextButton = screen.getByRole('button', { name: /continue to bdinfo/i });
+    expect(nextButton).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(new RegExp(secondSource.name, 'i')));
+    expect(onSelectSource).toHaveBeenCalledWith(secondSource.id);
+    expect(onNext).not.toHaveBeenCalled();
+
+    rerender(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[longPathSource, secondSource]}
+        selectedSourceId={secondSource.id}
+        onScan={vi.fn()}
+        onSelectSource={onSelectSource}
+        onNext={onNext}
+      />,
+    );
+
+    const enabledNextButton = screen.getByRole('button', { name: /continue to bdinfo/i });
+    expect(enabledNextButton).not.toBeDisabled();
+    fireEvent.click(enabledNextButton);
+    expect(onNext).toHaveBeenCalledTimes(1);
   });
 });

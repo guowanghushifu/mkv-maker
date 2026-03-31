@@ -25,31 +25,30 @@ export function LoginPage({ locale = 'zh', onSuccess, error: externalError }: Lo
   };
 
   return (
-    <section className="panel login-panel">
-      <div className="login-panel-body">
+    <section className="login-screen">
+      <div className="login-card">
+        <div className="login-brand-mark">MM</div>
         <div className="login-panel-intro">
           <h2>{text.login.title}</h2>
           <p>{text.login.subtitle}</p>
         </div>
-        <div className="login-panel-surface">
-          <form onSubmit={handleSubmit} className="login-form">
-            <div className="login-form-field">
-              <label htmlFor="password">{text.login.passwordLabel}</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder={text.login.passwordPlaceholder}
-              />
-            </div>
-            {error ? <p className="error-text">{error}</p> : null}
-            {externalError ? <p className="error-text">{externalError}</p> : null}
-            <Button type="submit" className="login-submit-button">
-              {text.login.continueButton}
-            </Button>
-          </form>
-        </div>
+        <form onSubmit={handleSubmit} className="login-form login-card-form">
+          <div className="login-form-field">
+            <label htmlFor="password">{text.login.passwordLabel}</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={text.login.passwordPlaceholder}
+            />
+          </div>
+          {error ? <p className="error-text">{error}</p> : null}
+          {externalError ? <p className="error-text">{externalError}</p> : null}
+          <Button type="submit" className="login-submit-button">
+            {text.login.continueButton}
+          </Button>
+        </form>
       </div>
     </section>
   );

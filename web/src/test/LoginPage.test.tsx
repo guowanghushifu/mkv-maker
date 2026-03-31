@@ -3,16 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { LoginPage } from '../features/auth/LoginPage';
 
 describe('LoginPage', () => {
-  it('renders a centered login layout shell for the password form', () => {
+  it('renders the standalone light login card without the admin shell', () => {
     render(<LoginPage locale="en" onSuccess={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: /login/i }).closest('section')).toHaveClass('login-panel');
-    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-panel-body')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-panel-intro')).not.toBeNull();
-    expect(screen.getByLabelText(/password/i).closest('.login-panel-surface')).not.toBeNull();
-    expect(screen.getByLabelText(/password/i).closest('form')).toHaveClass('login-form');
-    expect(screen.getByLabelText(/password/i).closest('.login-form-field')).not.toBeNull();
-    expect(screen.getByRole('button', { name: /continue/i })).toHaveClass('login-submit-button');
+    const continueButton = screen.getByRole('button', { name: /continue/i });
+    expect(document.querySelector('.admin-shell')).toBeNull();
+    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-screen')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-card')).not.toBeNull();
+    expect(continueButton).toHaveClass('login-submit-button');
+    expect(continueButton).toHaveClass('ui-button-primary');
   });
 
   it('requires a password before submitting', () => {
@@ -23,5 +22,17 @@ describe('LoginPage', () => {
 
     expect(onSuccess).not.toHaveBeenCalled();
     expect(screen.getByText(/password is required/i)).toBeInTheDocument();
+  });
+
+  it('submits a trimmed password from the redesigned login card', () => {
+    const onSuccess = vi.fn();
+    render(<LoginPage locale="en" onSuccess={onSuccess} />);
+
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: '  my-secret  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    expect(onSuccess).toHaveBeenCalledWith('my-secret');
   });
 });

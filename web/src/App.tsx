@@ -1,4 +1,5 @@
 import { Layout } from './components/Layout';
+import { Button } from './components/Button';
 import { LoginPage } from './features/auth/LoginPage';
 import { BDInfoPage } from './features/bdinfo/BDInfoPage';
 import { TrackEditorPage } from './features/draft/TrackEditorPage';
@@ -9,6 +10,19 @@ import { useRemuxWorkflow } from './useRemuxWorkflow';
 function App() {
   const workflow = useRemuxWorkflow();
 
+  if (workflow.step === 'login') {
+    return (
+      <div className="login-state">
+        <div className="login-state-actions">
+          <Button variant="subtle" className="locale-toggle" onClick={workflow.toggleLocale}>
+            {workflow.locale === 'zh' ? '中文 / EN' : 'EN / 中文'}
+          </Button>
+        </div>
+        <LoginPage locale={workflow.locale} onSuccess={workflow.handleLogin} error={workflow.loginError} />
+      </div>
+    );
+  }
+
   return (
     <Layout
       currentStep={workflow.currentStep}
@@ -16,10 +30,6 @@ function App() {
       onToggleLocale={workflow.toggleLocale}
       context={workflow.layoutContext}
     >
-      {workflow.step === 'login' ? (
-        <LoginPage locale={workflow.locale} onSuccess={workflow.handleLogin} error={workflow.loginError} />
-      ) : null}
-
       {workflow.step === 'scan' ? (
         <ScanPage
           locale={workflow.locale}

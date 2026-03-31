@@ -18,7 +18,14 @@ type LayoutProps = PropsWithChildren<{
   };
 }>;
 
-const stepOrder: WorkflowStep[] = ['login', 'scan', 'bdinfo', 'editor', 'review'];
+const shellSteps: Exclude<WorkflowStep, 'login'>[] = ['scan', 'bdinfo', 'editor', 'review'];
+
+function getShellMeta(step: Exclude<WorkflowStep, 'login'>, text: ReturnType<typeof getMessages>) {
+  return {
+    title: text.layout.steps[step],
+    subtitle: text.layout.stepDescriptions[step],
+  };
+}
 
 function renderContextValue(value: string) {
   return value.split(/([./@_-])/g).map((part, index) => (
@@ -30,82 +37,117 @@ function renderContextValue(value: string) {
 }
 
 export function Layout({ currentStep, locale, onToggleLocale, context, children }: LayoutProps) {
-  const activeIndex = stepOrder.indexOf(currentStep);
   const text = getMessages(locale);
+  const activeStep = currentStep === 'login' ? 'scan' : currentStep;
+  const meta = getShellMeta(activeStep, text);
 
   return (
-    <div className="app-shell">
-      <header className="app-header app-hero">
-        <div className="app-header-top">
-          <div className="app-hero-copy">
-            <h1>{text.layout.appTitle}</h1>
-            <p>{text.layout.appSubtitle}</p>
+    <div className="admin-shell">
+      <aside className="shell-sidebar">
+        <div className="shell-brand">
+          <div className="shell-brand-mark">MM</div>
+          <div className="shell-brand-copy">
+            <strong>{text.layout.appTitle}</strong>
+            <span>{text.layout.appSubtitle}</span>
           </div>
-          <div className="app-hero-actions">
+        </div>
+        <nav aria-label={text.layout.shellNavAria} className="shell-nav">
+          <ol className="shell-nav-list">
+            {shellSteps.map((step) => (
+              <li key={step}>
+                <span className={`shell-nav-item${step === activeStep ? ' is-active' : ''}`}>
+                  <span className="shell-nav-index">{text.layout.stepNumbers[step]}</span>
+                  <span>{text.layout.steps[step]}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </nav>
+        <div className="shell-session-card">
+          <div className="shell-session-badge">MK</div>
+          <div>
+            <strong>{text.layout.shellSessionTitle}</strong>
+            <p>{text.layout.shellSessionSubtitle}</p>
+          </div>
+        </div>
+      </aside>
+
+      <div className="shell-main">
+        <header className="topbar">
+          <div className="topbar-copy">
+            <h1>{meta.title}</h1>
+            <p>{meta.subtitle}</p>
+          </div>
+          <div className="topbar-actions">
             <Button variant="subtle" className="locale-toggle" onClick={onToggleLocale}>
               {text.layout.localeToggle}
             </Button>
           </div>
-        </div>
-      </header>
-      <section className="workflow-context">
-        <div className="workflow-context-header">
-          <div>
-            <p className="context-kicker">{text.layout.contextTitle}</p>
-          </div>
-        </div>
-        <nav aria-label={text.layout.workflowStepsAria}>
-          <ol className="step-list">
-            {stepOrder.map((step, index) => {
-              const className =
-                index === activeIndex ? 'is-active' : index < activeIndex ? 'is-complete' : '';
-              return (
-                <li key={step} className={className}>
-                  <span className="step-index">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="step-copy">
-                    <span className="step-label">{text.layout.steps[step]}</span>
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-        <div className="context-card-grid">
-          <SummaryCard
-            className="context-card"
-            labelClassName="context-card-label"
-            valueClassName="context-card-value context-card-value-clamp"
-            valueProps={{ title: context.source }}
-            label={text.layout.contextLabels.source}
-            value={renderContextValue(context.source)}
-          />
-          <SummaryCard
-            className="context-card"
-            labelClassName="context-card-label"
-            valueClassName="context-card-value context-card-value-clamp"
-            valueProps={{ title: context.playlist }}
-            label={text.layout.contextLabels.playlist}
-            value={renderContextValue(context.playlist)}
-          />
-          <SummaryCard
-            className="context-card"
-            labelClassName="context-card-label"
-            valueClassName="context-card-value context-card-value-clamp"
-            valueProps={{ title: context.output }}
-            label={text.layout.contextLabels.output}
-            value={renderContextValue(context.output)}
-          />
-          <SummaryCard
-            className="context-card"
-            labelClassName="context-card-label"
-            valueClassName="context-card-value context-card-value-clamp"
-            valueProps={{ title: context.task }}
-            label={text.layout.contextLabels.task}
-            value={renderContextValue(context.task)}
-          />
-        </div>
-      </section>
-      <main className="page-content">{children}</main>
+        </header>
+        <main className="shell-page">
+          <section className="workflow-summary-row" aria-label={text.layout.contextTitle}>
+            <article className="workflow-summary-card">
+              <span className="summary-label">{text.layout.summaryLabels.step}</span>
+              <strong className="summary-value">{meta.title}</strong>
+            </article>
+            <article className="workflow-summary-card">
+              <span className="summary-label">{text.layout.summaryLabels.source}</span>
+              <strong className="summary-value" title={context.source}>
+                {renderContextValue(context.source)}
+              </strong>
+            </article>
+            <article className="workflow-summary-card">
+              <span className="summary-label">{text.layout.summaryLabels.playlist}</span>
+              <strong className="summary-value" title={context.playlist}>
+                {renderContextValue(context.playlist)}
+              </strong>
+            </article>
+            <article className="workflow-summary-card">
+              <span className="summary-label">{text.layout.summaryLabels.status}</span>
+              <strong className="summary-value" title={context.task}>
+                {renderContextValue(context.task)}
+              </strong>
+            </article>
+          </section>
+          <section className="workflow-page-grid">
+            <div className="workflow-page-main">{children}</div>
+            <aside className="workflow-page-aside">
+              <SummaryCard
+                className="context-card"
+                labelClassName="context-card-label"
+                valueClassName="context-card-value context-card-value-clamp"
+                valueProps={{ title: context.source }}
+                label={text.layout.contextLabels.source}
+                value={renderContextValue(context.source)}
+              />
+              <SummaryCard
+                className="context-card"
+                labelClassName="context-card-label"
+                valueClassName="context-card-value context-card-value-clamp"
+                valueProps={{ title: context.playlist }}
+                label={text.layout.contextLabels.playlist}
+                value={renderContextValue(context.playlist)}
+              />
+              <SummaryCard
+                className="context-card"
+                labelClassName="context-card-label"
+                valueClassName="context-card-value context-card-value-clamp"
+                valueProps={{ title: context.output }}
+                label={text.layout.contextLabels.output}
+                value={renderContextValue(context.output)}
+              />
+              <SummaryCard
+                className="context-card"
+                labelClassName="context-card-label"
+                valueClassName="context-card-value context-card-value-clamp"
+                valueProps={{ title: context.task }}
+                label={text.layout.contextLabels.task}
+                value={renderContextValue(context.task)}
+              />
+            </aside>
+          </section>
+        </main>
+      </div>
     </div>
   );
 }

@@ -12,6 +12,27 @@ const source = {
 };
 
 describe('BDInfoPage', () => {
+  it('renders bdinfo as a split workspace with support cards in the aside column', () => {
+    const { container } = render(
+      <BDInfoPage
+        locale="en"
+        source={source}
+        bdinfoText=""
+        parsed={null}
+        error={null}
+        loading={false}
+        onBack={vi.fn()}
+        onTextChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.workspace-card.bdinfo-workspace')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-layout')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-sidebar.supporting-card')).not.toBeNull();
+    expect(screen.getByText(/bdinfo example/i).closest('.supporting-card')).not.toBeNull();
+  });
+
   it('renders the bdinfo sample below the actions instead of inside the sidebar', () => {
     render(
       <BDInfoPage
@@ -84,5 +105,63 @@ describe('BDInfoPage', () => {
     expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.bdinfo-summary-card'))).toBe(true);
     expect(screen.getByText(/audio labels found: 2/i)).toBeInTheDocument();
     expect(screen.getByText(/subtitle labels found: 2/i)).toBeInTheDocument();
+  });
+
+  it('preserves bdinfo submit gating and action callbacks in the redesigned workspace', () => {
+    const onBack = vi.fn();
+    const onSubmit = vi.fn();
+    const { rerender } = render(
+      <BDInfoPage
+        locale="en"
+        source={source}
+        bdinfoText=""
+        parsed={null}
+        error={null}
+        loading={false}
+        onBack={onBack}
+        onTextChange={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const submitButton = screen.getByRole('button', { name: /parse bdinfo and continue/i });
+    expect(submitButton).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <BDInfoPage
+        locale="en"
+        source={source}
+        bdinfoText="PLAYLIST REPORT"
+        parsed={null}
+        error={null}
+        loading={true}
+        onBack={onBack}
+        onTextChange={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /parsing/i })).toBeDisabled();
+
+    rerender(
+      <BDInfoPage
+        locale="en"
+        source={source}
+        bdinfoText="PLAYLIST REPORT"
+        parsed={null}
+        error={null}
+        loading={false}
+        onBack={onBack}
+        onTextChange={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const enabledSubmitButton = screen.getByRole('button', { name: /parse bdinfo and continue/i });
+    expect(enabledSubmitButton).not.toBeDisabled();
+    fireEvent.click(enabledSubmitButton);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
