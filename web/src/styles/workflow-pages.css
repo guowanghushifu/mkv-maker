@@ -386,7 +386,7 @@ textarea:focus {
 }
 
 .track-editor-table .col-drag {
-  width: 3.2rem;
+  width: 3.4rem;
 }
 
 .track-editor-table .col-id {
@@ -490,7 +490,7 @@ textarea:focus {
 
 .track-editor-table .track-language-input {
   width: 100%;
-  min-width: 6.2rem;
+  min-width: 6rem;
 }
 
 .track-editor-table .track-audio-format-cell {
