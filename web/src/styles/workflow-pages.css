@@ -177,7 +177,22 @@ textarea:focus {
 }
 
 .workspace-card {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: var(--shadow-md);
   padding: 1.35rem;
+}
+
+.workspace-card h2,
+.workspace-card h3,
+.workspace-card h4 {
+  margin-top: 0;
 }
 
 .workspace-header,
