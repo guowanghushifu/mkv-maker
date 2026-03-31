@@ -11,6 +11,13 @@ const longPathSource = {
   modifiedAt: '2026-03-29T12:00:00Z',
 };
 
+const secondSource = {
+  ...longPathSource,
+  id: 'disc-2',
+  name: 'Another Disc',
+  path: '/bd_input/Another Disc/BDMV',
+};
+
 describe('ScanPage', () => {
   it('renders sources as selectable cards before the table details', () => {
     const { container } = render(
@@ -31,6 +38,23 @@ describe('ScanPage', () => {
     expect(screen.getByText(longPathSource.name).closest('.source-card')).not.toBeNull();
     expect(screen.getByText(/BDMV Directory/i)).toBeInTheDocument();
     expect(screen.getByText(/1\.0 KB/i)).toBeInTheDocument();
+  });
+
+  it('uses a dedicated two-up grid layout for source cards', () => {
+    const { container } = render(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[longPathSource, secondSource]}
+        selectedSourceId={null}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.source-grid.source-grid-two-up')).not.toBeNull();
   });
 
   it('renders long source names with hoverable full text metadata in the source card', () => {

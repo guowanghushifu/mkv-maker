@@ -55,10 +55,6 @@ export function BDInfoPage({
               {loading ? text.bdinfo.submittingButton : text.bdinfo.submitButton}
             </Button>
           </div>
-          <section className="bdinfo-sample">
-            <h3>{text.bdinfo.sampleTitle}</h3>
-            <pre>{sampleBDInfo}</pre>
-          </section>
         </div>
 
         <aside className="bdinfo-sidebar">
@@ -84,6 +80,11 @@ export function BDInfoPage({
           ) : null}
         </aside>
       </div>
+
+      <section className="bdinfo-sample">
+        <h3>{text.bdinfo.sampleTitle}</h3>
+        <pre>{sampleBDInfo}</pre>
+      </section>
     </section>
   );
 }

@@ -28,7 +28,6 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
       <header className="app-header app-hero">
         <div className="app-header-top">
           <div className="app-hero-copy">
-            <p className="app-eyebrow">{text.layout.appEyebrow}</p>
             <h1>{text.layout.appTitle}</h1>
             <p>{text.layout.appSubtitle}</p>
           </div>

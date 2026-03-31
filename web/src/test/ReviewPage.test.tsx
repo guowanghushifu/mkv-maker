@@ -64,11 +64,8 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/mkvmerge/i).closest('pre')).toHaveClass('scroll-panel');
     expect(screen.getByText(/\[2026-03-30T00:00:01Z\] Progress: 42%/i)).toHaveClass('scroll-panel');
     expect(screen.getByRole('button', { name: /start next remux/i }).closest('.review-actions-secondary')).not.toBeNull();
-    expect(screen.getByText(/Nightcrawler Disc/i).closest('.review-summary-card')).not.toBeNull();
-    expect(screen.getByText(/00003\.MPLS/i).closest('.review-summary-card')).not.toBeNull();
-    expect(
-      screen.getAllByText(/Nightcrawler - 2160p\.mkv/i).some((node) => node.closest('.review-summary-card'))
-    ).toBe(true);
+    expect(screen.queryByText(/^Nightcrawler Disc$/i)).toBeNull();
+    expect(screen.queryByText(/^00003\.MPLS$/i)).toBeNull();
     expect(screen.getByText(/current remux/i).closest('.job-console')).not.toBeNull();
   });
 

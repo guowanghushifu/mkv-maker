@@ -129,7 +129,7 @@ export function TrackEditorPage({
             </colgroup>
             <thead>
               <tr>
-                <th scope="col" aria-label={text.editor.columns.drag} />
+                <th scope="col">{text.editor.columns.drag}</th>
                 <th scope="col">{text.editor.columns.id}</th>
                 <th scope="col">{text.editor.columns.track}</th>
                 <th scope="col">{text.editor.columns.language}</th>
@@ -174,7 +174,7 @@ export function TrackEditorPage({
                       onDragEnd={handleDragEnd}
                       onKeyDown={(event) => handleKeyboardReorder(group, track.id, event.key)}
                     >
-                      ⋮⋮
+                      ↕
                     </button>
                   </td>
                   <td className="track-id-cell">{track.id}</td>
@@ -264,7 +264,7 @@ export function TrackEditorPage({
       <div className="editor-overview-grid">
         <div className="editor-overview-pair">
           <article className="editor-overview-card">
-            <div className="stack">
+            <div className="stack editor-field-full">
               <label htmlFor="draft-title">{text.editor.titleLabel}</label>
               <input
                 id="draft-title"
@@ -276,7 +276,7 @@ export function TrackEditorPage({
           </article>
 
           <article className="editor-overview-card">
-            <div className="stack">
+            <div className="stack editor-field-full">
               <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
               <input
                 id="video-track-name"

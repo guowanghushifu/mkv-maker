@@ -167,6 +167,7 @@ describe('App', () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     render(<App />);
     expect(screen.getByRole('heading', { name: /MKV Remux Tool/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Media Mastering Console/i)).not.toBeInTheDocument();
     expect(screen.getByText('任务概览')).toBeInTheDocument();
     expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
   });

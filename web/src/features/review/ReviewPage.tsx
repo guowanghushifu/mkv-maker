@@ -76,17 +76,6 @@ export function ReviewPage({
         </div>
       </div>
 
-      <div className="review-summary-grid">
-        <SummaryCard className="review-summary-card" label={text.review.source} value={source.name} />
-        <SummaryCard className="review-summary-card" label={text.review.playlist} value={bdinfo.playlistName} />
-        <SummaryCard className="review-summary-card" label={text.review.filename} value={outputFilename} />
-        <SummaryCard
-          className="review-summary-card"
-          label={text.review.dolbyVisionMergeEnabled}
-          value={draft.dvMergeEnabled ? text.review.yes : text.review.no}
-        />
-      </div>
-
       <section className="review-track-panel">
         <div className="section-heading">
           <h3>{text.review.finalTrackList}</h3>

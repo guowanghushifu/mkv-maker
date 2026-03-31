@@ -213,7 +213,7 @@ export const messages: Record<Locale, MessageSet> = {
       backButton: '返回',
       nextButton: '下一步',
       columns: {
-        drag: '拖拽',
+        drag: '移动',
         id: 'ID',
         track: '轨道',
         language: '语言',
@@ -345,7 +345,7 @@ export const messages: Record<Locale, MessageSet> = {
       backButton: 'Back',
       nextButton: 'Continue to Review',
       columns: {
-        drag: 'Drag',
+        drag: 'Move',
         id: 'ID',
         track: 'Track',
         language: 'Language',

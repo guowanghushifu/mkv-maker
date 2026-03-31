@@ -37,7 +37,7 @@ describe('TrackEditorPage', () => {
 
     const [audioTable, subtitleTable] = screen.getAllByRole('table');
     expect(within(audioTable).getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
-      '',
+      'Move',
       'ID',
       'Track',
       'Language',
@@ -47,7 +47,7 @@ describe('TrackEditorPage', () => {
     ]);
     expect(
       within(subtitleTable).getAllByRole('columnheader').map((header) => header.textContent?.trim()),
-    ).toEqual(['', 'ID', 'Track', 'Language', 'Include', 'Default']);
+    ).toEqual(['Move', 'ID', 'Track', 'Language', 'Include', 'Default']);
 
     expect(screen.getByText('a1')).toBeInTheDocument();
     expect(screen.getByText('a2')).toBeInTheDocument();
@@ -76,8 +76,8 @@ describe('TrackEditorPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: /track editor/i }).closest('.page-panel')).not.toBeNull();
-    expect(screen.getByLabelText(/title/i).closest('.editor-overview-pair')).not.toBeNull();
-    expect(screen.getByLabelText(/video track name/i).closest('.editor-overview-pair')).not.toBeNull();
+    expect(screen.getByLabelText(/title/i).closest('.editor-field-full')).not.toBeNull();
+    expect(screen.getByLabelText(/video track name/i).closest('.editor-field-full')).not.toBeNull();
     expect(screen.getByLabelText(/output filename/i).closest('.editor-overview-card-wide')).not.toBeNull();
     expect(screen.getByText(/video source attributes: hevc \/ 2160p \/ dv\.hdr/i).closest('.editor-overview-card')).not.toBeNull();
   });
@@ -193,6 +193,7 @@ describe('TrackEditorPage', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
+    expect(screen.getByRole('button', { name: /drag commentary/i })).toHaveTextContent('↕');
     fireEvent.keyDown(screen.getByRole('button', { name: /drag commentary/i }), { key: 'ArrowUp' });
 
     expect(onChange).toHaveBeenCalledTimes(1);

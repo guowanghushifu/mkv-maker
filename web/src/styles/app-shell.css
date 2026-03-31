@@ -11,7 +11,7 @@
 .app-hero {
   position: relative;
   overflow: hidden;
-  padding: 1.5rem 1.6rem;
+  padding: 0.95rem 1rem;
   border: 1px solid var(--line);
   border-radius: 24px;
   background:
@@ -31,7 +31,6 @@
   max-width: 44rem;
 }
 
-.app-eyebrow,
 .context-kicker {
   margin: 0 0 0.45rem;
   color: var(--accent);
@@ -42,18 +41,17 @@
 
 .app-header h1 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(2.2rem, 4vw, 3.5rem);
-  line-height: 0.96;
+  font-size: clamp(1.55rem, 2.4vw, 2rem);
+  line-height: 1.05;
   letter-spacing: 0.01em;
 }
 
 .app-header p {
-  margin: 0.55rem 0 0;
+  margin: 0.35rem 0 0;
   max-width: 38rem;
   color: var(--text-muted);
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .app-hero-actions {
@@ -218,7 +216,6 @@
 .stack {
   display: grid;
   gap: 0.6rem;
-  max-width: 420px;
 }
 
 .muted-text {

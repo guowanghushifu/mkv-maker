@@ -77,7 +77,7 @@ export function ScanPage({
           <p className="muted-text">{text.scan.empty}</p>
         </div>
       ) : (
-        <div className="source-grid">
+        <div className="source-grid source-grid-two-up">
           {sources.map((source) => {
             const isSelected = source.id === selectedSourceId;
             return (
