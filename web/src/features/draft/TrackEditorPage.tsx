@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import type { Draft, DraftTrack } from '../../api/types';
+import { Button } from '../../components/Button';
 import { getMessages, type Locale } from '../../i18n';
 import { moveTrackRow, setExclusiveDefault, toggleTrackSelected } from './trackTable';
 
@@ -114,208 +115,230 @@ export function TrackEditorPage({
     const isAudioTable = group === 'audio';
 
     return (
-    <div className="track-table-wrap">
-      <table className="track-editor-table">
-        <colgroup>
-          <col className="col-drag" />
-          <col className="col-id" />
-          <col className="col-track" />
-          <col className="col-language" />
-          {isAudioTable ? <col className="col-audio-format" /> : null}
-          <col className="col-include" />
-          <col className="col-default" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th scope="col" aria-label={text.editor.columns.drag} />
-            <th scope="col">{text.editor.columns.id}</th>
-            <th scope="col">{text.editor.columns.track}</th>
-            <th scope="col">{text.editor.columns.language}</th>
-            {isAudioTable ? <th scope="col">{text.editor.columns.audioFormat}</th> : null}
-            <th scope="col">{text.editor.columns.include}</th>
-            <th scope="col">{text.editor.columns.default}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tracks.map((track) => (
-            <tr
-              key={track.id}
-              className={[
-                track.selected ? 'is-selected' : 'is-muted',
-                dropTarget?.group === group && dropTarget.trackId === track.id ? 'is-drop-target' : '',
-              ]
-                .join(' ')
-                .trim()}
-              onDragEnter={() => setDropTarget({ group, trackId: track.id })}
-              onDragLeave={() => setDropTarget((current) => {
-                if (current?.group === group && current.trackId === track.id) {
-                  return null;
-                }
-                return current;
-              })}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDropTarget({ group, trackId: track.id });
-                if (event.dataTransfer) {
-                  event.dataTransfer.dropEffect = 'move';
-                }
-              }}
-              onDrop={(event) => handleDrop(event, group, track.id)}
-            >
-              <td className="drag-cell">
-                <button
-                  type="button"
-                  className="drag-handle"
-                  aria-label={text.editor.dragTrack(track.name)}
-                  draggable
-                  onDragStart={(event) => handleDragStart(event, group, track.id)}
-                  onDragEnd={handleDragEnd}
-                  onKeyDown={(event) => handleKeyboardReorder(group, track.id, event.key)}
+      <div className="track-section-panel">
+        <div className="track-table-wrap">
+          <table className="track-editor-table">
+            <colgroup>
+              <col className="col-drag" />
+              <col className="col-id" />
+              <col className="col-track" />
+              <col className="col-language" />
+              {isAudioTable ? <col className="col-audio-format" /> : null}
+              <col className="col-include" />
+              <col className="col-default" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" aria-label={text.editor.columns.drag} />
+                <th scope="col">{text.editor.columns.id}</th>
+                <th scope="col">{text.editor.columns.track}</th>
+                <th scope="col">{text.editor.columns.language}</th>
+                {isAudioTable ? <th scope="col">{text.editor.columns.audioFormat}</th> : null}
+                <th scope="col">{text.editor.columns.include}</th>
+                <th scope="col">{text.editor.columns.default}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tracks.map((track) => (
+                <tr
+                  key={track.id}
+                  className={[
+                    track.selected ? 'is-selected' : 'is-muted',
+                    dropTarget?.group === group && dropTarget.trackId === track.id ? 'is-drop-target' : '',
+                  ]
+                    .join(' ')
+                    .trim()}
+                  onDragEnter={() => setDropTarget({ group, trackId: track.id })}
+                  onDragLeave={() => setDropTarget((current) => {
+                    if (current?.group === group && current.trackId === track.id) {
+                      return null;
+                    }
+                    return current;
+                  })}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDropTarget({ group, trackId: track.id });
+                    if (event.dataTransfer) {
+                      event.dataTransfer.dropEffect = 'move';
+                    }
+                  }}
+                  onDrop={(event) => handleDrop(event, group, track.id)}
                 >
-                  ⋮⋮
-                </button>
-              </td>
-              <td className="track-id-cell">{track.id}</td>
-              <td>
-                <input
-                  type="text"
-                  className="track-name-input"
-                  aria-label={text.editor.trackName(track.name)}
-                  value={track.name}
-                  onChange={(event) => {
-                    if (group === 'audio') {
-                      updateAudioTrack(track.id, (current) => ({ ...current, name: event.target.value }));
-                      return;
-                    }
-                    updateSubtitleTrack(track.id, (current) => ({ ...current, name: event.target.value }));
-                  }}
-                />
-              </td>
-              <td>
-                <input
-                  type="text"
-                  className="track-language-input"
-                  aria-label={text.editor.language(track.name)}
-                  value={track.language}
-                  onChange={(event) => {
-                    if (group === 'audio') {
-                      updateAudioTrack(track.id, (current) => ({
-                        ...current,
-                        language: event.target.value,
-                      }));
-                      return;
-                    }
-                    updateSubtitleTrack(track.id, (current) => ({
-                      ...current,
-                      language: event.target.value,
-                    }));
-                  }}
-                />
-              </td>
-              {isAudioTable ? <td className="track-audio-format-cell">{track.codecLabel || ''}</td> : null}
-              <td>
-                <input
-                  type="checkbox"
-                  aria-label={text.editor.include(track.name)}
-                  checked={track.selected}
-                  onChange={() => {
-                    if (group === 'audio') {
-                      updateAudio(toggleTrackSelected(draft.audio, track.id));
-                      return;
-                    }
-                    updateSubtitles(toggleTrackSelected(draft.subtitles, track.id));
-                  }}
-                />
-              </td>
-              <td>
-                <input
-                  type="checkbox"
-                  aria-label={text.editor.default(track.name)}
-                  checked={track.default}
-                  disabled={!track.selected}
-                  onChange={() => {
-                    if (group === 'audio') {
-                      updateAudio(setExclusiveDefault(draft.audio, track.id));
-                      return;
-                    }
-                    updateSubtitles(setExclusiveDefault(draft.subtitles, track.id));
-                  }}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  <td className="drag-cell">
+                    <button
+                      type="button"
+                      className="drag-handle"
+                      aria-label={text.editor.dragTrack(track.name)}
+                      draggable
+                      onDragStart={(event) => handleDragStart(event, group, track.id)}
+                      onDragEnd={handleDragEnd}
+                      onKeyDown={(event) => handleKeyboardReorder(group, track.id, event.key)}
+                    >
+                      ⋮⋮
+                    </button>
+                  </td>
+                  <td className="track-id-cell">{track.id}</td>
+                  <td>
+                    <input
+                      type="text"
+                      className="track-name-input"
+                      aria-label={text.editor.trackName(track.name)}
+                      value={track.name}
+                      onChange={(event) => {
+                        if (group === 'audio') {
+                          updateAudioTrack(track.id, (current) => ({ ...current, name: event.target.value }));
+                          return;
+                        }
+                        updateSubtitleTrack(track.id, (current) => ({ ...current, name: event.target.value }));
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      className="track-language-input"
+                      aria-label={text.editor.language(track.name)}
+                      value={track.language}
+                      onChange={(event) => {
+                        if (group === 'audio') {
+                          updateAudioTrack(track.id, (current) => ({
+                            ...current,
+                            language: event.target.value,
+                          }));
+                          return;
+                        }
+                        updateSubtitleTrack(track.id, (current) => ({
+                          ...current,
+                          language: event.target.value,
+                        }));
+                      }}
+                    />
+                  </td>
+                  {isAudioTable ? <td className="track-audio-format-cell">{track.codecLabel || ''}</td> : null}
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={text.editor.include(track.name)}
+                      checked={track.selected}
+                      onChange={() => {
+                        if (group === 'audio') {
+                          updateAudio(toggleTrackSelected(draft.audio, track.id));
+                          return;
+                        }
+                        updateSubtitles(toggleTrackSelected(draft.subtitles, track.id));
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={text.editor.default(track.name)}
+                      checked={track.default}
+                      disabled={!track.selected}
+                      onChange={() => {
+                        if (group === 'audio') {
+                          updateAudio(setExclusiveDefault(draft.audio, track.id));
+                          return;
+                        }
+                        updateSubtitles(setExclusiveDefault(draft.subtitles, track.id));
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     );
   };
 
   return (
-    <section className="panel">
-      <h2>{text.editor.title}</h2>
-
-      <div className="stack">
-        <label htmlFor="draft-title">{text.editor.titleLabel}</label>
-        <input
-          id="draft-title"
-          type="text"
-          value={draft.title || ''}
-          onChange={(event) => updateTitle(event.target.value)}
-        />
-        <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
-        <input
-          id="video-track-name"
-          type="text"
-          value={draft.video.name}
-          onChange={(event) => updateVideoName(event.target.value)}
-        />
+    <section className="panel page-panel editor-panel">
+      <div className="panel-header">
+        <div>
+          <h2>{text.editor.title}</h2>
+        </div>
       </div>
 
-      <p>
-        {text.editor.videoSourceAttributes}: {draft.video.codec} / {draft.video.resolution}
-        {draft.video.hdrType ? ` / ${draft.video.hdrType}` : ''}
-      </p>
+      <div className="editor-overview-grid">
+        <article className="editor-overview-card">
+          <div className="stack">
+            <label htmlFor="draft-title">{text.editor.titleLabel}</label>
+            <input
+              id="draft-title"
+              type="text"
+              value={draft.title || ''}
+              onChange={(event) => updateTitle(event.target.value)}
+            />
+          </div>
+        </article>
 
-      {typeof filenamePreview === 'string' ? (
-        <div className="info-box">
-          <p>
-            <strong>{text.editor.liveFilenamePreview}:</strong> {filenamePreview}
+        <article className="editor-overview-card">
+          <div className="stack">
+            <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
+            <input
+              id="video-track-name"
+              type="text"
+              value={draft.video.name}
+              onChange={(event) => updateVideoName(event.target.value)}
+            />
+          </div>
+          <p className="editor-meta-line">
+            {text.editor.videoSourceAttributes}: {draft.video.codec} / {draft.video.resolution}
+            {draft.video.hdrType ? ` / ${draft.video.hdrType}` : ''}
           </p>
-          {onFilenameChange ? (
-            <>
-              <label htmlFor="output-filename">{text.editor.outputFilename}</label>
-              <input
-                id="output-filename"
-                type="text"
-                value={outputFilename || ''}
-                onChange={(event) => onFilenameChange(event.target.value)}
-              />
-            </>
-          ) : null}
+        </article>
+
+        {typeof filenamePreview === 'string' ? (
+          <article className="editor-overview-card">
+            <p>
+              <strong>{text.editor.liveFilenamePreview}:</strong> {filenamePreview}
+            </p>
+            {onFilenameChange ? (
+              <div className="stack">
+                <label htmlFor="output-filename">{text.editor.outputFilename}</label>
+                <input
+                  id="output-filename"
+                  type="text"
+                  value={outputFilename || ''}
+                  onChange={(event) => onFilenameChange(event.target.value)}
+                />
+              </div>
+            ) : null}
+          </article>
+        ) : null}
+      </div>
+
+      <section className="editor-track-section">
+        <div className="section-heading">
+          <h3>{text.editor.audioHeading}</h3>
         </div>
-      ) : null}
+        {renderTrackTable('audio', draft.audio)}
+      </section>
 
-      <h3>{text.editor.audioHeading}</h3>
-      {renderTrackTable('audio', draft.audio)}
-
-      <h3>{text.editor.subtitlesHeading}</h3>
-      {draft.subtitles.length === 0 ? (
-        <p className="muted-text">{text.editor.noSubtitles}</p>
-      ) : (
-        renderTrackTable('subtitles', draft.subtitles)
-      )}
+      <section className="editor-track-section">
+        <div className="section-heading">
+          <h3>{text.editor.subtitlesHeading}</h3>
+        </div>
+        {draft.subtitles.length === 0 ? (
+          <p className="muted-text">{text.editor.noSubtitles}</p>
+        ) : (
+          renderTrackTable('subtitles', draft.subtitles)
+        )}
+      </section>
 
       {onBack || onNext ? (
         <div className="row editor-actions">
           {onBack ? (
-            <button type="button" onClick={onBack}>
+            <Button variant="subtle" onClick={onBack}>
               {text.editor.backButton}
-            </button>
+            </Button>
           ) : null}
           {onNext ? (
-            <button type="button" onClick={onNext}>
+            <Button onClick={onNext}>
               {text.editor.nextButton}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

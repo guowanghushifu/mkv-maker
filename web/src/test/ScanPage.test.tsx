@@ -12,9 +12,10 @@ const longPathSource = {
 };
 
 describe('ScanPage', () => {
-  it('keeps fixed columns compact so name and path can use remaining space', () => {
+  it('renders sources as selectable cards before the table details', () => {
     const { container } = render(
       <ScanPage
+        locale="en"
         loading={false}
         error={null}
         sources={[longPathSource]}
@@ -25,19 +26,17 @@ describe('ScanPage', () => {
       />,
     );
 
-    const columns = Array.from(container.querySelectorAll('.source-table col'));
-    expect(columns).toHaveLength(6);
-    expect(columns[1]).not.toHaveClass('col-name');
-    expect(columns[3]).not.toHaveClass('col-path');
-    expect(columns[0]).toHaveClass('col-select');
-    expect(columns[2]).toHaveClass('col-type');
-    expect(columns[4]).toHaveClass('col-size');
-    expect(columns[5]).toHaveClass('col-modified');
+    expect(container.querySelector('.source-grid')).not.toBeNull();
+    expect(container.querySelectorAll('.source-card')).toHaveLength(1);
+    expect(screen.getByText(longPathSource.name).closest('.source-card')).not.toBeNull();
+    expect(screen.getByText(/BDMV Directory/i)).toBeInTheDocument();
+    expect(screen.getByText(/1\.0 KB/i)).toBeInTheDocument();
   });
 
-  it('renders long source names with hoverable full text metadata', () => {
+  it('renders long source names with hoverable full text metadata in the source card', () => {
     render(
       <ScanPage
+        locale="en"
         loading={false}
         error={null}
         sources={[longPathSource]}
@@ -50,12 +49,13 @@ describe('ScanPage', () => {
 
     const nameText = screen.getByText(longPathSource.name);
     expect(nameText).toHaveAttribute('title', longPathSource.name);
-    expect(nameText).toHaveClass('source-name-text');
+    expect(nameText).toHaveClass('source-card-title');
   });
 
-  it('renders long source paths with hoverable full text metadata', () => {
+  it('renders long source paths with hoverable full text metadata in the source card', () => {
     render(
       <ScanPage
+        locale="en"
         loading={false}
         error={null}
         sources={[longPathSource]}
@@ -68,6 +68,23 @@ describe('ScanPage', () => {
 
     const pathText = screen.getByText(longPathSource.path);
     expect(pathText).toHaveAttribute('title', longPathSource.path);
-    expect(pathText).toHaveClass('source-path-text');
+    expect(pathText).toHaveClass('source-card-path');
+  });
+
+  it('marks the selected source card with an active state', () => {
+    const { container } = render(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[longPathSource]}
+        selectedSourceId={longPathSource.id}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.source-card.is-selected')).not.toBeNull();
   });
 });

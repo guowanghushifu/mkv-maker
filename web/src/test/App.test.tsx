@@ -334,7 +334,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /start remux/i }));
 
     await screen.findByText(/current remux/i);
-    expect(await screen.findByText(/succeeded/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/succeeded/i)).length).toBeGreaterThan(0);
     expect(await screen.findByText(/remux completed/i)).toBeInTheDocument();
     expect(screen.queryByText(/waiting for log output/i)).not.toBeInTheDocument();
   });
@@ -441,5 +441,19 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: /^review$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue to bdinfo/i })).toBeDisabled();
     expect(sourceRadio).not.toBeChecked();
+  });
+
+  it('renders workflow context cards on the review step', async () => {
+    installFetchMock({ currentJob: null, currentLog: '' });
+    render(<App />);
+
+    await goToReviewStep();
+
+    expect(screen.getByText(/current session/i)).toBeInTheDocument();
+    const context = screen.getByText(/current session/i).closest('.workflow-context');
+    expect(context).not.toBeNull();
+    expect(screen.getAllByText(/nightcrawler disc/i).some((node) => node.closest('.context-card'))).toBe(true);
+    expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.context-card'))).toBe(true);
+    expect(screen.getAllByText(/nightcrawler - 2160p\.mkv/i).some((node) => node.closest('.context-card'))).toBe(true);
   });
 });

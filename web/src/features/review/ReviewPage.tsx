@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { Draft, DraftTrack, Job, ParsedBDInfo, SourceEntry } from '../../api/types';
+import { Button } from '../../components/Button';
 import { getMessages, type Locale } from '../../i18n';
+import { SummaryCard } from '../../components/SummaryCard';
 import { StatusBadge } from '../../components/StatusBadge';
 
 type ReviewPageProps = {
@@ -66,71 +68,75 @@ export function ReviewPage({
   }, [currentLog, currentJob?.id]);
 
   return (
-    <section className="panel">
-      <h2>{text.review.title}</h2>
-      <p>{text.review.description}</p>
-      <div className="info-box">
-        <p>
-          <strong>{text.review.source}:</strong> {source.name}
-        </p>
-        <p>
-          <strong>{text.review.playlist}:</strong> {bdinfo.playlistName}
-        </p>
-        <p>
-          <strong>{text.review.filename}:</strong> {outputFilename}
-        </p>
-        <p>
-          <strong>{text.review.outputPath}:</strong> {outputPath}
-        </p>
-        <p>
-          <strong>{text.review.dolbyVisionMergeEnabled}:</strong> {draft.dvMergeEnabled ? text.review.yes : text.review.no}
-        </p>
+    <section className="panel page-panel review-panel">
+      <div className="panel-header">
+        <div>
+          <h2>{text.review.title}</h2>
+          <p className="panel-description">{text.review.description}</p>
+        </div>
       </div>
 
-      <h3>{text.review.finalTrackList}</h3>
-      <ol className="ordered-track-list">
-        <li>{text.review.video}: {draft.video.name}</li>
-        {selectedAudio.map((track) => (
-          <li key={`audio-${track.id}`}>{text.review.audio}: {renderTrackSummaryWithLocale(track, locale)}</li>
-        ))}
-        {selectedSubtitles.map((track) => (
-          <li key={`sub-${track.id}`}>{text.review.subtitle}: {renderTrackSummaryWithLocale(track, locale)}</li>
-        ))}
-      </ol>
+      <div className="review-summary-grid">
+        <SummaryCard className="review-summary-card" label={text.review.source} value={source.name} />
+        <SummaryCard className="review-summary-card" label={text.review.playlist} value={bdinfo.playlistName} />
+        <SummaryCard className="review-summary-card" label={text.review.filename} value={outputFilename} />
+        <SummaryCard
+          className="review-summary-card"
+          label={text.review.dolbyVisionMergeEnabled}
+          value={draft.dvMergeEnabled ? text.review.yes : text.review.no}
+        />
+      </div>
+
+      <section className="review-track-panel">
+        <div className="section-heading">
+          <h3>{text.review.finalTrackList}</h3>
+          <p className="muted-text">{outputPath}</p>
+        </div>
+        <ol className="ordered-track-list">
+          <li>{text.review.video}: {draft.video.name}</li>
+          {selectedAudio.map((track) => (
+            <li key={`audio-${track.id}`}>{text.review.audio}: {renderTrackSummaryWithLocale(track, locale)}</li>
+          ))}
+          {selectedSubtitles.map((track) => (
+            <li key={`sub-${track.id}`}>{text.review.subtitle}: {renderTrackSummaryWithLocale(track, locale)}</li>
+          ))}
+        </ol>
+      </section>
 
       <div className="review-actions">
         <div className="review-actions-primary">
-          <button type="button" onClick={onBack}>
+          <Button variant="subtle" onClick={onBack}>
             {text.review.backButton}
-          </button>
-          <button type="button" onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
+          </Button>
+          <Button onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
             {submitting ? text.review.startingRemuxButton : text.review.startRemuxButton}
-          </button>
+          </Button>
         </div>
         <div className="review-actions-secondary">
-          <button
-            type="button"
+          <Button
+            variant="subtle"
             onClick={() => void onStartNextRemux()}
             disabled={currentJob?.status === 'running'}
           >
             {text.review.startNextRemuxButton}
-          </button>
+          </Button>
         </div>
       </div>
       {submitError ? <p className="error-text">{submitError}</p> : null}
 
       {currentJob ? (
-        <section className="info-box current-job-panel">
-          <div className="row">
-            <h3>{text.review.currentRemux}</h3>
+        <section className="job-console current-job-panel">
+          <div className="job-console-header">
+            <div>
+              <p className="context-kicker">{text.review.currentRemux}</p>
+              <h3>{currentJob.outputName}</h3>
+            </div>
             <StatusBadge status={currentJob.status} locale={locale} />
           </div>
-          <p>
-            <strong>{text.review.output}:</strong> {currentJob.outputName}
-          </p>
-          <p>
-            <strong>{text.review.path}:</strong> {currentJob.outputPath}
-          </p>
+          <div className="job-console-grid">
+            <SummaryCard className="review-summary-card" label={text.review.output} value={currentJob.outputName} />
+            <SummaryCard className="review-summary-card" label={text.review.path} value={currentJob.outputPath} />
+          </div>
           <div className="current-job-progress">
             <div className="row">
               <h4>{text.review.progress}</h4>
@@ -147,13 +153,16 @@ export function ReviewPage({
             </div>
           </div>
           {currentJob.commandPreview ? (
-            <div className="current-job-command">
+            <div className="current-job-command console-block">
               <h4>{text.review.commandPreview}</h4>
               <pre className="command-preview scroll-panel">{currentJob.commandPreview}</pre>
             </div>
           ) : null}
           {currentJob.message ? <p className="error-text">{currentJob.message}</p> : null}
-          <pre ref={logRef} className="job-log scroll-panel">{currentLog || text.review.waitingForLogOutput}</pre>
+          <div className="console-block">
+            <h4>{text.review.logOutput}</h4>
+            <pre ref={logRef} className="job-log scroll-panel">{currentLog || text.review.waitingForLogOutput}</pre>
+          </div>
         </section>
       ) : null}
     </section>

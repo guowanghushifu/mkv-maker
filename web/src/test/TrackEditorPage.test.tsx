@@ -63,6 +63,25 @@ describe('TrackEditorPage', () => {
     expect(screen.queryByText(/video source attributes: hevc \/ 2160p \/ hdr\.dv/i)).not.toBeInTheDocument();
   });
 
+  it('renders overview cards for title, video source attributes, and filename preview', () => {
+    render(
+      <TrackEditorPage
+        locale="en"
+        draft={createDraft()}
+        filenamePreview="Demo.Title.2160p.DV.mkv"
+        outputFilename="Demo.Title.2160p.DV.mkv"
+        onFilenameChange={vi.fn()}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: /track editor/i }).closest('.page-panel')).not.toBeNull();
+    expect(screen.getByLabelText(/title/i).closest('.editor-overview-card')).not.toBeNull();
+    expect(screen.getByLabelText(/video track name/i).closest('.editor-overview-card')).not.toBeNull();
+    expect(screen.getByLabelText(/output filename/i).closest('.editor-overview-card')).not.toBeNull();
+    expect(screen.getByText(/video source attributes: hevc \/ 2160p \/ dv\.hdr/i).closest('.editor-overview-card')).not.toBeNull();
+  });
+
   it('clears the previous default audio track when a new default is checked', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
@@ -233,5 +252,14 @@ describe('TrackEditorPage', () => {
 
     expect(screen.getByRole('button', { name: /back/i }).closest('.editor-actions')).not.toBeNull();
     expect(screen.getByRole('button', { name: /continue to review/i }).closest('.editor-actions')).not.toBeNull();
+  });
+
+  it('wraps audio and subtitle tables in dedicated track section panels', () => {
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: /^audio$/i }).closest('.editor-track-section')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: /^subtitles$/i }).closest('.editor-track-section')).not.toBeNull();
+    expect(screen.getAllByRole('table')[0].closest('.track-section-panel')).not.toBeNull();
+    expect(screen.getAllByRole('table')[1].closest('.track-section-panel')).not.toBeNull();
   });
 });

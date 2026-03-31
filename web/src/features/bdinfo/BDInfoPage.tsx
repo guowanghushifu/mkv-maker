@@ -1,4 +1,6 @@
 import type { ParsedBDInfo, SourceEntry } from '../../api/types';
+import { Button } from '../../components/Button';
+import { SummaryCard } from '../../components/SummaryCard';
 import { getMessages, type Locale } from '../../i18n';
 import { sampleBDInfo } from './sampleBDInfo';
 
@@ -28,40 +30,61 @@ export function BDInfoPage({
   const text = getMessages(locale);
 
   return (
-    <section className="panel">
-      <h2>{text.bdinfo.title}</h2>
-      <p>
-        {text.bdinfo.selectedSource}: <strong>{source.name}</strong>
-      </p>
-      <p>{text.bdinfo.description}</p>
-      <textarea
-        value={bdinfoText}
-        onChange={(event) => onTextChange(event.target.value)}
-        rows={12}
-        placeholder={text.bdinfo.placeholder}
-      />
-      {error ? <p className="error-text">{error}</p> : null}
-      {parsed ? (
-        <div className="info-box">
-          <p>
-            {text.bdinfo.playlist}: <strong>{parsed.playlistName}</strong>
-          </p>
-          <p>{text.bdinfo.audioLabelsFound}: {parsed.audioLabels.length}</p>
-          <p>{text.bdinfo.subtitleLabelsFound}: {parsed.subtitleLabels.length}</p>
+    <section className="panel page-panel bdinfo-panel">
+      <div className="panel-header">
+        <div>
+          <h2>{text.bdinfo.title}</h2>
+          <p className="panel-description">{text.bdinfo.description}</p>
         </div>
-      ) : null}
-      <div className="row bdinfo-actions">
-        <button type="button" onClick={onBack}>
-          {text.bdinfo.backButton}
-        </button>
-        <button type="button" onClick={() => void onSubmit()} disabled={!bdinfoText.trim() || loading}>
-          {loading ? text.bdinfo.submittingButton : text.bdinfo.submitButton}
-        </button>
       </div>
-      <section className="bdinfo-sample">
-        <h3>{text.bdinfo.sampleTitle}</h3>
-        <pre>{sampleBDInfo}</pre>
-      </section>
+
+      <div className="bdinfo-layout">
+        <div className="bdinfo-composer">
+          <textarea
+            value={bdinfoText}
+            onChange={(event) => onTextChange(event.target.value)}
+            rows={16}
+            placeholder={text.bdinfo.placeholder}
+          />
+          {error ? <p className="error-text">{error}</p> : null}
+          <div className="row bdinfo-actions">
+            <Button variant="subtle" onClick={onBack}>
+              {text.bdinfo.backButton}
+            </Button>
+            <Button onClick={() => void onSubmit()} disabled={!bdinfoText.trim() || loading}>
+              {loading ? text.bdinfo.submittingButton : text.bdinfo.submitButton}
+            </Button>
+          </div>
+        </div>
+
+        <aside className="bdinfo-sidebar">
+          <SummaryCard
+            className="bdinfo-source-card"
+            label={text.bdinfo.selectedSource}
+            value={source.name}
+          >
+            <span className="source-card-path" title={source.path}>
+              {source.path}
+            </span>
+          </SummaryCard>
+
+          {parsed ? (
+            <SummaryCard
+              className="bdinfo-summary-card"
+              label={text.bdinfo.playlist}
+              value={parsed.playlistName}
+            >
+              <p>{text.bdinfo.audioLabelsFound}: {parsed.audioLabels.length}</p>
+              <p>{text.bdinfo.subtitleLabelsFound}: {parsed.subtitleLabels.length}</p>
+            </SummaryCard>
+          ) : null}
+
+          <section className="bdinfo-sample">
+            <h3>{text.bdinfo.sampleTitle}</h3>
+            <pre>{sampleBDInfo}</pre>
+          </section>
+        </aside>
+      </div>
     </section>
   );
 }

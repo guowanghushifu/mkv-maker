@@ -1,0 +1,61 @@
+:root {
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Times New Roman', serif;
+  --font-body: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SFMono-Regular', 'IBM Plex Mono', Menlo, Monaco, Consolas, monospace;
+  --bg: #091017;
+  --bg-elevated: rgba(17, 26, 36, 0.84);
+  --bg-panel: rgba(18, 28, 38, 0.92);
+  --bg-panel-strong: rgba(14, 21, 29, 0.96);
+  --bg-soft: rgba(95, 130, 165, 0.12);
+  --line: rgba(148, 175, 206, 0.18);
+  --line-strong: rgba(148, 175, 206, 0.34);
+  --text: #ebf3fb;
+  --text-muted: #9fb0c1;
+  --text-dim: #74879d;
+  --accent: #6bd0ff;
+  --accent-strong: #1da7ff;
+  --accent-soft: rgba(107, 208, 255, 0.14);
+  --success: #5ed08c;
+  --warning: #ffc36b;
+  --danger: #ff8b8b;
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 14px 40px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(36, 87, 128, 0.32), transparent 28%),
+    radial-gradient(circle at 85% 10%, rgba(11, 131, 163, 0.2), transparent 24%),
+    linear-gradient(180deg, #0b1118 0%, #091017 52%, #060b10 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}

@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { Button } from '../../components/Button';
 import { getMessages, type Locale } from '../../i18n';
 
 type LoginPageProps = {
@@ -44,9 +45,9 @@ export function LoginPage({ locale = 'zh', onSuccess, error: externalError }: Lo
             </div>
             {error ? <p className="error-text">{error}</p> : null}
             {externalError ? <p className="error-text">{externalError}</p> : null}
-            <button type="submit" className="login-submit-button">
+            <Button type="submit" className="login-submit-button">
               {text.login.continueButton}
-            </button>
+            </Button>
           </form>
         </div>
       </div>

@@ -1,3 +1,5 @@
+import { Button } from './Button';
+import { SummaryCard } from './SummaryCard';
 import type { PropsWithChildren } from 'react';
 import { getMessages, type Locale } from '../i18n';
 
@@ -7,40 +9,89 @@ type LayoutProps = PropsWithChildren<{
   currentStep: WorkflowStep;
   locale: Locale;
   onToggleLocale: () => void;
+  context: {
+    source: string;
+    playlist: string;
+    output: string;
+    task: string;
+  };
 }>;
 
 const stepOrder: WorkflowStep[] = ['login', 'scan', 'bdinfo', 'editor', 'review'];
 
-export function Layout({ currentStep, locale, onToggleLocale, children }: LayoutProps) {
+export function Layout({ currentStep, locale, onToggleLocale, context, children }: LayoutProps) {
   const activeIndex = stepOrder.indexOf(currentStep);
   const text = getMessages(locale);
 
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className="app-header app-hero">
         <div className="app-header-top">
-          <div>
+          <div className="app-hero-copy">
+            <p className="app-eyebrow">{text.layout.appEyebrow}</p>
             <h1>{text.layout.appTitle}</h1>
             <p>{text.layout.appSubtitle}</p>
           </div>
-          <button type="button" className="locale-toggle" onClick={onToggleLocale}>
-            {text.layout.localeToggle}
-          </button>
+          <div className="app-hero-actions">
+            <Button variant="subtle" className="locale-toggle" onClick={onToggleLocale}>
+              {text.layout.localeToggle}
+            </Button>
+          </div>
         </div>
       </header>
-      <nav aria-label={text.layout.workflowStepsAria}>
-        <ol className="step-list">
-          {stepOrder.map((step, index) => {
-            const className =
-              index === activeIndex ? 'is-active' : index < activeIndex ? 'is-complete' : '';
-            return (
-              <li key={step} className={className}>
-                {text.layout.steps[step]}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      <section className="workflow-context">
+        <div className="workflow-context-header">
+          <div>
+            <p className="context-kicker">{text.layout.contextTitle}</p>
+          </div>
+        </div>
+        <nav aria-label={text.layout.workflowStepsAria}>
+          <ol className="step-list">
+            {stepOrder.map((step, index) => {
+              const className =
+                index === activeIndex ? 'is-active' : index < activeIndex ? 'is-complete' : '';
+              return (
+                <li key={step} className={className}>
+                  <span className="step-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="step-copy">
+                    <span className="step-label">{text.layout.steps[step]}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+        <div className="context-card-grid">
+          <SummaryCard
+            className="context-card"
+            labelClassName="context-card-label"
+            valueClassName="context-card-value"
+            label={text.layout.contextLabels.source}
+            value={context.source}
+          />
+          <SummaryCard
+            className="context-card"
+            labelClassName="context-card-label"
+            valueClassName="context-card-value"
+            label={text.layout.contextLabels.playlist}
+            value={context.playlist}
+          />
+          <SummaryCard
+            className="context-card"
+            labelClassName="context-card-label"
+            valueClassName="context-card-value"
+            label={text.layout.contextLabels.output}
+            value={context.output}
+          />
+          <SummaryCard
+            className="context-card"
+            labelClassName="context-card-label"
+            valueClassName="context-card-value"
+            label={text.layout.contextLabels.task}
+            value={context.task}
+          />
+        </div>
+      </section>
       <main className="page-content">{children}</main>
     </div>
   );

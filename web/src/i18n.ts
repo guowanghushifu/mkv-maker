@@ -5,10 +5,21 @@ export const tokenStorageKey = 'mkv-maker-token';
 
 type MessageSet = {
   layout: {
+    appEyebrow: string;
     appTitle: string;
     appSubtitle: string;
     workflowStepsAria: string;
     localeToggle: string;
+    contextTitle: string;
+    contextLabels: {
+      source: string;
+      playlist: string;
+      output: string;
+      task: string;
+    };
+    readyState: string;
+    lockedState: string;
+    pendingValue: string;
     steps: Record<'login' | 'scan' | 'bdinfo' | 'editor' | 'review', string>;
   };
   status: {
@@ -107,6 +118,7 @@ type MessageSet = {
     path: string;
     progress: string;
     commandPreview: string;
+    logOutput: string;
     waitingForLogOutput: string;
   };
   app: {
@@ -121,10 +133,21 @@ type MessageSet = {
 export const messages: Record<Locale, MessageSet> = {
   zh: {
     layout: {
+      appEyebrow: 'Media Mastering Console',
       appTitle: 'MKV Remux Tool',
-      appSubtitle: '从蓝光盘REMUX视频文件，支持从BDInfo自动提取信息',
+      appSubtitle: '针对蓝光 Remux 工作流的精确控制台，串联 BDInfo、轨道整理与任务执行。',
       workflowStepsAria: '工作流步骤',
       localeToggle: '中文 / EN',
+      contextTitle: '当前会话',
+      contextLabels: {
+        source: '片源',
+        playlist: '播放列表',
+        output: '输出',
+        task: '任务',
+      },
+      readyState: '就绪',
+      lockedState: '未登录',
+      pendingValue: '等待上一步',
       steps: {
         login: '登录',
         scan: '扫描',
@@ -229,6 +252,7 @@ export const messages: Record<Locale, MessageSet> = {
       path: '路径',
       progress: '进度',
       commandPreview: '命令预览',
+      logOutput: '任务日志',
       waitingForLogOutput: '等待日志输出...',
     },
     app: {
@@ -241,10 +265,21 @@ export const messages: Record<Locale, MessageSet> = {
   },
   en: {
     layout: {
+      appEyebrow: 'Media Mastering Console',
       appTitle: 'MKV Remux Tool',
-      appSubtitle: 'BDMV workflow with required BDInfo parsing.',
+      appSubtitle: 'A precision workflow for BDInfo parsing, track curation, and remux execution.',
       workflowStepsAria: 'Workflow steps',
       localeToggle: '中文 / EN',
+      contextTitle: 'Current Session',
+      contextLabels: {
+        source: 'Source',
+        playlist: 'Playlist',
+        output: 'Output',
+        task: 'Task',
+      },
+      readyState: 'Ready',
+      lockedState: 'Locked',
+      pendingValue: 'Waiting',
       steps: {
         login: 'Login',
         scan: 'Scan',
@@ -281,7 +316,7 @@ export const messages: Record<Locale, MessageSet> = {
         size: 'Size',
         modified: 'Modified',
       },
-      typeBDMV: 'BDMV Folder',
+      typeBDMV: 'BDMV Directory',
       selectSource: (name: string) => `Select ${name}`,
     },
     bdinfo: {
@@ -349,6 +384,7 @@ export const messages: Record<Locale, MessageSet> = {
       path: 'Path',
       progress: 'Progress',
       commandPreview: 'Command Preview',
+      logOutput: 'Task Log',
       waitingForLogOutput: 'Waiting for log output...',
     },
     app: {

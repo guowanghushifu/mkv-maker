@@ -64,6 +64,12 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/mkvmerge/i).closest('pre')).toHaveClass('scroll-panel');
     expect(screen.getByText(/\[2026-03-30T00:00:01Z\] Progress: 42%/i)).toHaveClass('scroll-panel');
     expect(screen.getByRole('button', { name: /start next remux/i }).closest('.review-actions-secondary')).not.toBeNull();
+    expect(screen.getByText(/Nightcrawler Disc/i).closest('.review-summary-card')).not.toBeNull();
+    expect(screen.getByText(/00003\.MPLS/i).closest('.review-summary-card')).not.toBeNull();
+    expect(
+      screen.getAllByText(/Nightcrawler - 2160p\.mkv/i).some((node) => node.closest('.review-summary-card'))
+    ).toBe(true);
+    expect(screen.getByText(/current remux/i).closest('.job-console')).not.toBeNull();
   });
 
   it('renders the current remux panel when a task is present', () => {
@@ -280,6 +286,54 @@ describe('ReviewPage', () => {
 
     expect(screen.getByRole('button', { name: /start next remux/i })).toBeEnabled();
     expect(screen.queryByText(/current remux/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the final track list inside a dedicated review panel', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
+      audio: [{ id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true }],
+      subtitles: [{ id: 's1', name: 'English PGS', language: 'eng', selected: true, default: false }],
+    } as const;
+
+    render(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={null}
+        currentLog=""
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByText(/final track list/i).closest('.review-track-panel')).not.toBeNull();
+    expect(screen.getByText(/english atmos/i)).toBeInTheDocument();
+    expect(screen.getByText(/english pgs/i)).toBeInTheDocument();
   });
 
   it('scrolls the log panel to the latest output when the log changes', () => {
