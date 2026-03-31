@@ -310,6 +310,151 @@ func TestSourcesHandlerResolvePreservesAudioCodecLabelWhenDisplayLabelIsDescript
 	}
 }
 
+func TestSourcesHandlerResolveUsesSubtitleLanguageColumnInsteadOfGuessingFromLabel(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "Zootopia2"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			SubtitleTrackIDs: []string{"11", "12", "13", "14", "15"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"Zootopia2",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           English         54.085 kbps\nPresentation Graphics           French          43.255 kbps\nPresentation Graphics           Spanish         42.957 kbps\nPresentation Graphics           Japanese        30.071 kbps\nPresentation Graphics           Chinese         31.415 kbps                    简体中文特效"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/Zootopia2/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Subtitles []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Language string `json:"language"`
+		} `json:"subtitles"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(body.Subtitles) != 5 {
+		t.Fatalf("expected 5 subtitle tracks, got %d", len(body.Subtitles))
+	}
+	gotLanguages := []string{
+		body.Subtitles[0].Language,
+		body.Subtitles[1].Language,
+		body.Subtitles[2].Language,
+		body.Subtitles[3].Language,
+		body.Subtitles[4].Language,
+	}
+	wantLanguages := []string{"eng", "fre", "spa", "jpn", "chi"}
+	if !equalStringSlices(gotLanguages, wantLanguages) {
+		t.Fatalf("expected subtitle languages %+v, got %+v", wantLanguages, gotLanguages)
+	}
+	if body.Subtitles[0].Name != "English" || body.Subtitles[4].Name != "简体中文特效" {
+		t.Fatalf("expected display labels to remain subtitle-facing, got %+v", body.Subtitles)
+	}
+}
+
+func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAreUnavailable(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "FallbackDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:      []string{"2", "4"},
+			AudioLanguages:     []string{"eng", "fre"},
+			SubtitleTrackIDs:   []string{"11", "12"},
+			SubtitleLanguages:  []string{"spa", "chi"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"FallbackDisc",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"audioLabels":["Dolby TrueHD/Atmos Audio","Dolby Digital Plus Audio"],
+			"subtitleLabels":["Signs & Songs","简体中文特效"],
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/FallbackDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Language string `json:"language"`
+		} `json:"audio"`
+		Subtitles []struct {
+			Name     string `json:"name"`
+			Language string `json:"language"`
+		} `json:"subtitles"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	gotAudioLanguages := []string{body.Audio[0].Language, body.Audio[1].Language}
+	if !equalStringSlices(gotAudioLanguages, []string{"eng", "fre"}) {
+		t.Fatalf("expected audio language fallback [eng fre], got %+v", gotAudioLanguages)
+	}
+	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language}
+	if !equalStringSlices(gotSubtitleLanguages, []string{"spa", "chi"}) {
+		t.Fatalf("expected subtitle language fallback [spa chi], got %+v", gotSubtitleLanguages)
+	}
+	if body.Subtitles[0].Name != "Signs & Songs" || body.Subtitles[1].Name != "简体中文特效" {
+		t.Fatalf("expected subtitle labels to remain unchanged, got %+v", body.Subtitles)
+	}
+}
+
 func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "NoPlaylistDisc"
@@ -461,34 +606,19 @@ func TestCollectTrackIDsCollapsesTrueHDCoreMultiplexedAudioTracks(t *testing.T) 
 				ID:    1,
 				Type:  "audio",
 				Codec: "TrueHD Atmos",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 8, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
+				Properties: mkvmergeTrackProperties{AudioChannels: 8, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
 			},
 			{
 				ID:    2,
 				Type:  "audio",
 				Codec: "AC-3",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 6, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
+				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
 			},
 			{
 				ID:    3,
 				Type:  "audio",
 				Codec: "DTS-HD Master Audio",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 6, Number: 4353, StreamID: 4353},
+				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 4353, StreamID: 4353},
 			},
 			{
 				ID:    4,
@@ -514,23 +644,13 @@ func TestCollectTrackIDsPrefersHigherChannelCountWithinMultiplexedGroup(t *testi
 				ID:    1,
 				Type:  "audio",
 				Codec: "AC-3",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 2, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
+				Properties: mkvmergeTrackProperties{AudioChannels: 2, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
 			},
 			{
 				ID:    2,
 				Type:  "audio",
 				Codec: "DTS-HD Master Audio",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 6, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
+				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
 			},
 		},
 	}
@@ -548,23 +668,13 @@ func TestCollectTrackIDsKeepsFirstTrackWhenChannelCountMatches(t *testing.T) {
 				ID:    7,
 				Type:  "audio",
 				Codec: "DTS-HD Master Audio",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
+				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
 			},
 			{
 				ID:    8,
 				Type:  "audio",
 				Codec: "AC-3",
-				Properties: struct {
-					AudioChannels     int   `json:"audio_channels"`
-					Number            int   `json:"number"`
-					StreamID          int   `json:"stream_id"`
-					MultiplexedTracks []int `json:"multiplexed_tracks"`
-				}{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
+				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
 			},
 		},
 	}

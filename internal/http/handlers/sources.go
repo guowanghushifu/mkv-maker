@@ -88,7 +88,9 @@ type PlaylistInspector interface {
 
 type PlaylistInspection struct {
 	AudioTrackIDs    []string
+	AudioLanguages   []string
 	SubtitleTrackIDs []string
+	SubtitleLanguages []string
 }
 
 var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
@@ -243,8 +245,8 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		DVMergeEnabled: dvMergeEnabled,
 		SegmentPaths:   segmentPaths,
 		Video:          video,
-		Audio:          buildResolveTracks(audioLabels, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
-		Subtitles:      buildResolveTracks(subtitleLabels, nil, inspection.SubtitleTrackIDs, true),
+	Audio:          buildResolveTracks(audioLabels, parsed.AudioLanguages, inspection.AudioLanguages, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
+	Subtitles:      buildResolveTracks(subtitleLabels, parsed.SubtitleLanguages, inspection.SubtitleLanguages, nil, inspection.SubtitleTrackIDs, true),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -429,7 +431,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func buildResolveTracks(labels []string, codecLabels []string, trackIDs []string, subtitles bool) []resolveTrack {
+func buildResolveTracks(labels []string, languages []string, fallbackLanguages []string, codecLabels []string, trackIDs []string, subtitles bool) []resolveTrack {
 	tracks := make([]resolveTrack, 0, len(labels))
 	for i, label := range labels {
 		trackID := strconv.Itoa(i + 1)
@@ -443,10 +445,20 @@ func buildResolveTracks(labels []string, codecLabels []string, trackIDs []string
 		if codecLabel == "" && !subtitles {
 			codecLabel = normalizeCodecLabel(label)
 		}
+		language := ""
+		if i < len(languages) {
+			language = normalizeLanguageCode(languages[i])
+		}
+		if language == "" && i < len(fallbackLanguages) {
+			language = normalizeLanguageCode(fallbackLanguages[i])
+		}
+		if language == "" {
+			language = inferLanguage(label)
+		}
 		track := resolveTrack{
 			ID:         trackID,
 			Name:       label,
-			Language:   inferLanguage(label),
+			Language:   language,
 			CodecLabel: codecLabel,
 			Selected:   true,
 			Default:    i == 0,
@@ -486,12 +498,15 @@ type mkvmergeTrack struct {
 	ID         int    `json:"id"`
 	Type       string `json:"type"`
 	Codec      string `json:"codec"`
-	Properties struct {
-		AudioChannels     int   `json:"audio_channels"`
-		Number            int   `json:"number"`
-		StreamID          int   `json:"stream_id"`
-		MultiplexedTracks []int `json:"multiplexed_tracks"`
-	} `json:"properties"`
+	Properties mkvmergeTrackProperties `json:"properties"`
+}
+
+type mkvmergeTrackProperties struct {
+	AudioChannels     int    `json:"audio_channels"`
+	Language          string `json:"language"`
+	Number            int    `json:"number"`
+	StreamID          int    `json:"stream_id"`
+	MultiplexedTracks []int  `json:"multiplexed_tracks"`
 }
 
 type mkvmergeIdentifyPayload struct {
@@ -514,17 +529,30 @@ func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspect
 		return PlaylistInspection{}, err
 	}
 
-	audioIDs, subtitleIDs := collectTrackIDs(payload)
+	audioSelections, subtitleSelections := collectTrackSelections(payload)
 	return PlaylistInspection{
-		AudioTrackIDs:    audioIDs,
-		SubtitleTrackIDs: subtitleIDs,
+		AudioTrackIDs:      collectSelectionIDs(audioSelections),
+		AudioLanguages:     collectSelectionLanguages(audioSelections),
+		SubtitleTrackIDs:   collectSelectionIDs(subtitleSelections),
+		SubtitleLanguages:  collectSelectionLanguages(subtitleSelections),
 	}, nil
 }
 
 func collectTrackIDs(payload mkvmergeIdentifyPayload) ([]string, []string) {
-	audioIDs := make([]string, 0, len(payload.Tracks))
-	subtitleIDs := make([]string, 0, len(payload.Tracks))
+	audioSelections, subtitleSelections := collectTrackSelections(payload)
+	return collectSelectionIDs(audioSelections), collectSelectionIDs(subtitleSelections)
+}
+
+type trackSelection struct {
+	ID       string
+	Language string
+}
+
+func collectTrackSelections(payload mkvmergeIdentifyPayload) ([]trackSelection, []trackSelection) {
+	audioSelections := make([]trackSelection, 0, len(payload.Tracks))
+	subtitleSelections := make([]trackSelection, 0, len(payload.Tracks))
 	groupBest := make(map[string]mkvmergeTrack, len(payload.Tracks))
+	audioDirect := make(map[string]trackSelection, len(payload.Tracks))
 	audioOrder := make([]string, 0, len(payload.Tracks))
 
 	for _, track := range payload.Tracks {
@@ -541,20 +569,49 @@ func collectTrackIDs(payload mkvmergeIdentifyPayload) ([]string, []string) {
 				}
 				continue
 			}
-			audioOrder = append(audioOrder, strconv.Itoa(track.ID))
+			key := strconv.Itoa(track.ID)
+			audioOrder = append(audioOrder, key)
+			audioDirect[key] = trackSelection{
+				ID:       strconv.Itoa(track.ID),
+				Language: strings.TrimSpace(track.Properties.Language),
+			}
 		case "subtitles":
-			subtitleIDs = append(subtitleIDs, strconv.Itoa(track.ID))
+			subtitleSelections = append(subtitleSelections, trackSelection{
+				ID:       strconv.Itoa(track.ID),
+				Language: strings.TrimSpace(track.Properties.Language),
+			})
 		}
 	}
 
 	for _, entry := range audioOrder {
 		if track, ok := groupBest[entry]; ok {
-			audioIDs = append(audioIDs, strconv.Itoa(track.ID))
+			audioSelections = append(audioSelections, trackSelection{
+				ID:       strconv.Itoa(track.ID),
+				Language: strings.TrimSpace(track.Properties.Language),
+			})
 			continue
 		}
-		audioIDs = append(audioIDs, entry)
+		if selection, ok := audioDirect[entry]; ok {
+			audioSelections = append(audioSelections, selection)
+		}
 	}
-	return audioIDs, subtitleIDs
+	return audioSelections, subtitleSelections
+}
+
+func collectSelectionIDs(selections []trackSelection) []string {
+	ids := make([]string, 0, len(selections))
+	for _, selection := range selections {
+		ids = append(ids, selection.ID)
+	}
+	return ids
+}
+
+func collectSelectionLanguages(selections []trackSelection) []string {
+	languages := make([]string, 0, len(selections))
+	for _, selection := range selections {
+		languages = append(languages, selection.Language)
+	}
+	return languages
 }
 
 func multiplexedGroupKey(track mkvmergeTrack) string {
@@ -607,15 +664,26 @@ func normalizeCodecLabel(label string) string {
 }
 
 func inferLanguage(label string) string {
-	upper := strings.ToUpper(label)
+	if normalized := normalizeLanguageCode(label); normalized != "" {
+		return normalized
+	}
+	return "und"
+}
+
+func normalizeLanguageCode(value string) string {
+	upper := strings.ToUpper(value)
 	switch {
-	case strings.Contains(label, "中"), strings.Contains(upper, "CHINESE"), strings.Contains(upper, "MANDARIN"):
+	case strings.Contains(value, "中"), strings.Contains(upper, "CHINESE"), strings.Contains(upper, "MANDARIN"), strings.Contains(upper, "CANTONESE"), strings.Contains(upper, "CHI"), strings.Contains(upper, "ZHO"):
 		return "chi"
-	case strings.Contains(label, "日"), strings.Contains(upper, "JAPANESE"):
+	case strings.Contains(value, "日"), strings.Contains(upper, "JAPANESE"), strings.Contains(upper, "JPN"):
 		return "jpn"
-	case strings.Contains(label, "英"), strings.Contains(upper, "ENGLISH"):
+	case strings.Contains(value, "英"), strings.Contains(upper, "ENGLISH"), strings.Contains(upper, "ENG"):
 		return "eng"
+	case strings.Contains(upper, "FRENCH"), strings.Contains(upper, "FRE"), strings.Contains(upper, "FRA"), strings.Contains(upper, "FRANCAIS"):
+		return "fre"
+	case strings.Contains(upper, "SPANISH"), strings.Contains(upper, "SPA"), strings.Contains(upper, "ESPANOL"):
+		return "spa"
 	default:
-		return "und"
+		return ""
 	}
 }

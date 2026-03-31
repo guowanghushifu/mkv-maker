@@ -16,8 +16,10 @@ type Parsed struct {
 	DiscTitle      string   `json:"discTitle,omitempty"`
 	Duration       string   `json:"duration,omitempty"`
 	AudioLabels    []string `json:"audioLabels"`
+	AudioLanguages []string `json:"-"`
 	AudioCodecInfo []string `json:"-"`
 	SubtitleLabels []string `json:"subtitleLabels"`
+	SubtitleLanguages []string `json:"-"`
 	RawText        string   `json:"rawText"`
 	StreamFiles    []string `json:"-"`
 	Video          Video    `json:"-"`
@@ -69,8 +71,10 @@ func Parse(rawText string) (Parsed, error) {
 	parsed := Parsed{
 		RawText:        rawText,
 		AudioLabels:    []string{},
+		AudioLanguages: []string{},
 		AudioCodecInfo: []string{},
 		SubtitleLabels: []string{},
+		SubtitleLanguages: []string{},
 		Video: Video{
 			Name: "Main Video",
 		},
@@ -193,6 +197,7 @@ func Parse(rawText string) (Parsed, error) {
 		if label != "" {
 			parsed.AudioLabels = append(parsed.AudioLabels, label)
 		}
+		parsed.AudioLanguages = append(parsed.AudioLanguages, row.Language)
 		parsed.AudioCodecInfo = append(parsed.AudioCodecInfo, buildAudioCodecLabel(row))
 	}
 	for _, row := range subtitleRows {
@@ -200,6 +205,7 @@ func Parse(rawText string) (Parsed, error) {
 		if label != "" {
 			parsed.SubtitleLabels = append(parsed.SubtitleLabels, label)
 		}
+		parsed.SubtitleLanguages = append(parsed.SubtitleLanguages, row.Language)
 	}
 	if len(videoRows) > 0 {
 		parsed.Video, parsed.DVMergeEnabled = buildVideo(videoRows, rawText)
@@ -275,11 +281,27 @@ func parseSubtitleTableRow(line string) (subtitleRow, bool) {
 		return subtitleRow{}, false
 	}
 
-	row := subtitleRow{
-		Language: columns[0],
-	}
-	if len(columns) > 1 {
+	row := subtitleRow{}
+	switch {
+	case len(columns) >= 4:
+		row.Language = columns[1]
 		row.Description = columns[len(columns)-1]
+	case len(columns) == 3:
+		if looksLikeSubtitleCodec(columns[0]) {
+			row.Language = columns[1]
+		} else {
+			row.Language = columns[0]
+			row.Description = columns[2]
+		}
+	case len(columns) == 2:
+		if looksLikeSubtitleCodec(columns[0]) {
+			row.Language = columns[1]
+		} else {
+			row.Language = columns[0]
+			row.Description = columns[1]
+		}
+	default:
+		row.Language = columns[0]
 	}
 	return row, true
 }
@@ -332,6 +354,14 @@ func looksLikeAudioHeader(columns []string) bool {
 func looksLikeSubtitleHeader(columns []string) bool {
 	joined := strings.ToUpper(strings.Join(columns, " "))
 	return strings.Contains(joined, "LANGUAGE") && strings.Contains(joined, "DESCRIPTION")
+}
+
+func looksLikeSubtitleCodec(value string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(value))
+	return strings.Contains(upper, "GRAPHICS") ||
+		strings.Contains(upper, "PGS") ||
+		strings.Contains(upper, "VOBSUB") ||
+		strings.Contains(upper, "SUBTITLE")
 }
 
 func buildAudioLabel(row audioRow) string {

@@ -97,8 +97,41 @@ func TestParseExtractsPlaylistAndFrontendFieldsFromTables(t *testing.T) {
 	if !reflect.DeepEqual(parsed.SubtitleLabels, expectedSubtitles) {
 		t.Fatalf("expected subtitle labels %+v, got %+v", expectedSubtitles, parsed.SubtitleLabels)
 	}
+	expectedSubtitleLanguages := []string{
+		"Chinese",
+		"English",
+		"English",
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLanguages, expectedSubtitleLanguages) {
+		t.Fatalf("expected subtitle languages %+v, got %+v", expectedSubtitleLanguages, parsed.SubtitleLanguages)
+	}
 	if !reflect.DeepEqual(parsed.StreamFiles, []string{"00005.M2TS"}) {
 		t.Fatalf("expected parsed stream files, got %+v", parsed.StreamFiles)
+	}
+}
+
+func TestParseExtractsSubtitleLanguageFromCodecLanguageBitrateDescriptionTable(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00800.MPLS
+
+SUBTITLES:
+
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+Presentation Graphics           English         54.085 kbps
+Presentation Graphics           French          43.255 kbps
+Presentation Graphics           Chinese         31.415 kbps                    简体中文特效
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLanguages, []string{"English", "French", "Chinese"}) {
+		t.Fatalf("expected subtitle languages from Language column, got %+v", parsed.SubtitleLanguages)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLabels, []string{"English", "French", "简体中文特效"}) {
+		t.Fatalf("expected subtitle labels to preserve display text, got %+v", parsed.SubtitleLabels)
 	}
 }
 
