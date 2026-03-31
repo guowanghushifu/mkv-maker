@@ -68,15 +68,15 @@ export function ReviewPage({
   }, [currentLog, currentJob?.id]);
 
   return (
-    <section className="panel page-panel review-panel">
-      <div className="panel-header">
+    <section className="workspace-card page-panel review-panel review-workspace">
+      <div className="workspace-header">
         <div>
           <h2>{text.review.title}</h2>
           <p className="panel-description">{text.review.description}</p>
         </div>
       </div>
 
-      <section className="review-track-panel">
+      <section className="review-track-panel review-section-card">
         <div className="section-heading">
           <h3>{text.review.finalTrackList}</h3>
           <p className="muted-text">{outputPath}</p>
@@ -114,7 +114,7 @@ export function ReviewPage({
       {submitError ? <p className="error-text">{submitError}</p> : null}
 
       {currentJob ? (
-        <section className="job-console current-job-panel">
+        <section className="job-console current-job-panel review-section-card">
           <div className="job-console-header">
             <div>
               <p className="context-kicker">{text.review.currentRemux}</p>

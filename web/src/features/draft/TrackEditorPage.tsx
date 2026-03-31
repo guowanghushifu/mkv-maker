@@ -254,8 +254,8 @@ export function TrackEditorPage({
   };
 
   return (
-    <section className="panel page-panel editor-panel">
-      <div className="panel-header">
+    <section className="workspace-card page-panel editor-panel editor-workspace">
+      <div className="workspace-header">
         <div>
           <h2>{text.editor.title}</h2>
         </div>
@@ -263,7 +263,7 @@ export function TrackEditorPage({
 
       <div className="editor-overview-grid">
         <div className="editor-overview-pair">
-          <article className="editor-overview-card">
+          <article className="editor-overview-card editor-section-card">
             <div className="stack editor-field-full">
               <label htmlFor="draft-title">{text.editor.titleLabel}</label>
               <input
@@ -276,7 +276,7 @@ export function TrackEditorPage({
             </div>
           </article>
 
-          <article className="editor-overview-card">
+          <article className="editor-overview-card editor-section-card">
             <div className="stack editor-field-full">
               <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
               <input
@@ -294,7 +294,7 @@ export function TrackEditorPage({
         </div>
 
         {typeof filenamePreview === 'string' ? (
-          <article className="editor-overview-card editor-overview-card-wide">
+          <article className="editor-overview-card editor-overview-card-wide editor-section-card">
             <p>
               <strong>{text.editor.liveFilenamePreview}:</strong> {filenamePreview}
             </p>
@@ -313,14 +313,14 @@ export function TrackEditorPage({
         ) : null}
       </div>
 
-      <section className="editor-track-section">
+      <section className="editor-track-section editor-section-card">
         <div className="section-heading">
           <h3>{text.editor.audioHeading}</h3>
         </div>
         {renderTrackTable('audio', draft.audio)}
       </section>
 
-      <section className="editor-track-section">
+      <section className="editor-track-section editor-section-card">
         <div className="section-heading">
           <h3>{text.editor.subtitlesHeading}</h3>
         </div>
@@ -329,22 +329,21 @@ export function TrackEditorPage({
         ) : (
           renderTrackTable('subtitles', draft.subtitles)
         )}
+        {onBack || onNext ? (
+          <div className="row editor-actions">
+            {onBack ? (
+              <Button variant="subtle" onClick={onBack}>
+                {text.editor.backButton}
+              </Button>
+            ) : null}
+            {onNext ? (
+              <Button onClick={onNext}>
+                {text.editor.nextButton}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
-
-      {onBack || onNext ? (
-        <div className="row editor-actions">
-          {onBack ? (
-            <Button variant="subtle" onClick={onBack}>
-              {text.editor.backButton}
-            </Button>
-          ) : null}
-          {onNext ? (
-            <Button onClick={onNext}>
-              {text.editor.nextButton}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }

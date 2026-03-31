@@ -4,6 +4,49 @@ import { createApiClient } from '../api/client';
 import { ReviewPage } from '../features/review/ReviewPage';
 
 describe('ReviewPage', () => {
+  it('renders review actions, summary, and job console inside light workspace cards', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-30T00:00:00Z',
+    } as const;
+    const bdinfo = { playlistName: '00003.MPLS', rawText: 'PLAYLIST REPORT', audioLabels: [], subtitleLabels: [] } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
+      audio: [],
+      subtitles: [],
+    } as const;
+
+    const { container } = render(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={null}
+        currentLog=""
+        onBack={vi.fn()}
+        onStartNextRemux={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    );
+
+    expect(container.querySelector('.workspace-card.review-workspace')).not.toBeNull();
+    expect(container.querySelector('.review-track-panel')).not.toBeNull();
+    expect(container.querySelector('.review-actions')).not.toBeNull();
+  });
+
   it('renders progress percentage, progress bar, and formatted command preview', () => {
     const source = {
       id: 'disc-1',

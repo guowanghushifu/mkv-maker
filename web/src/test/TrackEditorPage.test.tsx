@@ -32,6 +32,14 @@ function createDraft() {
 }
 
 describe('TrackEditorPage', () => {
+  it('renders the editor inside workspace and table cards', () => {
+    const { container } = render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
+
+    expect(container.querySelector('.workspace-card.editor-workspace')).not.toBeNull();
+    expect(container.querySelectorAll('.editor-section-card').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.track-section-panel').length).toBeGreaterThan(1);
+  });
+
   it('shows audio format only in the audio table and keeps subtitle headers unchanged', () => {
     const { container } = render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
 
