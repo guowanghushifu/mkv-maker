@@ -54,7 +54,7 @@ describe('ReviewPage', () => {
 
     expect(container.querySelector('.workspace-card.review-workspace')).not.toBeNull();
     expect(container.querySelector('.review-track-panel.review-section-card')).not.toBeNull();
-    expect(container.querySelector('.review-actions')).not.toBeNull();
+    expect(container.querySelector('.review-actions.review-section-card')).not.toBeNull();
     expect(container.querySelector('.job-console.review-section-card')).not.toBeNull();
   });
 

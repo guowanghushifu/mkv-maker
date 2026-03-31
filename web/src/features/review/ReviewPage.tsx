@@ -92,7 +92,7 @@ export function ReviewPage({
         </ol>
       </section>
 
-      <div className="review-actions">
+      <div className="review-actions review-section-card">
         <div className="review-actions-primary">
           <Button variant="subtle" onClick={onBack}>
             {text.review.backButton}
