@@ -3,7 +3,7 @@
   border: 1px solid rgba(107, 208, 255, 0.42);
   border-radius: 14px;
   color: var(--text);
-  padding: 0.72rem 1rem;
+  padding: 0.6rem 0.86rem;
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -65,7 +65,7 @@ textarea:focus {
 }
 
 .login-panel {
-  padding: 2.6rem 1.75rem;
+  padding: 2rem 1.4rem;
   border-color: rgba(107, 208, 255, 0.16);
   background:
     radial-gradient(circle at top, rgba(107, 208, 255, 0.14), transparent 38%),
@@ -89,7 +89,7 @@ textarea:focus {
   max-width: 36rem;
   margin: 0 auto;
   display: grid;
-  gap: 1.4rem;
+  gap: 1rem;
   text-align: center;
 }
 
@@ -113,7 +113,7 @@ textarea:focus {
 
 .login-panel-surface {
   width: 100%;
-  padding: 1.2rem;
+  padding: 0.95rem;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgba(9, 15, 22, 0.74);
@@ -123,7 +123,7 @@ textarea:focus {
 
 .login-form {
   display: grid;
-  gap: 1rem;
+  gap: 0.8rem;
   justify-items: stretch;
 }
 
@@ -166,7 +166,7 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 20px;
   background: rgba(9, 15, 23, 0.72);
-  padding: 1rem;
+  padding: 0.75rem 0.8rem;
 }
 
 .info-box {
@@ -176,14 +176,14 @@ textarea:focus {
 .source-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 0.9rem;
+  gap: 0.6rem;
 }
 
 .source-card {
   position: relative;
   display: grid;
-  gap: 0.85rem;
-  padding: 1rem;
+  gap: 0.65rem;
+  padding: 0.8rem;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(16, 25, 35, 0.96) 0%, rgba(10, 16, 23, 0.96) 100%);
@@ -278,7 +278,7 @@ textarea:focus {
 .bdinfo-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.85fr);
-  gap: 1rem;
+  gap: 0.7rem;
 }
 
 .bdinfo-composer,
@@ -289,29 +289,29 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 20px;
   background: rgba(9, 15, 23, 0.72);
-  padding: 1rem;
+  padding: 0.75rem 0.8rem;
 }
 
 .bdinfo-composer {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.7rem;
 }
 
 .bdinfo-composer textarea {
-  min-height: 22rem;
+  min-height: 18rem;
   resize: vertical;
 }
 
 .bdinfo-sidebar {
   display: grid;
-  gap: 1rem;
+  gap: 0.7rem;
   align-content: start;
 }
 
 .bdinfo-source-card,
 .bdinfo-summary-card {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .bdinfo-summary-card p,
@@ -322,25 +322,27 @@ textarea:focus {
 
 .bdinfo-actions,
 .editor-actions {
-  margin-top: 1.15rem;
+  margin-top: 0.8rem;
 }
 
 .bdinfo-sample h3 {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.55rem;
 }
 
 .bdinfo-sample pre,
 .command-preview,
 .job-log {
   margin: 0;
-  padding: 0.8rem;
+  padding: 0.65rem 0.75rem;
   border: 1px solid rgba(148, 175, 206, 0.14);
   border-radius: 16px;
   background: rgba(4, 10, 16, 0.78);
   color: #d2e4f7;
-  white-space: pre-wrap;
+  white-space: pre;
+  overflow: auto;
+  max-height: 18rem;
   font-size: 0.84rem;
-  line-height: 1.55;
+  line-height: 1.45;
   font-family: var(--font-mono);
 }
 
@@ -354,7 +356,7 @@ textarea:focus {
 .track-table-wrap,
 .source-table-wrap {
   overflow-x: auto;
-  margin-top: 0.75rem;
+  margin-top: 0.55rem;
 }
 
 .track-editor-table {
@@ -403,7 +405,7 @@ textarea:focus {
 .track-editor-table th,
 .track-editor-table td {
   border: 1px solid var(--line);
-  padding: 0.55rem 0.6rem;
+  padding: 0.45rem 0.5rem;
   text-align: left;
   vertical-align: middle;
 }
@@ -526,14 +528,24 @@ textarea:focus {
 
 .editor-overview-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.9rem;
-  margin-bottom: 1rem;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.editor-overview-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
 }
 
 .editor-overview-card {
   display: grid;
-  gap: 0.8rem;
+  gap: 0.6rem;
+}
+
+.editor-overview-card-wide {
+  grid-column: 1 / -1;
 }
 
 .editor-meta-line {
@@ -542,41 +554,41 @@ textarea:focus {
 }
 
 .editor-track-section {
-  margin-top: 1rem;
+  margin-top: 0.8rem;
 }
 
 .review-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.8rem;
+  gap: 0.55rem;
 }
 
 .review-track-panel {
-  margin-top: 1rem;
+  margin-top: 0.8rem;
 }
 
 .section-heading {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.7rem;
   align-items: baseline;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.6rem;
 }
 
 .ordered-track-list {
   margin: 0;
   padding-left: 1.25rem;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.4rem;
 }
 
 .review-actions {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
-  margin-top: 1rem;
+  margin-top: 0.8rem;
 }
 
 .review-actions-primary,
@@ -591,7 +603,7 @@ textarea:focus {
 }
 
 .job-console {
-  margin-top: 1rem;
+  margin-top: 0.8rem;
   background:
     radial-gradient(circle at top right, rgba(107, 208, 255, 0.12), transparent 26%),
     linear-gradient(180deg, rgba(8, 14, 21, 0.98) 0%, rgba(4, 9, 15, 0.98) 100%);
@@ -612,14 +624,14 @@ textarea:focus {
 .job-console-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
-  margin-top: 1rem;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
 }
 
 .current-job-progress {
   display: grid;
-  gap: 0.45rem;
-  margin: 1rem 0;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
 }
 
 .current-job-progress h4,
@@ -647,10 +659,10 @@ textarea:focus {
 }
 
 .current-job-command {
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.65rem;
 }
 
 .console-block {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.4rem;
 }

@@ -55,6 +55,10 @@ export function BDInfoPage({
               {loading ? text.bdinfo.submittingButton : text.bdinfo.submitButton}
             </Button>
           </div>
+          <section className="bdinfo-sample">
+            <h3>{text.bdinfo.sampleTitle}</h3>
+            <pre>{sampleBDInfo}</pre>
+          </section>
         </div>
 
         <aside className="bdinfo-sidebar">
@@ -78,11 +82,6 @@ export function BDInfoPage({
               <p>{text.bdinfo.subtitleLabelsFound}: {parsed.subtitleLabels.length}</p>
             </SummaryCard>
           ) : null}
-
-          <section className="bdinfo-sample">
-            <h3>{text.bdinfo.sampleTitle}</h3>
-            <pre>{sampleBDInfo}</pre>
-          </section>
         </aside>
       </div>
     </section>

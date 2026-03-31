@@ -76,9 +76,9 @@ describe('TrackEditorPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: /track editor/i }).closest('.page-panel')).not.toBeNull();
-    expect(screen.getByLabelText(/title/i).closest('.editor-overview-card')).not.toBeNull();
-    expect(screen.getByLabelText(/video track name/i).closest('.editor-overview-card')).not.toBeNull();
-    expect(screen.getByLabelText(/output filename/i).closest('.editor-overview-card')).not.toBeNull();
+    expect(screen.getByLabelText(/title/i).closest('.editor-overview-pair')).not.toBeNull();
+    expect(screen.getByLabelText(/video track name/i).closest('.editor-overview-pair')).not.toBeNull();
+    expect(screen.getByLabelText(/output filename/i).closest('.editor-overview-card-wide')).not.toBeNull();
     expect(screen.getByText(/video source attributes: hevc \/ 2160p \/ dv\.hdr/i).closest('.editor-overview-card')).not.toBeNull();
   });
 

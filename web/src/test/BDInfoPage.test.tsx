@@ -12,7 +12,7 @@ const source = {
 };
 
 describe('BDInfoPage', () => {
-  it('renders a composed bdinfo workspace with source and sample side panels', () => {
+  it('renders the bdinfo sample below the actions instead of inside the sidebar', () => {
     render(
       <BDInfoPage
         locale="en"
@@ -32,7 +32,8 @@ describe('BDInfoPage', () => {
     expect(screen.getByPlaceholderText(/paste full bdinfo text here/i).closest('.bdinfo-composer')).not.toBeNull();
     expect(screen.getByRole('button', { name: /back/i }).closest('.bdinfo-actions')).not.toBeNull();
     expect(screen.getByRole('button', { name: /parse bdinfo and continue/i }).closest('.bdinfo-actions')).not.toBeNull();
-    expect(screen.getByText(/bdinfo example/i).closest('.bdinfo-sidebar')).not.toBeNull();
+    expect(screen.getByText(/bdinfo example/i).closest('.bdinfo-sidebar')).toBeNull();
+    expect(screen.getByText(/bdinfo example/i).closest('.bdinfo-sample')).not.toBeNull();
     expect(screen.getByText(/disc title:\s+the amateur 2025/i)).toBeInTheDocument();
     expect(screen.getByText(/presentation graphics\s+english/i)).toBeInTheDocument();
   });

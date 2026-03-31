@@ -262,36 +262,38 @@ export function TrackEditorPage({
       </div>
 
       <div className="editor-overview-grid">
-        <article className="editor-overview-card">
-          <div className="stack">
-            <label htmlFor="draft-title">{text.editor.titleLabel}</label>
-            <input
-              id="draft-title"
-              type="text"
-              value={draft.title || ''}
-              onChange={(event) => updateTitle(event.target.value)}
-            />
-          </div>
-        </article>
+        <div className="editor-overview-pair">
+          <article className="editor-overview-card">
+            <div className="stack">
+              <label htmlFor="draft-title">{text.editor.titleLabel}</label>
+              <input
+                id="draft-title"
+                type="text"
+                value={draft.title || ''}
+                onChange={(event) => updateTitle(event.target.value)}
+              />
+            </div>
+          </article>
 
-        <article className="editor-overview-card">
-          <div className="stack">
-            <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
-            <input
-              id="video-track-name"
-              type="text"
-              value={draft.video.name}
-              onChange={(event) => updateVideoName(event.target.value)}
-            />
-          </div>
-          <p className="editor-meta-line">
-            {text.editor.videoSourceAttributes}: {draft.video.codec} / {draft.video.resolution}
-            {draft.video.hdrType ? ` / ${draft.video.hdrType}` : ''}
-          </p>
-        </article>
+          <article className="editor-overview-card">
+            <div className="stack">
+              <label htmlFor="video-track-name">{text.editor.videoTrackNameLabel}</label>
+              <input
+                id="video-track-name"
+                type="text"
+                value={draft.video.name}
+                onChange={(event) => updateVideoName(event.target.value)}
+              />
+            </div>
+            <p className="editor-meta-line">
+              {text.editor.videoSourceAttributes}: {draft.video.codec} / {draft.video.resolution}
+              {draft.video.hdrType ? ` / ${draft.video.hdrType}` : ''}
+            </p>
+          </article>
+        </div>
 
         {typeof filenamePreview === 'string' ? (
-          <article className="editor-overview-card">
+          <article className="editor-overview-card editor-overview-card-wide">
             <p>
               <strong>{text.editor.liveFilenamePreview}:</strong> {filenamePreview}
             </p>
