@@ -1,5 +1,6 @@
 import { Button } from './Button';
 import { SummaryCard } from './SummaryCard';
+import { Fragment } from 'react';
 import type { PropsWithChildren } from 'react';
 import { getMessages, type Locale } from '../i18n';
 
@@ -18,6 +19,15 @@ type LayoutProps = PropsWithChildren<{
 }>;
 
 const stepOrder: WorkflowStep[] = ['login', 'scan', 'bdinfo', 'editor', 'review'];
+
+function renderContextValue(value: string) {
+  return value.split(/([./@_-])/g).map((part, index) => (
+    <Fragment key={`${part}-${index}`}>
+      {part}
+      {/[./@_-]/.test(part) ? <wbr /> : null}
+    </Fragment>
+  ));
+}
 
 export function Layout({ currentStep, locale, onToggleLocale, context, children }: LayoutProps) {
   const activeIndex = stepOrder.indexOf(currentStep);
@@ -67,7 +77,7 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
             valueClassName="context-card-value context-card-value-clamp"
             valueProps={{ title: context.source }}
             label={text.layout.contextLabels.source}
-            value={context.source}
+            value={renderContextValue(context.source)}
           />
           <SummaryCard
             className="context-card"
@@ -75,7 +85,7 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
             valueClassName="context-card-value context-card-value-clamp"
             valueProps={{ title: context.playlist }}
             label={text.layout.contextLabels.playlist}
-            value={context.playlist}
+            value={renderContextValue(context.playlist)}
           />
           <SummaryCard
             className="context-card"
@@ -83,7 +93,7 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
             valueClassName="context-card-value context-card-value-clamp"
             valueProps={{ title: context.output }}
             label={text.layout.contextLabels.output}
-            value={context.output}
+            value={renderContextValue(context.output)}
           />
           <SummaryCard
             className="context-card"
@@ -91,7 +101,7 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
             valueClassName="context-card-value context-card-value-clamp"
             valueProps={{ title: context.task }}
             label={text.layout.contextLabels.task}
-            value={context.task}
+            value={renderContextValue(context.task)}
           />
         </div>
       </section>

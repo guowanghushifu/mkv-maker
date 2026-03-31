@@ -179,7 +179,7 @@
   text-overflow: ellipsis;
   white-space: normal;
   overflow-wrap: break-word;
-  word-break: normal;
+  word-break: keep-all;
 }
 
 .page-content {
