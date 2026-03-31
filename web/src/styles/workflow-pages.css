@@ -65,7 +65,6 @@ textarea:focus {
 }
 
 .login-screen {
-  min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 2rem 1rem;
@@ -161,6 +160,10 @@ textarea:focus {
   justify-self: center;
   min-width: 11rem;
   border-radius: 999px;
+}
+
+.login-card .login-submit-button {
+  color: #fff;
 }
 
 .empty-state,

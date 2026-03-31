@@ -6,10 +6,12 @@ describe('LoginPage', () => {
   it('renders the standalone light login card without the admin shell', () => {
     render(<LoginPage locale="en" onSuccess={vi.fn()} />);
 
+    const continueButton = screen.getByRole('button', { name: /continue/i });
     expect(document.querySelector('.admin-shell')).toBeNull();
     expect(screen.getByRole('heading', { name: /login/i }).closest('.login-screen')).not.toBeNull();
     expect(screen.getByRole('heading', { name: /login/i }).closest('.login-card')).not.toBeNull();
-    expect(screen.getByRole('button', { name: /continue/i })).toHaveClass('login-submit-button');
+    expect(continueButton).toHaveClass('login-submit-button');
+    expect(continueButton).toHaveClass('ui-button-primary');
   });
 
   it('requires a password before submitting', () => {
