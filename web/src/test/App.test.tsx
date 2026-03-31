@@ -194,7 +194,7 @@ describe('App', () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     const view = render(<App />);
 
-    expect(screen.getByRole('heading', { name: /登录/i }).closest('.login-panel')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: /登录/i }).closest('.login-screen')).not.toBeNull();
     expect(screen.getByRole('button', { name: /中文 \/ EN/i })).toBeInTheDocument();
     expect(document.querySelector('.admin-shell')).toBeNull();
 
@@ -466,6 +466,8 @@ describe('App', () => {
 
     await goToReviewStep();
 
+    expect(document.querySelector('.shell-nav')).not.toBeNull();
+    expect(document.querySelector('.workflow-page-aside')).not.toBeNull();
     expect(document.querySelector('.workflow-summary-row[aria-label="Current Session"]')).not.toBeNull();
     expect(screen.getAllByText(/nightcrawler disc/i).some((node) => node.closest('.context-card'))).toBe(true);
     expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.context-card'))).toBe(true);
