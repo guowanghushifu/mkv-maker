@@ -81,6 +81,7 @@ describe('TrackEditorPage', () => {
     expect(screen.getByLabelText(/video track name/i).closest('.editor-field-full')).not.toBeNull();
     expect(screen.getByLabelText(/output filename/i).closest('.editor-overview-card-wide')).not.toBeNull();
     expect(screen.getByText(/video source attributes: hevc \/ 2160p \/ dv\.hdr/i).closest('.editor-overview-card')).not.toBeNull();
+    expect(screen.getByText(/recommended: name \+ year, example: nightcrawler\.2014/i)).toBeInTheDocument();
   });
 
   it('clears the previous default audio track when a new default is checked', () => {

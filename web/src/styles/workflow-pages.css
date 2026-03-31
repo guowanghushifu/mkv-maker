@@ -569,6 +569,12 @@ textarea:focus {
   line-height: 1.5;
 }
 
+.editor-help-text {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
 .editor-track-section {
   margin-top: 0.8rem;
 }

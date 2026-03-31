@@ -69,6 +69,7 @@ type MessageSet = {
   editor: {
     title: string;
     titleLabel: string;
+    titleHint: string;
     videoTrackNameLabel: string;
     videoSourceAttributes: string;
     liveFilenamePreview: string;
@@ -203,6 +204,7 @@ export const messages: Record<Locale, MessageSet> = {
     editor: {
       title: '轨道编辑器',
       titleLabel: '标题',
+      titleHint: '建议名称+年份，示例：Nightcrawler.2014',
       videoTrackNameLabel: '视频轨道名称',
       videoSourceAttributes: '视频源属性',
       liveFilenamePreview: '实时文件名预览',
@@ -335,6 +337,7 @@ export const messages: Record<Locale, MessageSet> = {
     editor: {
       title: 'Track Editor',
       titleLabel: 'Title',
+      titleHint: 'Recommended: name + year, example: Nightcrawler.2014',
       videoTrackNameLabel: 'Video track name',
       videoSourceAttributes: 'Video source attributes',
       liveFilenamePreview: 'Live filename preview',
