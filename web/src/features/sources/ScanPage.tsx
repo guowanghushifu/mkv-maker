@@ -56,13 +56,13 @@ export function ScanPage({
   };
 
   return (
-    <section className="panel page-panel scan-panel">
-      <div className="panel-header">
+    <section className="workspace-card page-panel scan-workspace">
+      <div className="workspace-header">
         <div>
           <h2>{text.scan.title}</h2>
           <p className="panel-description">{text.scan.subtitle}</p>
         </div>
-        <div className="panel-toolbar">
+        <div className="workspace-toolbar">
           <Button onClick={() => void onScan()} disabled={loading}>
             {loading ? text.scan.scanningButton : text.scan.scanButton}
           </Button>

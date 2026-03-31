@@ -3,15 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { LoginPage } from '../features/auth/LoginPage';
 
 describe('LoginPage', () => {
-  it('renders a centered login layout shell for the password form', () => {
+  it('renders the standalone light login card without the admin shell', () => {
     render(<LoginPage locale="en" onSuccess={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: /login/i }).closest('section')).toHaveClass('login-panel');
-    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-panel-body')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-panel-intro')).not.toBeNull();
-    expect(screen.getByLabelText(/password/i).closest('.login-panel-surface')).not.toBeNull();
-    expect(screen.getByLabelText(/password/i).closest('form')).toHaveClass('login-form');
-    expect(screen.getByLabelText(/password/i).closest('.login-form-field')).not.toBeNull();
+    expect(document.querySelector('.admin-shell')).toBeNull();
+    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-screen')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: /login/i }).closest('.login-card')).not.toBeNull();
     expect(screen.getByRole('button', { name: /continue/i })).toHaveClass('login-submit-button');
   });
 

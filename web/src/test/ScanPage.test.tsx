@@ -19,6 +19,25 @@ const secondSource = {
 };
 
 describe('ScanPage', () => {
+  it('renders scan content inside the workspace card and toolbar layout', () => {
+    const { container } = render(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[longPathSource, secondSource]}
+        selectedSourceId={null}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.workspace-card.scan-workspace')).not.toBeNull();
+    expect(container.querySelector('.workspace-toolbar')).not.toBeNull();
+    expect(container.querySelector('.source-grid')).not.toBeNull();
+  });
+
   it('renders sources as selectable cards before the table details', () => {
     const { container } = render(
       <ScanPage

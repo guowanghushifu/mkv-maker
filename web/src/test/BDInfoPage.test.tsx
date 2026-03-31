@@ -12,6 +12,27 @@ const source = {
 };
 
 describe('BDInfoPage', () => {
+  it('renders bdinfo as a split workspace with support cards in the aside column', () => {
+    const { container } = render(
+      <BDInfoPage
+        locale="en"
+        source={source}
+        bdinfoText=""
+        parsed={null}
+        error={null}
+        loading={false}
+        onBack={vi.fn()}
+        onTextChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.workspace-card.bdinfo-workspace')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-layout')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-sidebar')).not.toBeNull();
+    expect(screen.getByText(/bdinfo example/i).closest('.supporting-card')).not.toBeNull();
+  });
+
   it('renders the bdinfo sample below the actions instead of inside the sidebar', () => {
     render(
       <BDInfoPage
