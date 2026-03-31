@@ -497,6 +497,10 @@ textarea:focus {
   background: rgba(12, 18, 26, 0.88);
 }
 
+.track-editor-table tbody td {
+  background: #fff;
+}
+
 .source-table-nowrap {
   white-space: nowrap;
 }
@@ -520,7 +524,7 @@ textarea:focus {
 }
 
 .track-editor-table tr.is-muted td {
-  background: rgba(13, 18, 24, 0.88);
+  background: #f5f7fb;
 }
 
 .track-editor-table tr.is-muted input[type='text'] {
@@ -535,7 +539,7 @@ textarea:focus {
 
 .track-editor-table tr.is-drop-target td {
   border-top: 2px solid var(--accent-strong);
-  background: rgba(19, 43, 62, 0.92);
+  background: rgba(74, 144, 245, 0.12);
 }
 
 .track-editor-table .drag-cell {

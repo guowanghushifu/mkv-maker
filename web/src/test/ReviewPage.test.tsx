@@ -22,6 +22,16 @@ describe('ReviewPage', () => {
       audio: [],
       subtitles: [],
     } as const;
+    const currentJob = {
+      id: 'job-123',
+      sourceName: 'Nightcrawler Disc',
+      outputName: 'Nightcrawler - 2160p.mkv',
+      outputPath: '/remux/Nightcrawler - 2160p.mkv',
+      playlistName: '00003.MPLS',
+      createdAt: '2026-03-30T00:00:00Z',
+      status: 'running' as const,
+      progressPercent: 42,
+    };
 
     const { container } = render(
       <ReviewPage
@@ -34,7 +44,7 @@ describe('ReviewPage', () => {
         submitting={false}
         startDisabled={false}
         submitError={null}
-        currentJob={null}
+        currentJob={currentJob}
         currentLog=""
         onBack={vi.fn()}
         onStartNextRemux={vi.fn()}
@@ -43,8 +53,9 @@ describe('ReviewPage', () => {
     );
 
     expect(container.querySelector('.workspace-card.review-workspace')).not.toBeNull();
-    expect(container.querySelector('.review-track-panel')).not.toBeNull();
+    expect(container.querySelector('.review-track-panel.review-section-card')).not.toBeNull();
     expect(container.querySelector('.review-actions')).not.toBeNull();
+    expect(container.querySelector('.job-console.review-section-card')).not.toBeNull();
   });
 
   it('renders progress percentage, progress bar, and formatted command preview', () => {
