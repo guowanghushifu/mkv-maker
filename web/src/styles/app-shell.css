@@ -470,6 +470,67 @@
   box-shadow: 0 0 0 4px rgba(74, 144, 245, 0.14);
 }
 
+.panel.login-panel {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at top, rgba(74, 144, 245, 0.14), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+  box-shadow: var(--shadow-lg);
+}
+
+.panel.login-panel::before {
+  background: radial-gradient(circle, rgba(74, 144, 245, 0.16) 0%, rgba(74, 144, 245, 0) 72%);
+}
+
+.login-panel .login-panel-intro h2 {
+  color: var(--text);
+}
+
+.login-panel .login-panel-intro p {
+  color: var(--text-muted);
+}
+
+.login-panel .login-panel-surface {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.login-panel .login-form-field label {
+  color: var(--text-muted);
+}
+
+.login-panel .login-form-field input {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: #ffffff;
+}
+
+.login-panel .login-form-field input::placeholder {
+  color: var(--text-dim);
+}
+
+.login-panel .login-form-field input:focus {
+  border-color: rgba(74, 144, 245, 0.58);
+  box-shadow: 0 0 0 4px rgba(74, 144, 245, 0.14);
+  background: #ffffff;
+}
+
+.login-panel .login-form .error-text {
+  color: var(--danger);
+}
+
+.login-panel .login-submit-button {
+  color: #ffffff;
+  border-color: rgba(43, 99, 218, 0.46);
+  background: linear-gradient(180deg, #3f7eef 0%, #2b63da 100%);
+}
+
+.login-panel .login-submit-button:hover:not(:disabled) {
+  border-color: rgba(74, 144, 245, 0.56);
+  box-shadow: 0 10px 20px rgba(74, 96, 134, 0.22);
+}
+
 @media (max-width: 1100px) {
   .admin-shell {
     grid-template-columns: 1fr;
