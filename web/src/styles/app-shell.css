@@ -161,18 +161,25 @@
 .context-card-value,
 .summary-value {
   min-width: 0;
-  overflow-wrap: anywhere;
   font-size: 1rem;
   line-height: 1.35;
+}
+
+.summary-value {
+  overflow-wrap: anywhere;
 }
 
 .context-card-value-clamp {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  overflow-wrap: anywhere;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .page-content {

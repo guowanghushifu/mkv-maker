@@ -272,7 +272,7 @@ export function TrackEditorPage({
                 value={draft.title || ''}
                 onChange={(event) => updateTitle(event.target.value)}
               />
-              <p className="editor-help-text">{text.editor.titleHint}</p>
+              <p className="editor-meta-line">{text.editor.titleHint}</p>
             </div>
           </article>
 
