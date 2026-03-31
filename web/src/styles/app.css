@@ -198,20 +198,24 @@ button:disabled {
 }
 
 .track-editor-table .col-drag {
-  width: 2.6rem;
+  width: 2.4rem;
 }
 
 .track-editor-table .col-id {
-  width: 4.8rem;
+  width: 3.8rem;
 }
 
 .track-editor-table .col-language {
-  width: 6.2rem;
+  width: 5.6rem;
+}
+
+.track-editor-table .col-audio-format {
+  width: 11.5rem;
 }
 
 .track-editor-table .col-include,
 .track-editor-table .col-default {
-  width: 5.4rem;
+  width: 4.2rem;
 }
 
 .source-table th,
@@ -303,6 +307,11 @@ button:disabled {
 .track-editor-table .track-language-input {
   width: 5rem;
   min-width: 0;
+}
+
+.track-editor-table .track-audio-format-cell {
+  white-space: nowrap;
+  color: #425973;
 }
 
 .drag-handle {

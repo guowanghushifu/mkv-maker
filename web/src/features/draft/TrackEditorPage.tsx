@@ -110,7 +110,10 @@ export function TrackEditorPage({
     updateSubtitles(moveTrackByOffset(draft.subtitles, trackId, offset));
   };
 
-  const renderTrackTable = (group: TrackGroup, tracks: DraftTrack[]) => (
+  const renderTrackTable = (group: TrackGroup, tracks: DraftTrack[]) => {
+    const isAudioTable = group === 'audio';
+
+    return (
     <div className="track-table-wrap">
       <table className="track-editor-table">
         <colgroup>
@@ -118,6 +121,7 @@ export function TrackEditorPage({
           <col className="col-id" />
           <col className="col-track" />
           <col className="col-language" />
+          {isAudioTable ? <col className="col-audio-format" /> : null}
           <col className="col-include" />
           <col className="col-default" />
         </colgroup>
@@ -127,6 +131,7 @@ export function TrackEditorPage({
             <th scope="col">{text.editor.columns.id}</th>
             <th scope="col">{text.editor.columns.track}</th>
             <th scope="col">{text.editor.columns.language}</th>
+            {isAudioTable ? <th scope="col">{text.editor.columns.audioFormat}</th> : null}
             <th scope="col">{text.editor.columns.include}</th>
             <th scope="col">{text.editor.columns.default}</th>
           </tr>
@@ -207,6 +212,7 @@ export function TrackEditorPage({
                   }}
                 />
               </td>
+              {isAudioTable ? <td className="track-audio-format-cell">{track.codecLabel || ''}</td> : null}
               <td>
                 <input
                   type="checkbox"
@@ -241,7 +247,8 @@ export function TrackEditorPage({
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   return (
     <section className="panel">

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TrackEditorPage } from '../features/draft/TrackEditorPage';
 
@@ -7,8 +7,22 @@ function createDraft() {
     title: 'Demo Title',
     video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'HDR.DV' },
     audio: [
-      { id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true },
-      { id: 'a2', name: 'Commentary', language: 'eng', selected: true, default: false },
+      {
+        id: 'a1',
+        name: 'English Atmos',
+        language: 'eng',
+        codecLabel: 'TrueHD.7.1.Atmos',
+        selected: true,
+        default: true,
+      },
+      {
+        id: 'a2',
+        name: 'Commentary',
+        language: 'eng',
+        codecLabel: 'DTS-HD.MA.7.1',
+        selected: true,
+        default: false,
+      },
     ],
     subtitles: [
       { id: 's1', name: 'English PGS', language: 'eng', selected: true, default: true },
@@ -18,25 +32,27 @@ function createDraft() {
 }
 
 describe('TrackEditorPage', () => {
-  it('shows original track ids in a dedicated column and removes the details column', () => {
+  it('shows audio format only in the audio table and keeps subtitle headers unchanged', () => {
     render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
 
-    expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
+    const [audioTable, subtitleTable] = screen.getAllByRole('table');
+    expect(within(audioTable).getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
       '',
       'ID',
       'Track',
       'Language',
-      'Include',
-      'Default',
-      '',
-      'ID',
-      'Track',
-      'Language',
+      'Audio Format',
       'Include',
       'Default',
     ]);
+    expect(
+      within(subtitleTable).getAllByRole('columnheader').map((header) => header.textContent?.trim()),
+    ).toEqual(['', 'ID', 'Track', 'Language', 'Include', 'Default']);
+
     expect(screen.getByText('a1')).toBeInTheDocument();
     expect(screen.getByText('a2')).toBeInTheDocument();
+    expect(screen.getByText('TrueHD.7.1.Atmos')).toBeInTheDocument();
+    expect(screen.getByText('DTS-HD.MA.7.1')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Details' })).not.toBeInTheDocument();
   });
 

@@ -71,6 +71,7 @@ type MessageSet = {
       id: string;
       track: string;
       language: string;
+      audioFormat: string;
       include: string;
       default: string;
     };
@@ -191,6 +192,7 @@ export const messages: Record<Locale, MessageSet> = {
         id: 'ID',
         track: '轨道',
         language: '语言',
+        audioFormat: '音轨格式',
         include: '保留',
         default: '默认',
       },
@@ -309,6 +311,7 @@ export const messages: Record<Locale, MessageSet> = {
         id: 'ID',
         track: 'Track',
         language: 'Language',
+        audioFormat: 'Audio Format',
         include: 'Include',
         default: 'Default',
       },
