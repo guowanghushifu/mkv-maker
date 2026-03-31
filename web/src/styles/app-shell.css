@@ -173,6 +173,14 @@
   gap: 0.6rem;
 }
 
+.context-kicker {
+  margin: 0 0 0.4rem;
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .shell-page {
   min-height: 0;
   display: grid;
@@ -349,6 +357,63 @@
   color: var(--danger);
 }
 
+.admin-shell input,
+.admin-shell textarea {
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-panel-strong);
+}
+
+.admin-shell input::placeholder,
+.admin-shell textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.admin-shell input:focus,
+.admin-shell textarea:focus {
+  border-color: rgba(74, 144, 245, 0.58);
+  box-shadow: 0 0 0 4px rgba(74, 144, 245, 0.14);
+  background: #ffffff;
+}
+
+.admin-shell .ui-button-subtle,
+.admin-shell .locale-toggle {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: var(--bg-panel-strong);
+  box-shadow: none;
+}
+
+.admin-shell .ui-button-primary {
+  color: #ffffff;
+  border-color: rgba(43, 99, 218, 0.46);
+  background: linear-gradient(180deg, #3f7eef 0%, #2b63da 100%);
+}
+
+.admin-shell .ui-button:hover:not(:disabled) {
+  border-color: rgba(74, 144, 245, 0.56);
+  box-shadow: 0 10px 20px rgba(74, 96, 134, 0.22);
+}
+
+.admin-shell .empty-state,
+.admin-shell .info-box,
+.admin-shell .review-track-panel,
+.admin-shell .job-console,
+.admin-shell .bdinfo-sample,
+.admin-shell .source-card,
+.admin-shell .bdinfo-composer,
+.admin-shell .bdinfo-source-card,
+.admin-shell .bdinfo-summary-card,
+.admin-shell .editor-overview-card,
+.admin-shell .track-section-panel,
+.admin-shell .login-panel,
+.admin-shell .login-panel-surface {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-md);
+}
+
 @media (max-width: 1100px) {
   .admin-shell {
     grid-template-columns: 1fr;
@@ -390,6 +455,18 @@
   .workflow-page-aside {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .source-grid-two-up,
+  .review-summary-grid,
+  .job-console-grid,
+  .bdinfo-layout,
+  .editor-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bdinfo-layout {
+    gap: 0.8rem;
+  }
 }
 
 @media (max-width: 760px) {
@@ -424,6 +501,14 @@
   }
 
   .workflow-page-aside {
+    grid-template-columns: 1fr;
+  }
+
+  .source-grid-two-up,
+  .review-summary-grid,
+  .job-console-grid,
+  .bdinfo-layout,
+  .editor-overview-grid {
     grid-template-columns: 1fr;
   }
 

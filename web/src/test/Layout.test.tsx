@@ -36,6 +36,8 @@ describe('Layout', () => {
     expect(container.querySelectorAll('.workflow-page-aside .context-card-value-clamp')).toHaveLength(4);
     expect(container.querySelectorAll('.shell-nav-index')).toHaveLength(4);
     expect(container.querySelector('.shell-sidebar')).not.toBeNull();
+    expect(container.querySelector('.topbar-actions')).not.toBeNull();
+    expect(container.querySelector('.workflow-page-grid')).not.toBeNull();
   });
 
   it('renders the post-login shell with sidebar items and wrap opportunities in the context panel', () => {
