@@ -36,7 +36,7 @@ function sanitizeFilename(name: string): string {
 function buildHDRLabel(hdrType: string | undefined, dvMergeEnabled: boolean | undefined): string {
   const hdr = (hdrType || '').toUpperCase();
   if (dvMergeEnabled || hdr.includes('DV')) {
-    return 'HDR.DV';
+    return 'DV.HDR';
   }
   if (hdr.includes('HDR')) {
     return 'HDR';

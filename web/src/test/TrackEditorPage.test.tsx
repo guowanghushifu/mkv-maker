@@ -212,4 +212,19 @@ describe('TrackEditorPage', () => {
 
     expect(onChange).toHaveBeenCalled();
   });
+
+  it('renders the bottom editor actions in a dedicated spaced container', () => {
+    render(
+      <TrackEditorPage
+        locale="en"
+        draft={createDraft()}
+        onChange={vi.fn()}
+        onBack={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /back/i }).closest('.editor-actions')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /continue to review/i }).closest('.editor-actions')).not.toBeNull();
+  });
 });

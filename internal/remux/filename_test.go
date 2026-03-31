@@ -16,7 +16,7 @@ func TestBuildFilenameIncludesHDRAndDefaultAudio(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.TrueHD.7.1.Atmos.mkv"
+	want := "Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.TrueHD.7.1.Atmos.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -36,7 +36,7 @@ func TestBuildFilenameUsesSelectedAudioWhenNoSelectedDefault(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.DTS-HD.MA.5.1.mkv"
+	want := "Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.DTS-HD.MA.5.1.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -53,7 +53,7 @@ func TestBuildFilenameAddsDVWhenEnabled(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.UnknownAudio.mkv"
+	want := "Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.UnknownAudio.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}

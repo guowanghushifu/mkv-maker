@@ -1,5 +1,6 @@
 import type { ParsedBDInfo, SourceEntry } from '../../api/types';
 import { getMessages, type Locale } from '../../i18n';
+import { sampleBDInfo } from './sampleBDInfo';
 
 type BDInfoPageProps = {
   locale?: Locale;
@@ -49,7 +50,7 @@ export function BDInfoPage({
           <p>{text.bdinfo.subtitleLabelsFound}: {parsed.subtitleLabels.length}</p>
         </div>
       ) : null}
-      <div className="row">
+      <div className="row bdinfo-actions">
         <button type="button" onClick={onBack}>
           {text.bdinfo.backButton}
         </button>
@@ -57,6 +58,10 @@ export function BDInfoPage({
           {loading ? text.bdinfo.submittingButton : text.bdinfo.submitButton}
         </button>
       </div>
+      <section className="bdinfo-sample">
+        <h3>{text.bdinfo.sampleTitle}</h3>
+        <pre>{sampleBDInfo}</pre>
+      </section>
     </section>
   );
 }

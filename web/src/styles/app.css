@@ -204,6 +204,36 @@ body {
   flex-wrap: wrap;
 }
 
+.bdinfo-actions,
+.editor-actions {
+  margin-top: 1.15rem;
+}
+
+.bdinfo-sample {
+  margin-top: 1rem;
+  border: 1px solid #d7e1ee;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7fd 100%);
+  padding: 0.95rem 1rem;
+}
+
+.bdinfo-sample h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.92rem;
+  color: #2d4b6d;
+}
+
+.bdinfo-sample pre {
+  margin: 0;
+  max-height: 22rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: #35506f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
 .stack {
   display: grid;
   gap: 0.5rem;

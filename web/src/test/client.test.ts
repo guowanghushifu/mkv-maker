@@ -27,7 +27,7 @@ describe('buildFilenamePreview', () => {
       'Nightcrawler'
     );
 
-    expect(filename).toBe('Nightcrawler - 2160p.BluRay.HDR.DV.HEVC.UnknownAudio.mkv');
+    expect(filename).toBe('Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.UnknownAudio.mkv');
   });
 });
 

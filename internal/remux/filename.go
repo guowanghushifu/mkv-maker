@@ -13,7 +13,10 @@ func BuildFilename(d Draft) string {
 
 	hdrLabel := d.Video.HDRType
 	if d.EnableDV && !strings.Contains(strings.ToUpper(hdrLabel), "DV") {
-		hdrLabel = "HDR.DV"
+		hdrLabel = "DV.HDR"
+	}
+	if strings.EqualFold(strings.TrimSpace(hdrLabel), "HDR.DV") {
+		hdrLabel = "DV.HDR"
 	}
 
 	parts := []string{

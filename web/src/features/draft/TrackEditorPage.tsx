@@ -306,7 +306,7 @@ export function TrackEditorPage({
       )}
 
       {onBack || onNext ? (
-        <div className="row">
+        <div className="row editor-actions">
           {onBack ? (
             <button type="button" onClick={onBack}>
               {text.editor.backButton}

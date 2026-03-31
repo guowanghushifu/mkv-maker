@@ -47,6 +47,7 @@ type MessageSet = {
     selectedSource: string;
     description: string;
     placeholder: string;
+    sampleTitle: string;
     playlist: string;
     audioLabelsFound: string;
     subtitleLabelsFound: string;
@@ -168,6 +169,7 @@ export const messages: Record<Locale, MessageSet> = {
       selectedSource: '已选片源',
       description: '请粘贴 BDInfo 文本。此步骤必填，无法跳过。',
       placeholder: '请在这里粘贴完整 BDInfo 文本',
+      sampleTitle: 'BDInfo 样例',
       playlist: '播放列表',
       audioLabelsFound: '检测到音频标签',
       subtitleLabelsFound: '检测到字幕标签',
@@ -287,6 +289,7 @@ export const messages: Record<Locale, MessageSet> = {
       selectedSource: 'Selected source',
       description: 'Paste the BDInfo log. This step is required and cannot be skipped.',
       placeholder: 'Paste full BDInfo text here',
+      sampleTitle: 'BDInfo Example',
       playlist: 'Playlist',
       audioLabelsFound: 'Audio labels found',
       subtitleLabelsFound: 'Subtitle labels found',
