@@ -9,6 +9,7 @@ Add Linux-only Blu-ray ISO input support to the existing single-remux workflow s
 This design covers:
 
 - scanning `.iso` files as first-class input sources
+- adding an environment variable to enable or disable ISO source scanning
 - reserving `/bd_input/iso_auto_mount` as application-owned mount workspace
 - mounting ISO sources automatically during resolve and remux submission
 - preserving the existing BDMV workflow for extracted folders
@@ -37,6 +38,9 @@ This design does not cover:
 - ISO mounts are read-only.
 - `BD_INPUT_DIR` remains `/bd_input` by default.
 - `/bd_input/iso_auto_mount` is reserved for this application only and must not be used for user-managed inputs.
+- Add `ENABLE_ISO_SCAN` with default enabled.
+- `ENABLE_ISO_SCAN` only controls whether the scanner returns ISO sources.
+- If `ENABLE_ISO_SCAN=0`, extracted BDMV scanning still works normally and ISO-specific entry points become unreachable through the UI.
 
 ## Product Behavior
 
@@ -50,6 +54,13 @@ The scan flow must return two source types:
 `bdmv` keeps the current meaning: an extracted Blu-ray directory containing a valid `BDMV` structure.
 
 `iso` represents a `.iso` file directly under the input tree. The scanner should walk the input directory, discover ISO files conservatively, and skip the reserved `/bd_input/iso_auto_mount` subtree entirely so the application never re-discovers its own mounted workspaces as user inputs.
+
+ISO scanning is gated by `ENABLE_ISO_SCAN`:
+
+- default: enabled
+- disabled: the scanner does not return `iso` sources at all
+
+This flag only affects source discovery. It does not change resolve, remux, or cleanup behavior because those flows remain inaccessible unless an ISO source is first returned by scan.
 
 ### ISO Source Representation
 
@@ -258,6 +269,8 @@ The manager should expose these operations:
 
 Extend the existing source response contract so the frontend receives both `bdmv` and `iso`.
 
+When `ENABLE_ISO_SCAN` is disabled, the scan response returns only `bdmv` sources.
+
 Frontend types must change from:
 
 - `type SourceType = 'bdmv'`
@@ -417,5 +430,6 @@ Cover:
 ## Rollout Notes
 
 - README and Docker documentation must be updated to describe Linux-only ISO support and required container privileges
+- README and Docker documentation must describe `ENABLE_ISO_SCAN`, default-on behavior, and the recommendation to disable it in containers that do not have mount privileges
 - `/bd_input/iso_auto_mount` must be documented as application-reserved
 - operators should understand that ISO mount cleanup is best-effort and stale mounts can be retried by startup cleanup, manual release, or the idle janitor
