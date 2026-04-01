@@ -392,7 +392,6 @@ func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) (bool
 	m.mu.Lock()
 	entry := m.entries[sourceID]
 	if entry == nil {
-		delete(m.mountOwners, mountPath)
 		m.mu.Unlock()
 		return false, nil
 	}
