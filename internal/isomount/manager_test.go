@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -217,5 +218,70 @@ func TestManagerEnsureMountedSerializesSameSourceCalls(t *testing.T) {
 
 	if runner.calls["mount"] != 1 {
 		t.Fatalf("expected exactly one mount call, got %d", runner.calls["mount"])
+	}
+}
+
+func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name == "umount" && strings.Contains(args[0], "broken-disc") {
+				return errors.New("device busy")
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.now = func() time.Time { return now }
+	manager.entries["idle-disc"] = &entry{ISOPath: "/bd_input/idle.iso", MountPath: filepath.Join(root, "idle-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
+	manager.entries["busy-disc"] = &entry{ISOPath: "/bd_input/busy.iso", MountPath: filepath.Join(root, "busy-disc"), LastTouchedAt: now.Add(-2 * time.Hour), InUse: true}
+	manager.entries["broken-disc"] = &entry{ISOPath: "/bd_input/broken.iso", MountPath: filepath.Join(root, "broken-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
+
+	result := manager.ReleaseIdleMounted(context.Background())
+	if result.Released != 1 || result.SkippedInUse != 1 || result.Failed != 1 {
+		t.Fatalf("unexpected release summary %+v", result)
+	}
+}
+
+func TestManagerCleanupExpiredIdleReleasesOnlyStaleEntries(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	manager := NewManager(root, time.Hour, &fakeCommandRunner{})
+	manager.now = func() time.Time { return now }
+	manager.entries["stale-disc"] = &entry{ISOPath: "/bd_input/stale.iso", MountPath: filepath.Join(root, "stale-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
+	manager.entries["fresh-disc"] = &entry{ISOPath: "/bd_input/fresh.iso", MountPath: filepath.Join(root, "fresh-disc"), LastTouchedAt: now.Add(-15 * time.Minute)}
+
+	result := manager.CleanupExpiredIdle(context.Background(), now)
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected cleanup summary %+v", result)
+	}
+}
+
+func TestManagerCleanupResidualMountDirsBestEffort(t *testing.T) {
+	root := t.TempDir()
+	okPath := filepath.Join(root, "ok-disc")
+	failPath := filepath.Join(root, "fail-disc")
+	for _, path := range []string{okPath, failPath} {
+		if err := os.MkdirAll(filepath.Join(path, "BDMV", "PLAYLIST"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name == "umount" && strings.Contains(args[0], "fail-disc") {
+				return errors.New("device busy")
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Failed != 1 {
+		t.Fatalf("expected one failed cleanup, got %+v", result)
 	}
 }

@@ -22,6 +22,8 @@ type ReleaseResult struct {
 	Failed       int `json:"failed"`
 }
 
+var ErrSourceInUse = errors.New("source is in use")
+
 type entry struct {
 	ISOPath       string
 	MountPath     string
@@ -101,6 +103,132 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	return mountPath, nil
 }
 
+func (m *Manager) Touch(sourceID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if entry := m.entries[sourceID]; entry != nil {
+		entry.LastTouchedAt = m.now()
+	}
+}
+
+func (m *Manager) MarkInUse(sourceID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if entry := m.entries[sourceID]; entry != nil {
+		entry.InUse = true
+		entry.LastTouchedAt = m.now()
+	}
+}
+
+func (m *Manager) MarkIdle(sourceID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if entry := m.entries[sourceID]; entry != nil {
+		entry.InUse = false
+		entry.LastTouchedAt = m.now()
+	}
+}
+
+func (m *Manager) ReleaseIdleMounted(ctx context.Context) ReleaseResult {
+	m.mu.Lock()
+	ids := make([]string, 0, len(m.entries))
+	for sourceID := range m.entries {
+		ids = append(ids, sourceID)
+	}
+	m.mu.Unlock()
+
+	var result ReleaseResult
+	for _, sourceID := range ids {
+		switch err := m.ReleaseSource(ctx, sourceID); {
+		case err == nil:
+			result.Released++
+		case errors.Is(err, ErrSourceInUse):
+			result.SkippedInUse++
+		default:
+			result.Failed++
+		}
+	}
+	return result
+}
+
+func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) ReleaseResult {
+	m.mu.Lock()
+	ids := make([]string, 0, len(m.entries))
+	for sourceID, entry := range m.entries {
+		if entry == nil || entry.InUse || now.Sub(entry.LastTouchedAt) < m.idleTimeout {
+			continue
+		}
+		ids = append(ids, sourceID)
+	}
+	m.mu.Unlock()
+
+	var result ReleaseResult
+	for _, sourceID := range ids {
+		switch err := m.ReleaseSource(ctx, sourceID); {
+		case err == nil:
+			result.Released++
+		case errors.Is(err, ErrSourceInUse):
+			result.SkippedInUse++
+		default:
+			result.Failed++
+		}
+	}
+	return result
+}
+
+func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
+	entries, err := os.ReadDir(m.root)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		return ReleaseResult{}
+	}
+	if err != nil {
+		return ReleaseResult{Failed: 1}
+	}
+
+	var result ReleaseResult
+	for _, dirEntry := range entries {
+		if !dirEntry.IsDir() {
+			continue
+		}
+		mountPath := filepath.Join(m.root, dirEntry.Name())
+		if !isMountedBDMVRoot(mountPath) {
+			continue
+		}
+		if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
+			result.Failed++
+			continue
+		}
+		if err := os.RemoveAll(mountPath); err != nil {
+			result.Failed++
+			continue
+		}
+		result.Released++
+	}
+	return result
+}
+
+func (m *Manager) CleanupAll(ctx context.Context) ReleaseResult {
+	m.mu.Lock()
+	ids := make([]string, 0, len(m.entries))
+	for sourceID := range m.entries {
+		ids = append(ids, sourceID)
+	}
+	m.mu.Unlock()
+
+	var result ReleaseResult
+	for _, sourceID := range ids {
+		if err := m.forceReleaseSource(ctx, sourceID); err != nil {
+			result.Failed++
+			continue
+		}
+		result.Released++
+	}
+	return result
+}
+
 func (m *Manager) sourceLockFor(sourceID string) *sync.Mutex {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -112,6 +240,52 @@ func (m *Manager) sourceLockFor(sourceID string) *sync.Mutex {
 	lock := &sync.Mutex{}
 	m.sourceLocks[sourceID] = lock
 	return lock
+}
+
+func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) error {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
+	m.mu.Lock()
+	entry := m.entries[sourceID]
+	if entry == nil {
+		m.mu.Unlock()
+		return nil
+	}
+	if entry.InUse {
+		m.mu.Unlock()
+		return ErrSourceInUse
+	}
+	mountPath := entry.MountPath
+	delete(m.entries, sourceID)
+	m.mu.Unlock()
+
+	if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
+		return err
+	}
+	return os.RemoveAll(mountPath)
+}
+
+func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) error {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
+	m.mu.Lock()
+	entry := m.entries[sourceID]
+	if entry == nil {
+		m.mu.Unlock()
+		return nil
+	}
+	mountPath := entry.MountPath
+	delete(m.entries, sourceID)
+	m.mu.Unlock()
+
+	if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
+		return err
+	}
+	return os.RemoveAll(mountPath)
 }
 
 func (m *Manager) cleanupMount(ctx context.Context, mountPath string) {
@@ -133,4 +307,22 @@ func isMountedBDMVRoot(path string) bool {
 	}
 	_, err := os.Stat(filepath.Join(path, "BDMV", "index.bdmv"))
 	return err == nil
+}
+
+func (m *Manager) RunJanitor(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.CleanupExpiredIdle(ctx, m.now())
+		}
+	}
 }
