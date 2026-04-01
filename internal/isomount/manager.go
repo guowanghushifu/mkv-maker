@@ -40,6 +40,7 @@ type Manager struct {
 	mu          sync.Mutex
 	entries     map[string]*entry
 	sourceLocks map[string]*sync.Mutex
+	mountLocks  map[string]*sync.Mutex
 	mountOwners map[string]string
 	pendingDirs map[string]struct{}
 }
@@ -62,6 +63,7 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 		runner:      runner,
 		entries:     map[string]*entry{},
 		sourceLocks: map[string]*sync.Mutex{},
+		mountLocks:  map[string]*sync.Mutex{},
 		mountOwners: map[string]string{},
 		pendingDirs: map[string]struct{}{},
 	}
@@ -86,7 +88,11 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	m.mu.Unlock()
 
 	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
+	mountLock := m.mountLockFor(mountPath)
+	mountLock.Lock()
+	defer mountLock.Unlock()
 	m.mu.Lock()
+	delete(m.pendingDirs, mountPath)
 	m.mountOwners[mountPath] = sourceKey
 	m.mu.Unlock()
 	mounted := false
@@ -172,11 +178,14 @@ func (m *Manager) ReleaseIdleMounted(ctx context.Context) ReleaseResult {
 
 	var result ReleaseResult
 	for _, sourceID := range ids {
-		switch err := m.ReleaseSource(ctx, sourceID); {
-		case err == nil:
+		released, err := m.ReleaseSource(ctx, sourceID)
+		switch {
+		case released:
 			result.Released++
 		case errors.Is(err, ErrSourceInUse):
 			result.SkippedInUse++
+		case err == nil:
+			// The source disappeared before release time; nothing to count.
 		default:
 			result.Failed++
 		}
@@ -263,74 +272,45 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 			continue
 		}
 		mountPath := filepath.Join(m.root, dirEntry.Name())
+		mountLock := m.mountLockFor(mountPath)
+		if !mountLock.TryLock() {
+			continue
+		}
 
 		m.mu.Lock()
-		sourceID, tracked := m.mountOwners[mountPath]
-		pending := false
-		if !tracked {
-			_, pending = m.pendingDirs[mountPath]
-		}
+		_, tracked := m.mountOwners[mountPath]
+		_, pending := m.pendingDirs[mountPath]
 		m.mu.Unlock()
 
 		if tracked {
-			sourceLock := m.sourceLockFor(sourceID)
-			if !sourceLock.TryLock() {
-				continue
-			}
-
-			m.mu.Lock()
-			entry := m.entries[sourceID]
-			m.mu.Unlock()
-			if entry != nil {
-				sourceLock.Unlock()
-				continue
-			}
-
-			if pending {
-				if !m.cleanupMountPath(ctx, mountPath) {
-					sourceLock.Unlock()
-					result.Failed++
-					continue
-				}
-			} else if !isMountedBDMVRoot(mountPath) {
-				sourceLock.Unlock()
-				continue
-			}
-
-			if !pending && !m.cleanupMountPath(ctx, mountPath) {
-				sourceLock.Unlock()
-				result.Failed++
-				continue
-			}
-
-			m.mu.Lock()
-			if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
-				delete(m.entries, sourceID)
-			}
-			delete(m.mountOwners, mountPath)
-			delete(m.pendingDirs, mountPath)
-			m.mu.Unlock()
-			sourceLock.Unlock()
-			result.Released++
+			mountLock.Unlock()
 			continue
 		}
 
 		if pending {
 			if !m.cleanupMountPath(ctx, mountPath) {
+				mountLock.Unlock()
 				result.Failed++
 				continue
 			}
+			m.mu.Lock()
+			delete(m.pendingDirs, mountPath)
+			m.mu.Unlock()
+			mountLock.Unlock()
 			result.Released++
 			continue
 		}
 
 		if !isMountedBDMVRoot(mountPath) {
+			mountLock.Unlock()
 			continue
 		}
 		if !m.cleanupMountPath(ctx, mountPath) {
+			mountLock.Unlock()
 			result.Failed++
 			continue
 		}
+		mountLock.Unlock()
 		result.Released++
 	}
 	return result
@@ -346,11 +326,14 @@ func (m *Manager) CleanupAll(ctx context.Context) ReleaseResult {
 
 	var result ReleaseResult
 	for _, sourceID := range ids {
-		if err := m.forceReleaseSource(ctx, sourceID); err != nil {
+		released, err := m.forceReleaseSource(ctx, sourceID)
+		if err != nil {
 			result.Failed++
 			continue
 		}
-		result.Released++
+		if released {
+			result.Released++
+		}
 	}
 	return result
 }
@@ -368,26 +351,29 @@ func (m *Manager) sourceLockFor(sourceID string) *sync.Mutex {
 	return lock
 }
 
-func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) error {
+func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, error) {
 	sourceLock := m.sourceLockFor(sourceID)
 	sourceLock.Lock()
 	defer sourceLock.Unlock()
 
+	mountPath := filepath.Join(m.root, sanitizeID(sourceID))
+
 	m.mu.Lock()
 	entry := m.entries[sourceID]
 	if entry == nil {
+		delete(m.mountOwners, mountPath)
 		m.mu.Unlock()
-		return nil
+		return false, nil
 	}
 	if entry.InUse {
 		m.mu.Unlock()
-		return ErrSourceInUse
+		return false, ErrSourceInUse
 	}
-	mountPath := entry.MountPath
+	mountPath = entry.MountPath
 	m.mu.Unlock()
 
 	if !m.cleanupMountPath(ctx, mountPath) {
-		return errors.New("failed to release source")
+		return false, errors.New("failed to release source")
 	}
 
 	m.mu.Lock()
@@ -396,25 +382,28 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) error {
 	}
 	delete(m.mountOwners, mountPath)
 	m.mu.Unlock()
-	return nil
+	return true, nil
 }
 
-func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) error {
+func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) (bool, error) {
 	sourceLock := m.sourceLockFor(sourceID)
 	sourceLock.Lock()
 	defer sourceLock.Unlock()
 
+	mountPath := filepath.Join(m.root, sanitizeID(sourceID))
+
 	m.mu.Lock()
 	entry := m.entries[sourceID]
 	if entry == nil {
+		delete(m.mountOwners, mountPath)
 		m.mu.Unlock()
-		return nil
+		return false, nil
 	}
-	mountPath := entry.MountPath
+	mountPath = entry.MountPath
 	m.mu.Unlock()
 
 	if !m.cleanupMountPath(ctx, mountPath) {
-		return errors.New("failed to release source")
+		return false, errors.New("failed to release source")
 	}
 
 	m.mu.Lock()
@@ -423,7 +412,7 @@ func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) error
 	}
 	delete(m.mountOwners, mountPath)
 	m.mu.Unlock()
-	return nil
+	return true, nil
 }
 
 func (m *Manager) cleanupMount(ctx context.Context, mountPath string) {
@@ -457,6 +446,19 @@ func (m *Manager) cleanupMountPath(ctx context.Context, mountPath string) bool {
 		return true
 	}
 	return false
+}
+
+func (m *Manager) mountLockFor(mountPath string) *sync.Mutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if lock := m.mountLocks[mountPath]; lock != nil {
+		return lock
+	}
+
+	lock := &sync.Mutex{}
+	m.mountLocks[mountPath] = lock
+	return lock
 }
 
 func sanitizeID(id string) string {

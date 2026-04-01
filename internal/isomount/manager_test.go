@@ -282,6 +282,69 @@ func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *t
 	}
 }
 
+func TestManagerReleaseIdleMountedCountsOnlyActualReleasesWhenSourceDisappears(t *testing.T) {
+	root := t.TempDir()
+	firstID := "first-disc"
+	secondID := "second-disc"
+	firstPath := filepath.Join(root, firstID)
+	secondPath := filepath.Join(root, secondID)
+	for _, path := range []string{firstPath, secondPath} {
+		if err := os.MkdirAll(filepath.Join(path, "BDMV", "PLAYLIST"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	releaseFirst := make(chan struct{})
+	firstUnmounted := make(chan string, 1)
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name != "umount" {
+				return nil
+			}
+			select {
+			case firstUnmounted <- args[0]:
+				<-releaseFirst
+			default:
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[firstID] = &entry{ISOPath: "/bd_input/first.iso", MountPath: firstPath, LastTouchedAt: time.Now()}
+	manager.entries[secondID] = &entry{ISOPath: "/bd_input/second.iso", MountPath: secondPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[firstPath] = firstID
+	manager.mountOwners[secondPath] = secondID
+
+	done := make(chan ReleaseResult, 1)
+	go func() {
+		done <- manager.ReleaseIdleMounted(context.Background())
+	}()
+
+	blockedPath := <-firstUnmounted
+	missingID := secondID
+	missingPath := secondPath
+	if blockedPath == secondPath {
+		missingID = firstID
+		missingPath = firstPath
+	}
+	manager.mu.Lock()
+	delete(manager.entries, missingID)
+	delete(manager.mountOwners, missingPath)
+	manager.mu.Unlock()
+	if err := os.RemoveAll(missingPath); err != nil {
+		t.Fatal(err)
+	}
+	close(releaseFirst)
+
+	result := <-done
+	if result.Released != 1 || result.SkippedInUse != 0 || result.Failed != 0 {
+		t.Fatalf("unexpected release summary %+v", result)
+	}
+}
+
 func TestManagerCleanupExpiredIdleReleasesOnlyStaleEntries(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
@@ -538,9 +601,9 @@ func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 	}
 }
 
-func TestManagerCleanupResidualMountDirsBlocksConcurrentEnsureMounted(t *testing.T) {
+func TestManagerEnsureMountedClearsStalePendingDirState(t *testing.T) {
 	root := t.TempDir()
-	sourceID := "library/blocked-disc"
+	sourceID := "library/reused-disc"
 	mountPath := filepath.Join(root, sanitizeID(sourceID))
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
@@ -548,21 +611,15 @@ func TestManagerCleanupResidualMountDirsBlocksConcurrentEnsureMounted(t *testing
 	if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	isoPath := filepath.Join(t.TempDir(), "blocked.iso")
+	isoPath := filepath.Join(t.TempDir(), "reused.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	mounted := make(chan struct{})
-	releaseCleanup := make(chan struct{})
 	var mountCalls int
 	runner := &fakeCommandRunner{
 		runFn: func(_ context.Context, name string, args ...string) error {
 			switch name {
-			case "umount":
-				close(mounted)
-				<-releaseCleanup
-				return nil
 			case "mount":
 				mountCalls++
 				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
@@ -578,49 +635,26 @@ func TestManagerCleanupResidualMountDirsBlocksConcurrentEnsureMounted(t *testing
 		},
 	}
 	manager := NewManager(root, time.Hour, runner)
-	manager.mountOwners[mountPath] = sourceID
-
-	done := make(chan ReleaseResult, 1)
-	go func() {
-		done <- manager.CleanupResidualMountDirs(context.Background())
-	}()
-
-	select {
-	case <-mounted:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for residual cleanup to reach unmount")
+	manager.pendingDirs[mountPath] = struct{}{}
+	mountPathResult, err := manager.EnsureMounted(context.Background(), sourceID, isoPath)
+	if err != nil {
+		t.Fatalf("EnsureMounted returned error: %v", err)
 	}
-
-	ensureDone := make(chan error, 1)
-	go func() {
-		_, err := manager.EnsureMounted(context.Background(), sourceID, isoPath)
-		ensureDone <- err
-	}()
-
-	select {
-	case err := <-ensureDone:
-		t.Fatalf("EnsureMounted finished before cleanup released lock: %v", err)
-	case <-time.After(150 * time.Millisecond):
+	if mountPathResult != mountPath {
+		t.Fatalf("unexpected mount path %q", mountPathResult)
 	}
-
-	close(releaseCleanup)
-
-	result := <-done
-	if result.Released != 1 || result.Failed != 0 {
-		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	if _, ok := manager.pendingDirs[mountPath]; ok {
+		t.Fatal("expected stale pending state to be cleared on reuse")
 	}
-
-	select {
-	case err := <-ensureDone:
-		if err != nil {
-			t.Fatalf("EnsureMounted returned error: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for EnsureMounted to finish")
-	}
-
 	if mountCalls != 1 {
-		t.Fatalf("expected EnsureMounted to wait until cleanup completed, got %d mount calls", mountCalls)
+		t.Fatalf("expected one mount call, got %d", mountCalls)
+	}
+	released, releaseErr := manager.ReleaseSource(context.Background(), sourceID)
+	if releaseErr != nil {
+		t.Fatalf("ReleaseSource returned error: %v", releaseErr)
+	}
+	if !released {
+		t.Fatal("expected ReleaseSource to report an actual release")
 	}
 }
 
@@ -691,6 +725,69 @@ func TestManagerCleanupResidualMountDirsRetriesPendingUnmountedDir(t *testing.T)
 	}
 }
 
+func TestManagerCleanupAllCountsOnlyActualReleasesWhenSourceDisappears(t *testing.T) {
+	root := t.TempDir()
+	firstID := "first-disc"
+	secondID := "second-disc"
+	firstPath := filepath.Join(root, firstID)
+	secondPath := filepath.Join(root, secondID)
+	for _, path := range []string{firstPath, secondPath} {
+		if err := os.MkdirAll(filepath.Join(path, "BDMV", "PLAYLIST"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	releaseFirst := make(chan struct{})
+	firstUnmounted := make(chan string, 1)
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name != "umount" {
+				return nil
+			}
+			select {
+			case firstUnmounted <- args[0]:
+				<-releaseFirst
+			default:
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[firstID] = &entry{ISOPath: "/bd_input/first.iso", MountPath: firstPath, LastTouchedAt: time.Now()}
+	manager.entries[secondID] = &entry{ISOPath: "/bd_input/second.iso", MountPath: secondPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[firstPath] = firstID
+	manager.mountOwners[secondPath] = secondID
+
+	done := make(chan ReleaseResult, 1)
+	go func() {
+		done <- manager.CleanupAll(context.Background())
+	}()
+
+	blockedPath := <-firstUnmounted
+	missingID := secondID
+	missingPath := secondPath
+	if blockedPath == secondPath {
+		missingID = firstID
+		missingPath = firstPath
+	}
+	manager.mu.Lock()
+	delete(manager.entries, missingID)
+	delete(manager.mountOwners, missingPath)
+	manager.mu.Unlock()
+	if err := os.RemoveAll(missingPath); err != nil {
+		t.Fatal(err)
+	}
+	close(releaseFirst)
+
+	result := <-done
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected cleanup summary %+v", result)
+	}
+}
+
 func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/retry-disc"
@@ -719,8 +816,12 @@ func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *te
 	manager.mountOwners[mountPath] = sourceID
 	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/retry.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
 
-	if err := manager.ReleaseSource(context.Background(), sourceID); err == nil {
+	released, err := manager.ReleaseSource(context.Background(), sourceID)
+	if err == nil {
 		t.Fatal("expected first release attempt to fail because removal is denied")
+	}
+	if released {
+		t.Fatal("expected first release attempt not to count as released")
 	}
 	if umountCalls != 1 {
 		t.Fatalf("expected one umount call on first attempt, got %d", umountCalls)
@@ -733,8 +834,12 @@ func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *te
 		t.Fatal(err)
 	}
 
-	if err := manager.ReleaseSource(context.Background(), sourceID); err != nil {
+	released, err = manager.ReleaseSource(context.Background(), sourceID)
+	if err != nil {
 		t.Fatalf("expected retry to succeed without a second umount, got %v", err)
+	}
+	if !released {
+		t.Fatal("expected retry to count as released")
 	}
 	if umountCalls != 1 {
 		t.Fatalf("expected retry to skip umount, got %d total calls", umountCalls)
