@@ -99,7 +99,7 @@ const resolveSourceBodyLimit = 2 << 20
 
 func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector) *SourcesHandler {
 	if scanner == nil {
-		scanner = media.NewScanner()
+		scanner = media.NewScanner(filepath.Join(inputDir, "iso_auto_mount"), true)
 	}
 	if inspector == nil {
 		inspector = MKVMergePlaylistInspector{}

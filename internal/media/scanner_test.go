@@ -18,7 +18,7 @@ func TestScannerFindsBDMVFoldersOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner()
+	scanner := NewScanner("", true)
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -55,7 +55,7 @@ func TestScannerFindsBDMVFoldersInNestedSubdirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner()
+	scanner := NewScanner("", true)
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -95,7 +95,7 @@ func TestScannerDoesNotReturnNestedBDMVInsideRecognizedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner()
+	scanner := NewScanner("", true)
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -105,5 +105,51 @@ func TestScannerDoesNotReturnNestedBDMVInsideRecognizedRoot(t *testing.T) {
 	}
 	if items[0].Path != parentDiscPath {
 		t.Fatalf("expected top-level disc path %q, got %q", parentDiscPath, items[0].Path)
+	}
+}
+
+func TestScannerFindsISOFilesWhenEnabled(t *testing.T) {
+	root := t.TempDir()
+	isoPath := filepath.Join(root, "movies", "Nightcrawler.iso")
+	if err := os.MkdirAll(filepath.Dir(isoPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner(filepath.Join(root, "iso_auto_mount"), true)
+	items, err := scanner.Scan(root)
+	if err != nil {
+		t.Fatalf("Scan returned error: %v", err)
+	}
+	if len(items) != 1 || items[0].Type != SourceISO {
+		t.Fatalf("expected one ISO item, got %+v", items)
+	}
+	if items[0].Name != "Nightcrawler" {
+		t.Fatalf("expected ISO name Nightcrawler, got %q", items[0].Name)
+	}
+}
+
+func TestScannerSkipsAutoMountRootAndOmitsISOWhenDisabled(t *testing.T) {
+	root := t.TempDir()
+	autoMountRoot := filepath.Join(root, "iso_auto_mount")
+	if err := os.MkdirAll(filepath.Join(autoMountRoot, "old-disc", "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(autoMountRoot, "old-disc", "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "DiscA.iso"), []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner(autoMountRoot, false)
+	items, err := scanner.Scan(root)
+	if err != nil {
+		t.Fatalf("Scan returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected no items when ISO scanning disabled and auto-mount root skipped, got %+v", items)
 	}
 }

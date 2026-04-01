@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -11,6 +12,7 @@ type SourceType string
 
 const (
 	SourceBDMV SourceType = "bdmv"
+	SourceISO  SourceType = "iso"
 )
 
 type SourceEntry struct {
@@ -22,10 +24,20 @@ type SourceEntry struct {
 	ModifiedAt time.Time  `json:"modifiedAt"`
 }
 
-type Scanner struct{}
+type Scanner struct {
+	AutoMountRoot string
+	EnableISOScan bool
+}
 
-func NewScanner() *Scanner {
-	return &Scanner{}
+func NewScanner(autoMountRoot string, enableISOScan bool) *Scanner {
+	autoMountRoot = strings.TrimSpace(autoMountRoot)
+	if autoMountRoot != "" {
+		autoMountRoot = filepath.Clean(autoMountRoot)
+	}
+	return &Scanner{
+		AutoMountRoot: autoMountRoot,
+		EnableISOScan: enableISOScan,
+	}
 }
 
 func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
@@ -34,7 +46,25 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 		if err != nil {
 			return err
 		}
+		if s.isReservedAutoMountPath(path) {
+			return filepath.SkipDir
+		}
 		if !d.IsDir() {
+			if !s.EnableISOScan || !strings.EqualFold(filepath.Ext(path), ".iso") {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			out = append(out, SourceEntry{
+				ID:         stableSourceID(root, path),
+				Name:       strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+				Path:       path,
+				Type:       SourceISO,
+				Size:       info.Size(),
+				ModifiedAt: info.ModTime(),
+			})
 			return nil
 		}
 		if path == root {
@@ -54,7 +84,7 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 		}
 
 		out = append(out, SourceEntry{
-			ID:         filepath.Base(path),
+			ID:         stableSourceID(root, path),
 			Name:       filepath.Base(path),
 			Path:       path,
 			Type:       SourceBDMV,
@@ -80,6 +110,26 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 	})
 
 	return out, nil
+}
+
+func (s *Scanner) isReservedAutoMountPath(path string) bool {
+	if s.AutoMountRoot == "" {
+		return false
+	}
+	cleanedPath := filepath.Clean(path)
+	if cleanedPath == s.AutoMountRoot {
+		return true
+	}
+	return strings.HasPrefix(cleanedPath, s.AutoMountRoot+string(filepath.Separator))
+}
+
+func stableSourceID(root, path string) string {
+	if root != "" {
+		if rel, err := filepath.Rel(root, path); err == nil {
+			path = rel
+		}
+	}
+	return filepath.Base(filepath.Clean(path))
 }
 
 func isBDMVRoot(path string) bool {

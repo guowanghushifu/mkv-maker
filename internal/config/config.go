@@ -14,6 +14,7 @@ type Config struct {
 	ListenAddr          string
 	SessionMaxAge       int
 	SessionCookieSecure bool
+	EnableISOScan       bool
 }
 
 func Load() (Config, error) {
@@ -25,6 +26,7 @@ func Load() (Config, error) {
 		ListenAddr:          getenvDefault("LISTEN_ADDR", ":8080"),
 		SessionMaxAge:       86400,
 		SessionCookieSecure: getenvBoolDefault("SESSION_COOKIE_SECURE", false),
+		EnableISOScan:       getenvBoolDefault("ENABLE_ISO_SCAN", true),
 	}
 	if cfg.AppPassword == "" {
 		return Config{}, errors.New("APP_PASSWORD is required")
