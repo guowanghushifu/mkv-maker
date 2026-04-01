@@ -35,7 +35,7 @@ export function BDInfoPage({
         </div>
       </div>
 
-      <div className="bdinfo-layout">
+      <div className="bdinfo-layout bdinfo-layout-single">
         <div className="bdinfo-composer supporting-card">
           <textarea
             value={bdinfoText}

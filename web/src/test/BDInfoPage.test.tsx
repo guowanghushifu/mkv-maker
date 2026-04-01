@@ -12,7 +12,7 @@ const source = {
 };
 
 describe('BDInfoPage', () => {
-  it('renders bdinfo without the removed right-side support column cards', () => {
+  it('renders bdinfo as a single-pane workspace after removing the right-side cards', () => {
     const { container } = render(
       <BDInfoPage
         locale="en"
@@ -29,6 +29,7 @@ describe('BDInfoPage', () => {
 
     expect(container.querySelector('.workspace-card.bdinfo-workspace')).not.toBeNull();
     expect(container.querySelector('.bdinfo-layout')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-layout.bdinfo-layout-single')).not.toBeNull();
     expect(container.querySelector('.bdinfo-sidebar')).toBeNull();
     expect(container.querySelector('.bdinfo-source-card')).toBeNull();
     expect(container.querySelector('.bdinfo-summary-card')).toBeNull();

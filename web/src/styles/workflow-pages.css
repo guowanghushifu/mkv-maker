@@ -335,6 +335,10 @@ textarea:focus {
   gap: 0.7rem;
 }
 
+.bdinfo-layout-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .editor-overview-card {
   padding: 0.75rem 0.8rem;
 }
