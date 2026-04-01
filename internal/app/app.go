@@ -16,6 +16,7 @@ import (
 	httpapi "github.com/guowanghushifu/mkv-maker/internal/http"
 	"github.com/guowanghushifu/mkv-maker/internal/http/handlers"
 	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
+	"github.com/guowanghushifu/mkv-maker/internal/media"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
@@ -46,7 +47,12 @@ func New(cfg config.Config) (*App, error) {
 		InputDir:  cfg.InputDir,
 		OutputDir: cfg.OutputDir,
 	}
-	sourcesHandler := handlers.NewSourcesHandler(cfg.InputDir, cfg.OutputDir, nil, nil)
+	sourcesHandler := handlers.NewSourcesHandler(
+		cfg.InputDir,
+		cfg.OutputDir,
+		media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), cfg.EnableISOScan),
+		nil,
+	)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	remuxManager := remux.NewManager(nil)
