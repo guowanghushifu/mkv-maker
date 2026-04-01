@@ -221,6 +221,112 @@ func TestManagerEnsureMountedSerializesSameSourceCalls(t *testing.T) {
 	}
 }
 
+func TestManagerEnsureMountedRejectsCollidingClaimAfterMountLock(t *testing.T) {
+	root := t.TempDir()
+	primaryID := "library/../disc"
+	secondaryID := "disc"
+	isoPath := filepath.Join(t.TempDir(), "disc.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mountPath := filepath.Join(root, sanitizeID(primaryID))
+	primaryEntered := make(chan struct{})
+	releasePrimary := make(chan struct{})
+	var mountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name != "mount" {
+				return nil
+			}
+			mountCalls++
+			if mountCalls == 1 {
+				close(primaryEntered)
+				<-releasePrimary
+			}
+			if err := os.MkdirAll(filepath.Join(args[len(args)-1], "BDMV", "PLAYLIST"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(args[len(args)-1], "BDMV", "index.bdmv"), []byte("index"), 0o644)
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	primaryDone := make(chan struct {
+		path string
+		err  error
+	}, 1)
+	go func() {
+		path, err := manager.EnsureMounted(context.Background(), primaryID, isoPath)
+		primaryDone <- struct {
+			path string
+			err  error
+		}{path: path, err: err}
+	}()
+
+	select {
+	case <-primaryEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for primary mount to start")
+	}
+
+	secondaryStarted := make(chan struct{})
+	secondaryDone := make(chan struct {
+		path string
+		err  error
+	}, 1)
+	go func() {
+		close(secondaryStarted)
+		path, err := manager.EnsureMounted(context.Background(), secondaryID, isoPath)
+		secondaryDone <- struct {
+			path string
+			err  error
+		}{path: path, err: err}
+	}()
+
+	select {
+	case <-secondaryStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for secondary claimant to start")
+	}
+
+	close(releasePrimary)
+
+	select {
+	case outcome := <-primaryDone:
+		if outcome.err != nil {
+			t.Fatalf("primary EnsureMounted returned error: %v", outcome.err)
+		}
+		if outcome.path != mountPath {
+			t.Fatalf("unexpected primary mount path %q", outcome.path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for primary EnsureMounted")
+	}
+
+	select {
+	case outcome := <-secondaryDone:
+		if outcome.err == nil {
+			t.Fatal("expected secondary claimant to be rejected before mount")
+		}
+		if outcome.path != "" {
+			t.Fatalf("expected no mount path for rejected claimant, got %q", outcome.path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for secondary EnsureMounted")
+	}
+
+	if mountCalls != 1 {
+		t.Fatalf("expected only the primary mount attempt, got %d calls", mountCalls)
+	}
+	if owner := manager.mountOwners[mountPath]; owner != primaryID {
+		t.Fatalf("expected primary owner %q to remain, got %q", primaryID, owner)
+	}
+	if _, ok := manager.entries[secondaryID]; ok {
+		t.Fatal("expected rejected claimant to stay untracked")
+	}
+}
+
 func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
@@ -732,6 +838,40 @@ func TestManagerEnsureMountedPreservesPendingCleanupStateOnValidationFailure(t *
 	}
 }
 
+func TestManagerEnsureMountedRetainsPendingStateOnMountFailure(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/pending-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := filepath.Join(t.TempDir(), "pending.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var mountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name == "mount" {
+				mountCalls++
+				return errors.New("simulated mount failure")
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.pendingDirs[mountPath] = struct{}{}
+	manager.mountOwners[mountPath] = sourceID
+
+	if _, err := manager.EnsureMounted(context.Background(), sourceID, isoPath); err == nil {
+		t.Fatal("expected EnsureMounted to fail when mount command fails")
+	}
+	if mountCalls != 1 {
+		t.Fatalf("expected one mount call, got %d", mountCalls)
+	}
+	if _, pending := manager.pendingDirs[mountPath]; !pending {
+		t.Fatal("expected pending cleanup state to survive mount failure")
+	}
+}
+
 func TestManagerReleaseSourceAliasDoesNotExposeLiveMountToResidualCleanup(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/../disc"
@@ -1108,8 +1248,8 @@ func TestManagerEnsureMountedFailureDoesNotOrphanPriorSanitizedOwner(t *testing.
 	if umountCalls != 0 {
 		t.Fatalf("expected live mount not to be torn down, got %d umount calls", umountCalls)
 	}
-	if mountCalls != 2 {
-		t.Fatalf("expected two mount attempts, got %d", mountCalls)
+	if mountCalls != 1 {
+		t.Fatalf("expected the collision to be rejected before a second mount, got %d mount attempts", mountCalls)
 	}
 }
 
