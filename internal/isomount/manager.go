@@ -43,6 +43,7 @@ type Manager struct {
 	mountLocks  map[string]*sync.Mutex
 	mountOwners map[string]string
 	pendingDirs map[string]struct{}
+	retryMounts map[string]struct{}
 }
 
 type systemRunner struct{}
@@ -66,6 +67,7 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 		mountLocks:  map[string]*sync.Mutex{},
 		mountOwners: map[string]string{},
 		pendingDirs: map[string]struct{}{},
+		retryMounts: map[string]struct{}{},
 	}
 }
 
@@ -86,7 +88,9 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		return existing.MountPath, nil
 	}
 	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
+	preexistingPending := false
 	if _, pending := m.pendingDirs[mountPath]; pending {
+		preexistingPending = true
 		if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner != sourceKey {
 			m.mu.Unlock()
 			return "", errors.New("mount path is already owned")
@@ -113,7 +117,7 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		return "", err
 	}
 	if !isMountedBDMVRoot(mountPath) {
-		m.cleanupMount(ctx, mountPath)
+		m.cleanupInvalidMountedContent(ctx, mountPath, preexistingPending)
 		return "", errors.New("mounted ISO does not contain a valid BDMV structure")
 	}
 
@@ -295,11 +299,40 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 
 		m.mu.Lock()
 		_, tracked := m.mountOwners[mountPath]
+		_, retrying := m.retryMounts[mountPath]
 		_, pending := m.pendingDirs[mountPath]
 		m.mu.Unlock()
 
 		if tracked {
 			mountLock.Unlock()
+			continue
+		}
+
+		if retrying {
+			hadPending := pending
+			if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
+				mountLock.Unlock()
+				result.Failed++
+				continue
+			}
+			m.mu.Lock()
+			delete(m.retryMounts, mountPath)
+			if !hadPending {
+				m.pendingDirs[mountPath] = struct{}{}
+			}
+			m.mu.Unlock()
+			if err := os.RemoveAll(mountPath); err != nil {
+				mountLock.Unlock()
+				result.Failed++
+				continue
+			}
+			m.mu.Lock()
+			if !hadPending {
+				delete(m.pendingDirs, mountPath)
+			}
+			m.mu.Unlock()
+			mountLock.Unlock()
+			result.Released++
 			continue
 		}
 
@@ -464,6 +497,42 @@ func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) (bool
 func (m *Manager) cleanupMount(ctx context.Context, mountPath string) {
 	_ = m.runner.Run(ctx, "umount", mountPath)
 	_ = os.RemoveAll(mountPath)
+}
+
+func (m *Manager) cleanupInvalidMountedContent(ctx context.Context, mountPath string, preservePending bool) bool {
+	if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
+		m.mu.Lock()
+		m.retryMounts[mountPath] = struct{}{}
+		if preservePending {
+			m.pendingDirs[mountPath] = struct{}{}
+		}
+		m.mu.Unlock()
+		return false
+	}
+
+	m.mu.Lock()
+	delete(m.retryMounts, mountPath)
+	if !preservePending {
+		m.pendingDirs[mountPath] = struct{}{}
+	}
+	m.mu.Unlock()
+
+	if err := os.RemoveAll(mountPath); err != nil {
+		m.mu.Lock()
+		if !preservePending {
+			m.pendingDirs[mountPath] = struct{}{}
+		}
+		m.mu.Unlock()
+		return false
+	}
+
+	m.mu.Lock()
+	delete(m.retryMounts, mountPath)
+	if !preservePending {
+		delete(m.pendingDirs, mountPath)
+	}
+	m.mu.Unlock()
+	return true
 }
 
 func (m *Manager) cleanupMountPath(ctx context.Context, mountPath string) bool {

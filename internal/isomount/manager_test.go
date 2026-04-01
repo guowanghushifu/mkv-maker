@@ -149,6 +149,55 @@ func TestManagerEnsureMountedCleansUpInvalidMountedContent(t *testing.T) {
 	}
 }
 
+func TestManagerEnsureMountedRetriesInvalidContentCleanupAfterUnmountFailure(t *testing.T) {
+	root := t.TempDir()
+	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mountPath := filepath.Join(root, "movies-nightcrawler-iso")
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV"), 0o755); err != nil {
+					return err
+				}
+				return nil
+			case "umount":
+				umountCalls++
+				if umountCalls == 1 {
+					return errors.New("device busy")
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err == nil {
+		t.Fatal("expected invalid mounted content to fail")
+	}
+	if _, statErr := os.Stat(mountPath); statErr != nil {
+		t.Fatalf("expected mount dir to remain after failed unmount, got %v", statErr)
+	}
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	}
+	if umountCalls != 2 {
+		t.Fatalf("expected residual cleanup to retry unmount, got %d umount calls", umountCalls)
+	}
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected leftover directory cleanup, got stat error %v", statErr)
+	}
+}
+
 func TestManagerEnsureMountedSerializesSameSourceCalls(t *testing.T) {
 	root := t.TempDir()
 	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
