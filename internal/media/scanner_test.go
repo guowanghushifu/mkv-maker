@@ -3,6 +3,7 @@ package media
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -176,23 +177,22 @@ func TestScannerGivesDistinctIDsToISOFilesWithSameBasename(t *testing.T) {
 		t.Fatalf("expected 2 ISO items, got %+v", items)
 	}
 
-	ids := map[string]string{}
+	var firstID, secondID string
 	for _, item := range items {
 		if item.Type != SourceISO {
 			t.Fatalf("expected ISO source, got %+v", item)
 		}
-		ids[item.ID] = item.Path
+		if strings.Contains(item.ID, "/") {
+			t.Fatalf("expected URL-safe ISO ID without slash, got %q", item.ID)
+		}
+		if firstID == "" {
+			firstID = item.ID
+			continue
+		}
+		secondID = item.ID
 	}
 
-	expectedOne := filepath.ToSlash(filepath.Join("dir1", "Movie.iso"))
-	expectedTwo := filepath.ToSlash(filepath.Join("dir2", "Movie.iso"))
-	if _, ok := ids[expectedOne]; !ok {
-		t.Fatalf("expected ISO ID %q in results, got %+v", expectedOne, items)
-	}
-	if _, ok := ids[expectedTwo]; !ok {
-		t.Fatalf("expected ISO ID %q in results, got %+v", expectedTwo, items)
-	}
-	if expectedOne == expectedTwo {
-		t.Fatal("expected distinct ISO IDs for duplicate basenames")
+	if firstID == secondID {
+		t.Fatalf("expected distinct ISO IDs for duplicate basenames, got %+v", items)
 	}
 }

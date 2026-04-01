@@ -1,6 +1,7 @@
 package media
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -127,11 +128,11 @@ func stableISOID(root, path string) string {
 	if root != "" {
 		if rel, err := filepath.Rel(root, path); err == nil {
 			if rel != "." {
-				return filepath.ToSlash(filepath.Clean(rel))
+				return url.PathEscape(filepath.ToSlash(filepath.Clean(rel)))
 			}
 		}
 	}
-	return filepath.Base(path)
+	return url.PathEscape(filepath.ToSlash(filepath.Base(path)))
 }
 
 func isBDMVRoot(path string) bool {
