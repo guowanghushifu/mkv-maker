@@ -350,7 +350,7 @@ export const messages: Record<Locale, MessageSet> = {
     scan: {
       title: 'Scan Sources',
       subtitle: 'Only extracted BDMV folders are accepted as workflow input.',
-      scanButton: 'Scan Sources (POST /api/sources/scan)',
+      scanButton: 'Scan Sources',
       scanningButton: 'Scanning...',
       nextButton: 'Continue to BDInfo',
       empty: 'No sources yet. Run scan to discover BDMV directories.',
