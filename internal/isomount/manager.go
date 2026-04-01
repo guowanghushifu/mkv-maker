@@ -151,6 +151,11 @@ func (m *Manager) ReleaseIdleMounted(ctx context.Context) ReleaseResult {
 			result.Failed++
 		}
 	}
+
+	residual := m.CleanupResidualMountDirs(ctx)
+	result.Released += residual.Released
+	result.SkippedInUse += residual.SkippedInUse
+	result.Failed += residual.Failed
 	return result
 }
 
@@ -180,6 +185,16 @@ func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) Release
 }
 
 func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
+	m.mu.Lock()
+	trackedMountPaths := make(map[string]struct{}, len(m.entries))
+	for _, entry := range m.entries {
+		if entry == nil {
+			continue
+		}
+		trackedMountPaths[entry.MountPath] = struct{}{}
+	}
+	m.mu.Unlock()
+
 	entries, err := os.ReadDir(m.root)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return ReleaseResult{}
@@ -194,14 +209,13 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 			continue
 		}
 		mountPath := filepath.Join(m.root, dirEntry.Name())
+		if _, tracked := trackedMountPaths[mountPath]; tracked {
+			continue
+		}
 		if !isMountedBDMVRoot(mountPath) {
 			continue
 		}
-		if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
-			result.Failed++
-			continue
-		}
-		if err := os.RemoveAll(mountPath); err != nil {
+		if !m.cleanupMountPath(ctx, mountPath) {
 			result.Failed++
 			continue
 		}
@@ -258,13 +272,18 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) error {
 		return ErrSourceInUse
 	}
 	mountPath := entry.MountPath
-	delete(m.entries, sourceID)
 	m.mu.Unlock()
 
-	if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
-		return err
+	if !m.cleanupMountPath(ctx, mountPath) {
+		return errors.New("failed to release source")
 	}
-	return os.RemoveAll(mountPath)
+
+	m.mu.Lock()
+	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+		delete(m.entries, sourceID)
+	}
+	m.mu.Unlock()
+	return nil
 }
 
 func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) error {
@@ -279,18 +298,29 @@ func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) error
 		return nil
 	}
 	mountPath := entry.MountPath
-	delete(m.entries, sourceID)
 	m.mu.Unlock()
 
-	if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
-		return err
+	if !m.cleanupMountPath(ctx, mountPath) {
+		return errors.New("failed to release source")
 	}
-	return os.RemoveAll(mountPath)
+
+	m.mu.Lock()
+	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+		delete(m.entries, sourceID)
+	}
+	m.mu.Unlock()
+	return nil
 }
 
 func (m *Manager) cleanupMount(ctx context.Context, mountPath string) {
 	_ = m.runner.Run(ctx, "umount", mountPath)
 	_ = os.RemoveAll(mountPath)
+}
+
+func (m *Manager) cleanupMountPath(ctx context.Context, mountPath string) bool {
+	umountErr := m.runner.Run(ctx, "umount", mountPath)
+	removeErr := os.RemoveAll(mountPath)
+	return umountErr == nil && removeErr == nil
 }
 
 func sanitizeID(id string) string {
