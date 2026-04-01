@@ -120,7 +120,10 @@ describe('ReviewPage', () => {
     expect(screen.getByRole('button', { name: /start next remux/i }).closest('.review-actions-secondary')).not.toBeNull();
     expect(screen.queryByText(/^Nightcrawler Disc$/i)).toBeNull();
     expect(screen.queryByText(/^00003\.MPLS$/i)).toBeNull();
-    expect(screen.getByText(/current remux/i).closest('.job-console')).not.toBeNull();
+    const currentRemuxPanel = screen.getByText(/current remux/i).closest('.job-console');
+    expect(currentRemuxPanel).not.toBeNull();
+    expect(screen.queryByText(/^Output$/i)).toBeNull();
+    expect(currentRemuxPanel?.querySelector('.review-summary-card.review-summary-card-full')).not.toBeNull();
   });
 
   it('renders the current remux panel when a task is present', () => {

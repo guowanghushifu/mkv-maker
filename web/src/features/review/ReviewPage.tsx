@@ -123,8 +123,11 @@ export function ReviewPage({
             <StatusBadge status={currentJob.status} locale={locale} />
           </div>
           <div className="job-console-grid">
-            <SummaryCard className="review-summary-card" label={text.review.output} value={currentJob.outputName} />
-            <SummaryCard className="review-summary-card" label={text.review.path} value={currentJob.outputPath} />
+            <SummaryCard
+              className="review-summary-card review-summary-card-full"
+              label={text.review.path}
+              value={currentJob.outputPath}
+            />
           </div>
           <div className="current-job-progress">
             <div className="row">
