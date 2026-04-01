@@ -35,8 +35,9 @@ type Manager struct {
 	now         func() time.Time
 	runner      CommandRunner
 
-	mu      sync.Mutex
-	entries map[string]*entry
+	mu          sync.Mutex
+	entries     map[string]*entry
+	sourceLocks map[string]*sync.Mutex
 }
 
 type systemRunner struct{}
@@ -56,17 +57,27 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 		now:         time.Now,
 		runner:      runner,
 		entries:     map[string]*entry{},
+		sourceLocks: map[string]*sync.Mutex{},
 	}
 }
 
 func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
+	sourceKey := strings.TrimSpace(sourceID)
+	if sourceKey == "" {
+		return "", errors.New("source ID is required")
+	}
+
+	sourceLock := m.sourceLockFor(sourceKey)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
 	m.mu.Lock()
-	if existing := m.entries[sourceID]; existing != nil && isMountedBDMVRoot(existing.MountPath) {
+	if existing := m.entries[sourceKey]; existing != nil && isMountedBDMVRoot(existing.MountPath) {
 		existing.LastTouchedAt = m.now()
 		m.mu.Unlock()
 		return existing.MountPath, nil
 	}
-	mountPath := filepath.Join(m.root, sanitizeID(sourceID))
+	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
 	m.mu.Unlock()
 
 	if err := os.MkdirAll(mountPath, 0o755); err != nil {
@@ -76,17 +87,36 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		return "", err
 	}
 	if !isMountedBDMVRoot(mountPath) {
+		m.cleanupMount(ctx, mountPath)
 		return "", errors.New("mounted ISO does not contain a valid BDMV structure")
 	}
 
 	m.mu.Lock()
-	m.entries[sourceID] = &entry{
+	m.entries[sourceKey] = &entry{
 		ISOPath:       isoPath,
 		MountPath:     mountPath,
 		LastTouchedAt: m.now(),
 	}
 	m.mu.Unlock()
 	return mountPath, nil
+}
+
+func (m *Manager) sourceLockFor(sourceID string) *sync.Mutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if lock := m.sourceLocks[sourceID]; lock != nil {
+		return lock
+	}
+
+	lock := &sync.Mutex{}
+	m.sourceLocks[sourceID] = lock
+	return lock
+}
+
+func (m *Manager) cleanupMount(ctx context.Context, mountPath string) {
+	_ = m.runner.Run(ctx, "umount", mountPath)
+	_ = os.RemoveAll(mountPath)
 }
 
 func sanitizeID(id string) string {
