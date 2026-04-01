@@ -216,6 +216,10 @@ func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now
 	mountPath := entry.MountPath
 	m.mu.Unlock()
 
+	mountLock := m.mountLockFor(mountPath)
+	mountLock.Lock()
+	defer mountLock.Unlock()
+
 	if !m.cleanupMountPath(ctx, mountPath) {
 		return false, errors.New("failed to release source")
 	}
@@ -224,7 +228,10 @@ func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now
 	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
 	}
-	delete(m.mountOwners, mountPath)
+	if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner == sourceID {
+		delete(m.mountOwners, mountPath)
+		delete(m.pendingDirs, mountPath)
+	}
 	m.mu.Unlock()
 	return true, nil
 }
