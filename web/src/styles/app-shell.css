@@ -196,7 +196,6 @@
 }
 
 .workflow-summary-card,
-.context-card,
 .panel,
 .review-summary-card {
   min-width: 0;
@@ -209,7 +208,6 @@
 }
 
 .workflow-summary-card,
-.context-card,
 .review-summary-card {
   padding: 0.8rem 0.9rem;
 }
@@ -234,22 +232,9 @@
   overflow-wrap: anywhere;
 }
 
-.context-card-value-clamp {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: keep-all;
-}
-
 .workflow-page-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -257,13 +242,6 @@
   min-width: 0;
   display: grid;
   gap: 1rem;
-  align-content: start;
-}
-
-.workflow-page-aside {
-  min-width: 0;
-  display: grid;
-  gap: 0.8rem;
   align-content: start;
 }
 
@@ -602,10 +580,6 @@
     grid-template-columns: 1fr;
   }
 
-  .workflow-page-aside {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .admin-shell .source-grid-two-up,
   .admin-shell .review-summary-grid,
   .admin-shell .job-console-grid,
@@ -656,10 +630,6 @@
 
   .admin-shell .review-actions-secondary {
     margin-left: 0;
-  }
-
-  .workflow-page-aside {
-    grid-template-columns: 1fr;
   }
 
   .admin-shell .source-grid-two-up,

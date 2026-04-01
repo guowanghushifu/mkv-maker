@@ -1,5 +1,4 @@
 import { Button } from './Button';
-import { SummaryCard } from './SummaryCard';
 import { Fragment } from 'react';
 import type { PropsWithChildren } from 'react';
 import { getMessages, type Locale } from '../i18n';
@@ -87,10 +86,6 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
         <main className="shell-page">
           <section className="workflow-summary-row" aria-label={text.layout.contextTitle}>
             <article className="workflow-summary-card">
-              <span className="summary-label">{text.layout.summaryLabels.step}</span>
-              <strong className="summary-value">{meta.title}</strong>
-            </article>
-            <article className="workflow-summary-card">
               <span className="summary-label">{text.layout.summaryLabels.source}</span>
               <strong className="summary-value" title={context.source}>
                 {renderContextValue(context.source)}
@@ -103,6 +98,12 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
               </strong>
             </article>
             <article className="workflow-summary-card">
+              <span className="summary-label">{text.layout.summaryLabels.output}</span>
+              <strong className="summary-value" title={context.output}>
+                {renderContextValue(context.output)}
+              </strong>
+            </article>
+            <article className="workflow-summary-card">
               <span className="summary-label">{text.layout.summaryLabels.status}</span>
               <strong className="summary-value" title={context.task}>
                 {renderContextValue(context.task)}
@@ -111,40 +112,7 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
           </section>
           <section className="workflow-page-grid">
             <div className="workflow-page-main">{children}</div>
-            <aside className="workflow-page-aside">
-              <SummaryCard
-                className="context-card"
-                labelClassName="context-card-label"
-                valueClassName="context-card-value context-card-value-clamp"
-                valueProps={{ title: context.source }}
-                label={text.layout.contextLabels.source}
-                value={renderContextValue(context.source)}
-              />
-              <SummaryCard
-                className="context-card"
-                labelClassName="context-card-label"
-                valueClassName="context-card-value context-card-value-clamp"
-                valueProps={{ title: context.playlist }}
-                label={text.layout.contextLabels.playlist}
-                value={renderContextValue(context.playlist)}
-              />
-              <SummaryCard
-                className="context-card"
-                labelClassName="context-card-label"
-                valueClassName="context-card-value context-card-value-clamp"
-                valueProps={{ title: context.output }}
-                label={text.layout.contextLabels.output}
-                value={renderContextValue(context.output)}
-              />
-              <SummaryCard
-                className="context-card"
-                labelClassName="context-card-label"
-                valueClassName="context-card-value context-card-value-clamp"
-                valueProps={{ title: context.task }}
-                label={text.layout.contextLabels.task}
-                value={renderContextValue(context.task)}
-              />
-            </aside>
+            {/* Intentionally single-column: top summary row already carries the session context. */}
           </section>
         </main>
       </div>

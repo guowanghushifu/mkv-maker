@@ -21,9 +21,9 @@ type MessageSet = {
     stepNumbers: Record<'scan' | 'bdinfo' | 'editor' | 'review', string>;
     stepDescriptions: Record<'scan' | 'bdinfo' | 'editor' | 'review', string>;
     summaryLabels: {
-      step: string;
       source: string;
       playlist: string;
+      output: string;
       status: string;
     };
     readyState: string;
@@ -169,9 +169,9 @@ export const messages: Record<Locale, MessageSet> = {
         review: '确认最终轨道集合并监控 Remux 执行。',
       },
       summaryLabels: {
-        step: '当前步骤',
         source: '已选片源',
         playlist: '播放列表',
+        output: '输出',
         status: '任务状态',
       },
       readyState: '就绪',
@@ -321,9 +321,9 @@ export const messages: Record<Locale, MessageSet> = {
         review: 'Confirm the final track set and monitor remux execution.',
       },
       summaryLabels: {
-        step: 'Current Step',
         source: 'Selected Source',
         playlist: 'Playlist',
+        output: 'Output',
         status: 'Task State',
       },
       readyState: 'Ready',

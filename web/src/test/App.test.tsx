@@ -460,27 +460,24 @@ describe('App', () => {
     expect(sourceRadio).not.toBeChecked();
   });
 
-  it('renders workflow context cards on the review step', async () => {
+  it('renders the streamlined workflow summary row on the review step', async () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     render(<App />);
 
     await goToReviewStep();
 
     expect(document.querySelector('.shell-nav')).not.toBeNull();
-    expect(document.querySelector('.workflow-page-aside')).not.toBeNull();
+    expect(document.querySelector('.workflow-page-aside')).toBeNull();
     expect(document.querySelector('.workflow-summary-row[aria-label="Current Session"]')).not.toBeNull();
-    expect(screen.getAllByText(/nightcrawler disc/i).some((node) => node.closest('.context-card'))).toBe(true);
-    expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.context-card'))).toBe(true);
-    expect(screen.getAllByText(/nightcrawler - 2160p\.mkv/i).some((node) => node.closest('.context-card'))).toBe(true);
-    const contextValues = Array.from(document.querySelectorAll('.context-card-value'));
-    expect(contextValues.length).toBeGreaterThan(0);
-    expect(contextValues.every((node) => node.classList.contains('context-card-value-clamp'))).toBe(true);
-    expect(
-      contextValues.some(
-        (node) =>
-          node.getAttribute('title') === 'Nightcrawler Disc' ||
-          node.getAttribute('title') === 'Nightcrawler - 2160p.mkv'
-      )
-    ).toBe(true);
+    expect(document.querySelectorAll('.context-card')).toHaveLength(0);
+    const summaryLabels = Array.from(document.querySelectorAll('.workflow-summary-row .summary-label')).map((node) =>
+      node.textContent?.trim()
+    );
+    expect(summaryLabels).toEqual(['Selected Source', 'Playlist', 'Output', 'Task State']);
+    const summaryValues = Array.from(document.querySelectorAll('.workflow-summary-row .summary-value'));
+    expect(summaryValues).toHaveLength(4);
+    expect(summaryValues.some((node) => node.getAttribute('title') === 'Nightcrawler Disc')).toBe(true);
+    expect(summaryValues.some((node) => node.getAttribute('title') === '00800.MPLS')).toBe(true);
+    expect(summaryValues.some((node) => node.getAttribute('title') === 'Nightcrawler - 2160p.mkv')).toBe(true);
   });
 });
