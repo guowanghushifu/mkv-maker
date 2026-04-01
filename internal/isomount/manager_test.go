@@ -658,6 +658,68 @@ func TestManagerEnsureMountedClearsStalePendingDirState(t *testing.T) {
 	}
 }
 
+func TestManagerReleaseSourceAliasDoesNotExposeLiveMountToResidualCleanup(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/../disc"
+	aliasID := "disc"
+	isoPath := filepath.Join(t.TempDir(), "disc.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				mountPath := args[len(args)-1]
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+					return err
+				}
+				return nil
+			case "umount":
+				umountCalls++
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	mountPath, err := manager.EnsureMounted(context.Background(), sourceID, isoPath)
+	if err != nil {
+		t.Fatalf("EnsureMounted returned error: %v", err)
+	}
+	if mountPath != filepath.Join(root, sanitizeID(sourceID)) {
+		t.Fatalf("unexpected mount path %q", mountPath)
+	}
+
+	released, err := manager.ReleaseSource(context.Background(), aliasID)
+	if err != nil {
+		t.Fatalf("ReleaseSource alias returned error: %v", err)
+	}
+	if released {
+		t.Fatal("expected alias release to be a no-op")
+	}
+	if _, ok := manager.mountOwners[mountPath]; !ok {
+		t.Fatal("expected live mount ownership to remain after alias no-op release")
+	}
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Released != 0 || result.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	}
+	if umountCalls != 0 {
+		t.Fatalf("expected residual cleanup to ignore live mount, got %d umount calls", umountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; !ok {
+		t.Fatal("expected live mount entry to remain tracked")
+	}
+}
+
 func TestManagerCleanupResidualMountDirsSkipsTrackedMount(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/tracked-disc"

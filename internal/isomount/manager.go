@@ -356,12 +356,9 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, err
 	sourceLock.Lock()
 	defer sourceLock.Unlock()
 
-	mountPath := filepath.Join(m.root, sanitizeID(sourceID))
-
 	m.mu.Lock()
 	entry := m.entries[sourceID]
 	if entry == nil {
-		delete(m.mountOwners, mountPath)
 		m.mu.Unlock()
 		return false, nil
 	}
@@ -369,7 +366,7 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, err
 		m.mu.Unlock()
 		return false, ErrSourceInUse
 	}
-	mountPath = entry.MountPath
+	mountPath := entry.MountPath
 	m.mu.Unlock()
 
 	if !m.cleanupMountPath(ctx, mountPath) {
