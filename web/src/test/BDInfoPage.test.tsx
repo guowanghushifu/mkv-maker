@@ -57,6 +57,7 @@ describe('BDInfoPage', () => {
     expect(screen.getByRole('button', { name: /parse bdinfo and continue/i }).closest('.bdinfo-actions')).not.toBeNull();
     expect(screen.getByText(/bdinfo example/i).closest('.bdinfo-sidebar')).toBeNull();
     expect(screen.getByText(/bdinfo example/i).closest('.bdinfo-sample')).not.toBeNull();
+    expect(screen.getByText(/disc title:\s+the amateur 2025/i).closest('.bdinfo-sample-pre')).not.toBeNull();
     expect(screen.getByText(/disc title:\s+the amateur 2025/i)).toBeInTheDocument();
     expect(screen.getByText(/presentation graphics\s+english/i)).toBeInTheDocument();
   });

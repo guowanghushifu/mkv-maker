@@ -57,7 +57,7 @@ export function BDInfoPage({
 
       <section className="bdinfo-sample supporting-card">
         <h3>{text.bdinfo.sampleTitle}</h3>
-        <pre>{sampleBDInfo}</pre>
+        <pre className="bdinfo-sample-pre">{sampleBDInfo}</pre>
       </section>
     </section>
   );

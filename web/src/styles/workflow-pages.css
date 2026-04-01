@@ -388,11 +388,15 @@ textarea:focus {
 
 .bdinfo-sample {
   margin-top: 0.7rem;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.95rem 1rem;
 }
 
-.bdinfo-sample pre {
+.bdinfo-sample-pre {
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.65rem 0.75rem;
   border: 1px solid rgba(148, 175, 206, 0.14);
   border-radius: 16px;
