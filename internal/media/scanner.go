@@ -58,7 +58,7 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 				return err
 			}
 			out = append(out, SourceEntry{
-				ID:         stableSourceID(root, path),
+				ID:         stableISOID(root, path),
 				Name:       strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
 				Path:       path,
 				Type:       SourceISO,
@@ -84,7 +84,7 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 		}
 
 		out = append(out, SourceEntry{
-			ID:         stableSourceID(root, path),
+			ID:         filepath.Base(path),
 			Name:       filepath.Base(path),
 			Path:       path,
 			Type:       SourceBDMV,
@@ -123,13 +123,15 @@ func (s *Scanner) isReservedAutoMountPath(path string) bool {
 	return strings.HasPrefix(cleanedPath, s.AutoMountRoot+string(filepath.Separator))
 }
 
-func stableSourceID(root, path string) string {
+func stableISOID(root, path string) string {
 	if root != "" {
 		if rel, err := filepath.Rel(root, path); err == nil {
-			path = rel
+			if rel != "." {
+				return filepath.ToSlash(filepath.Clean(rel))
+			}
 		}
 	}
-	return filepath.Base(filepath.Clean(path))
+	return filepath.Base(path)
 }
 
 func isBDMVRoot(path string) bool {

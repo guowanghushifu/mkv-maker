@@ -153,3 +153,46 @@ func TestScannerSkipsAutoMountRootAndOmitsISOWhenDisabled(t *testing.T) {
 		t.Fatalf("expected no items when ISO scanning disabled and auto-mount root skipped, got %+v", items)
 	}
 }
+
+func TestScannerGivesDistinctIDsToISOFilesWithSameBasename(t *testing.T) {
+	root := t.TempDir()
+	isoOne := filepath.Join(root, "dir1", "Movie.iso")
+	isoTwo := filepath.Join(root, "dir2", "Movie.iso")
+	for _, path := range []string{isoOne, isoTwo} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("iso"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	scanner := NewScanner("", true)
+	items, err := scanner.Scan(root)
+	if err != nil {
+		t.Fatalf("Scan returned error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 ISO items, got %+v", items)
+	}
+
+	ids := map[string]string{}
+	for _, item := range items {
+		if item.Type != SourceISO {
+			t.Fatalf("expected ISO source, got %+v", item)
+		}
+		ids[item.ID] = item.Path
+	}
+
+	expectedOne := filepath.ToSlash(filepath.Join("dir1", "Movie.iso"))
+	expectedTwo := filepath.ToSlash(filepath.Join("dir2", "Movie.iso"))
+	if _, ok := ids[expectedOne]; !ok {
+		t.Fatalf("expected ISO ID %q in results, got %+v", expectedOne, items)
+	}
+	if _, ok := ids[expectedTwo]; !ok {
+		t.Fatalf("expected ISO ID %q in results, got %+v", expectedTwo, items)
+	}
+	if expectedOne == expectedTwo {
+		t.Fatal("expected distinct ISO IDs for duplicate basenames")
+	}
+}
