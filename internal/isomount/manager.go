@@ -538,14 +538,16 @@ func (m *Manager) cleanupInvalidMountedContent(ctx context.Context, mountPath st
 func (m *Manager) cleanupMountPath(ctx context.Context, mountPath string) bool {
 	m.mu.Lock()
 	_, alreadyUnmounted := m.pendingDirs[mountPath]
+	_, retrying := m.retryMounts[mountPath]
 	m.mu.Unlock()
 
 	umountSucceeded := false
-	if !alreadyUnmounted {
+	if retrying || !alreadyUnmounted {
 		if err := m.runner.Run(ctx, "umount", mountPath); err == nil {
 			umountSucceeded = true
 			m.mu.Lock()
 			m.pendingDirs[mountPath] = struct{}{}
+			delete(m.retryMounts, mountPath)
 			m.mu.Unlock()
 		}
 	}
@@ -557,6 +559,7 @@ func (m *Manager) cleanupMountPath(ctx context.Context, mountPath string) bool {
 	if alreadyUnmounted || umountSucceeded {
 		m.mu.Lock()
 		delete(m.pendingDirs, mountPath)
+		delete(m.retryMounts, mountPath)
 		m.mu.Unlock()
 		return true
 	}

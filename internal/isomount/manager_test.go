@@ -887,6 +887,77 @@ func TestManagerEnsureMountedPreservesPendingCleanupStateOnValidationFailure(t *
 	}
 }
 
+func TestManagerReleaseSourceRetriesInvalidContentCleanupWhenPendingAndRetryTracked(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/pending-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	isoPath := filepath.Join(t.TempDir(), "pending.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV"), 0o755); err != nil {
+					return err
+				}
+				return nil
+			case "umount":
+				umountCalls++
+				if umountCalls == 1 {
+					return errors.New("device busy")
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/old.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[mountPath] = sourceID
+	manager.pendingDirs[mountPath] = struct{}{}
+
+	if _, err := manager.EnsureMounted(context.Background(), sourceID, isoPath); err == nil {
+		t.Fatal("expected invalid mounted content to fail")
+	}
+	if _, pending := manager.pendingDirs[mountPath]; !pending {
+		t.Fatal("expected pending state to remain tracked after invalid cleanup failure")
+	}
+	if _, retrying := manager.retryMounts[mountPath]; !retrying {
+		t.Fatal("expected retry state to be tracked after invalid cleanup failure")
+	}
+
+	released, err := manager.ReleaseSource(context.Background(), sourceID)
+	if err != nil {
+		t.Fatalf("ReleaseSource returned error: %v", err)
+	}
+	if !released {
+		t.Fatal("expected ReleaseSource to report an actual release")
+	}
+	if umountCalls != 2 {
+		t.Fatalf("expected ReleaseSource to retry umount, got %d calls", umountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected entry to be removed after successful retry")
+	}
+	if _, ok := manager.pendingDirs[mountPath]; ok {
+		t.Fatal("expected pending state to be cleared after successful retry")
+	}
+	if _, ok := manager.retryMounts[mountPath]; ok {
+		t.Fatal("expected retry state to be cleared after successful retry")
+	}
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected mount dir to be removed after retry, got stat error %v", statErr)
+	}
+}
+
 func TestManagerEnsureMountedRetainsPendingStateOnMountFailure(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/pending-disc"
