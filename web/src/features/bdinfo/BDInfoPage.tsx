@@ -1,6 +1,5 @@
 import type { ParsedBDInfo, SourceEntry } from '../../api/types';
 import { Button } from '../../components/Button';
-import { SummaryCard } from '../../components/SummaryCard';
 import { getMessages, type Locale } from '../../i18n';
 import { sampleBDInfo } from './sampleBDInfo';
 
@@ -18,9 +17,7 @@ type BDInfoPageProps = {
 
 export function BDInfoPage({
   locale = 'zh',
-  source,
   bdinfoText,
-  parsed,
   error,
   loading,
   onBack,
@@ -56,29 +53,6 @@ export function BDInfoPage({
             </Button>
           </div>
         </div>
-
-        <aside className="bdinfo-sidebar supporting-card">
-          <SummaryCard
-            className="bdinfo-source-card supporting-card"
-            label={text.bdinfo.selectedSource}
-            value={source.name}
-          >
-            <span className="source-card-path" title={source.path}>
-              {source.path}
-            </span>
-          </SummaryCard>
-
-          {parsed ? (
-            <SummaryCard
-              className="bdinfo-summary-card supporting-card"
-              label={text.bdinfo.playlist}
-              value={parsed.playlistName}
-            >
-              <p>{text.bdinfo.audioLabelsFound}: {parsed.audioLabels.length}</p>
-              <p>{text.bdinfo.subtitleLabelsFound}: {parsed.subtitleLabels.length}</p>
-            </SummaryCard>
-          ) : null}
-        </aside>
       </div>
 
       <section className="bdinfo-sample supporting-card">

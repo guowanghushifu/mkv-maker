@@ -12,7 +12,7 @@ const source = {
 };
 
 describe('BDInfoPage', () => {
-  it('renders bdinfo as a split workspace with support cards in the aside column', () => {
+  it('renders bdinfo without the removed right-side support column cards', () => {
     const { container } = render(
       <BDInfoPage
         locale="en"
@@ -29,7 +29,9 @@ describe('BDInfoPage', () => {
 
     expect(container.querySelector('.workspace-card.bdinfo-workspace')).not.toBeNull();
     expect(container.querySelector('.bdinfo-layout')).not.toBeNull();
-    expect(container.querySelector('.bdinfo-sidebar.supporting-card')).not.toBeNull();
+    expect(container.querySelector('.bdinfo-sidebar')).toBeNull();
+    expect(container.querySelector('.bdinfo-source-card')).toBeNull();
+    expect(container.querySelector('.bdinfo-summary-card')).toBeNull();
     expect(screen.getByText(/bdinfo example/i).closest('.supporting-card')).not.toBeNull();
   });
 
@@ -49,7 +51,6 @@ describe('BDInfoPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: /required bdinfo/i }).closest('.page-panel')).not.toBeNull();
-    expect(screen.getByText(/selected source/i).closest('.bdinfo-source-card')).not.toBeNull();
     expect(screen.getByPlaceholderText(/paste full bdinfo text here/i).closest('.bdinfo-composer')).not.toBeNull();
     expect(screen.getByRole('button', { name: /back/i }).closest('.bdinfo-actions')).not.toBeNull();
     expect(screen.getByRole('button', { name: /parse bdinfo and continue/i }).closest('.bdinfo-actions')).not.toBeNull();
@@ -82,8 +83,8 @@ describe('BDInfoPage', () => {
     expect(onTextChange).toHaveBeenCalledWith('PLAYLIST REPORT');
   });
 
-  it('renders parsed bdinfo metrics inside a dedicated summary card', () => {
-    render(
+  it('does not render the removed playlist summary card when parsed data exists', () => {
+    const { container } = render(
       <BDInfoPage
         locale="en"
         source={source}
@@ -102,9 +103,9 @@ describe('BDInfoPage', () => {
       />,
     );
 
-    expect(screen.getAllByText(/00800\.MPLS/i).some((node) => node.closest('.bdinfo-summary-card'))).toBe(true);
-    expect(screen.getByText(/audio labels found: 2/i)).toBeInTheDocument();
-    expect(screen.getByText(/subtitle labels found: 2/i)).toBeInTheDocument();
+    expect(container.querySelector('.bdinfo-summary-card')).toBeNull();
+    expect(container.querySelector('.bdinfo-sidebar')).toBeNull();
+    expect(screen.getByText(/bdinfo example/i).closest('.bdinfo-sample')).not.toBeNull();
   });
 
   it('preserves bdinfo submit gating and action callbacks in the redesigned workspace', () => {
