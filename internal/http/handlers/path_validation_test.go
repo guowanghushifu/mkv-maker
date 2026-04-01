@@ -29,7 +29,7 @@ func TestValidateNewOutputPathWithinRootRejectsExistingSymlinkLeaf(t *testing.T)
 	}
 }
 
-func TestValidateNewOutputPathWithinRootRejectsExistingRegularFile(t *testing.T) {
+func TestValidateNewOutputPathWithinRootAllowsExistingRegularFile(t *testing.T) {
 	outputRoot := t.TempDir()
 	candidate := filepath.Join(outputRoot, "Disc.mkv")
 
@@ -37,7 +37,7 @@ func TestValidateNewOutputPathWithinRootRejectsExistingRegularFile(t *testing.T)
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	if err := validateNewOutputPathWithinRoot(outputRoot, candidate); err == nil {
-		t.Fatal("expected existing regular output file to be rejected")
+	if err := validateNewOutputPathWithinRoot(outputRoot, candidate); err != nil {
+		t.Fatalf("expected existing regular output file to be allowed for overwrite, got %v", err)
 	}
 }

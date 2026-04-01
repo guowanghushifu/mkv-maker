@@ -19,10 +19,14 @@ func validateNewOutputPathWithinRoot(root, candidate string) error {
 		return nil
 	case err != nil:
 		return err
+	case info.Mode()&os.ModeSymlink != 0:
+		return fmt.Errorf("output path must not be a symlink")
 	case info.IsDir():
 		return fmt.Errorf("output path must be a file")
+	case info.Mode().IsRegular():
+		return nil
 	default:
-		return fmt.Errorf("output path already exists")
+		return fmt.Errorf("output path must be a regular file")
 	}
 }
 

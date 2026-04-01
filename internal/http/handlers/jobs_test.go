@@ -229,7 +229,7 @@ func TestJobsHandlerCreateRejectsSymlinkEscapeInOutputPath(t *testing.T) {
 	}
 }
 
-func TestJobsHandlerCreateRejectsExistingOutputFile(t *testing.T) {
+func TestJobsHandlerCreateAllowsExistingOutputFile(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourcePath := filepath.Join(inputRoot, "Disc", "BDMV")
 	if err := os.MkdirAll(filepath.Join(sourcePath, "PLAYLIST"), 0o755); err != nil {
@@ -260,8 +260,8 @@ func TestJobsHandlerCreateRejectsExistingOutputFile(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.Create(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
 	}
 }
 
