@@ -85,9 +85,15 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		m.mu.Unlock()
 		return existing.MountPath, nil
 	}
+	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
+	if _, pending := m.pendingDirs[mountPath]; pending {
+		if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner != sourceKey {
+			m.mu.Unlock()
+			return "", errors.New("mount path is already owned")
+		}
+	}
 	m.mu.Unlock()
 
-	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
 	mountLock := m.mountLockFor(mountPath)
 	mountLock.Lock()
 	defer mountLock.Unlock()

@@ -1039,6 +1039,59 @@ func TestManagerEnsureMountedFailureDoesNotOrphanPriorSanitizedOwner(t *testing.
 	}
 }
 
+func TestManagerEnsureMountedRejectsClaimWhenSanitizedPathAlreadyHasTrackedPendingOwner(t *testing.T) {
+	root := t.TempDir()
+	primaryID := "library/../disc"
+	secondaryID := "disc"
+	isoPath := filepath.Join(t.TempDir(), "disc.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var mountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				mountCalls++
+				mountPath := args[len(args)-1]
+				if mountCalls == 1 {
+					if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+						return err
+					}
+					return nil
+				}
+				return errors.New("simulated mount failure")
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	mountPath, err := manager.EnsureMounted(context.Background(), primaryID, isoPath)
+	if err != nil {
+		t.Fatalf("primary EnsureMounted returned error: %v", err)
+	}
+	manager.pendingDirs[mountPath] = struct{}{}
+
+	if _, err := manager.EnsureMounted(context.Background(), secondaryID, isoPath); err == nil {
+		t.Fatal("expected secondary claimant to be rejected while pending cleanup still exists")
+	}
+	if owner := manager.mountOwners[mountPath]; owner != primaryID {
+		t.Fatalf("expected original owner %q to remain, got %q", primaryID, owner)
+	}
+	if _, ok := manager.entries[primaryID]; !ok {
+		t.Fatal("expected original entry to remain tracked")
+	}
+	residual := manager.CleanupResidualMountDirs(context.Background())
+	if residual.Released != 0 || residual.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", residual)
+	}
+}
+
 func TestManagerCleanupResidualMountDirsSkipsTrackedMount(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/tracked-disc"
