@@ -28,13 +28,14 @@ type Task struct {
 }
 
 type StartRequest struct {
-	SourceID     string
-	SourceType   string
-	SourceName   string
-	OutputName   string
-	OutputPath   string
-	PlaylistName string
-	PayloadJSON  string
+	SourceID              string
+	SourceType            string
+	SourceMountGeneration uint64
+	SourceName            string
+	OutputName            string
+	OutputPath            string
+	PlaylistName          string
+	PayloadJSON           string
 }
 
 type taskState struct {

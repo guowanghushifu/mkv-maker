@@ -27,6 +27,7 @@ var ErrSourceInUse = errors.New("source is in use")
 type entry struct {
 	ISOPath       string
 	MountPath     string
+	Generation    uint64
 	LastTouchedAt time.Time
 	InUse         bool
 }
@@ -44,6 +45,7 @@ type Manager struct {
 	mountOwners map[string]string
 	pendingDirs map[string]struct{}
 	retryMounts map[string]struct{}
+	nextGen     uint64
 }
 
 type systemRunner struct{}
@@ -68,6 +70,7 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 		mountOwners: map[string]string{},
 		pendingDirs: map[string]struct{}{},
 		retryMounts: map[string]struct{}{},
+		nextGen:     1,
 	}
 }
 
@@ -128,15 +131,33 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	}
 
 	m.mu.Lock()
+	gen := m.nextGen
+	m.nextGen++
 	m.mountOwners[mountPath] = sourceKey
 	delete(m.pendingDirs, mountPath)
 	m.entries[sourceKey] = &entry{
 		ISOPath:       isoPath,
 		MountPath:     mountPath,
+		Generation:    gen,
 		LastTouchedAt: m.now(),
 	}
 	m.mu.Unlock()
 	return mountPath, nil
+}
+
+func (m *Manager) CurrentGeneration(sourceID string) (uint64, bool) {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	entry := m.entries[sourceID]
+	if entry == nil {
+		return 0, false
+	}
+	return entry.Generation, true
 }
 
 func (m *Manager) Touch(sourceID string) {
@@ -411,6 +432,14 @@ func (m *Manager) sourceLockFor(sourceID string) *sync.Mutex {
 }
 
 func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, error) {
+	return m.releaseSource(ctx, sourceID, 0, false)
+}
+
+func (m *Manager) ReleaseSourceIfGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
+	return m.releaseSource(ctx, sourceID, generation, true)
+}
+
+func (m *Manager) releaseSource(ctx context.Context, sourceID string, generation uint64, guardGeneration bool) (bool, error) {
 	sourceLock := m.sourceLockFor(sourceID)
 	sourceLock.Lock()
 	defer sourceLock.Unlock()
@@ -421,7 +450,11 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, err
 		m.mu.Unlock()
 		return false, nil
 	}
-	if entry.InUse {
+	if guardGeneration && entry.Generation != generation {
+		m.mu.Unlock()
+		return false, nil
+	}
+	if entry.InUse && !guardGeneration {
 		m.mu.Unlock()
 		return false, ErrSourceInUse
 	}
@@ -435,7 +468,7 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, err
 	m.mu.Lock()
 	current := m.entries[sourceID]
 	currentOwner, ok := m.mountOwners[mountPath]
-	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) {
+	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) || (guardGeneration && current.Generation != generation) {
 		m.mu.Unlock()
 		return false, nil
 	}

@@ -47,6 +47,7 @@ func New(cfg config.Config) (*App, error) {
 		log.Printf("iso startup cleanup completed with %d failures", startupCleanup.Failed)
 	}
 	go isoManager.RunJanitor(lifetimeCtx, time.Minute)
+	scanner := media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), cfg.EnableISOScan)
 
 	cookieAuth := auth.NewCookieAuth(cfg.AppPassword, time.Duration(cfg.SessionMaxAge)*time.Second)
 	authHandler := &handlers.AuthHandler{
@@ -62,7 +63,7 @@ func New(cfg config.Config) (*App, error) {
 	sourcesHandler := handlers.NewSourcesHandler(
 		cfg.InputDir,
 		cfg.OutputDir,
-		media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), cfg.EnableISOScan),
+		scanner,
 		nil,
 		isoManager,
 	)
@@ -73,13 +74,12 @@ func New(cfg config.Config) (*App, error) {
 		if isoManager == nil {
 			return
 		}
-		if !strings.EqualFold(strings.TrimSpace(req.SourceType), "iso") || strings.TrimSpace(req.SourceID) == "" {
+		if !strings.EqualFold(strings.TrimSpace(req.SourceType), "iso") || strings.TrimSpace(req.SourceID) == "" || req.SourceMountGeneration == 0 {
 			return
 		}
-		isoManager.MarkIdle(req.SourceID)
-		_, _ = isoManager.ReleaseSource(context.Background(), req.SourceID)
+		_, _ = isoManager.ReleaseSourceIfGeneration(context.Background(), req.SourceID, req.SourceMountGeneration)
 	})
-	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, handlers.NewISOJobManagerAdapter(isoManager))
+	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, scanner, handlers.NewISOJobManagerAdapter(isoManager))
 	isoHandler := handlers.NewISOMountsHandler(isoManager)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
@@ -117,11 +117,11 @@ func (a *App) Close() error {
 	if a.cancelLifetime != nil {
 		a.cancelLifetime()
 	}
-	if a.isoManager != nil {
-		a.isoManager.CleanupAll(context.Background())
-	}
 	if a.remuxManager != nil {
 		a.remuxManager.Close()
+	}
+	if a.isoManager != nil {
+		a.isoManager.CleanupAll(context.Background())
 	}
 	if a.logFile != nil {
 		return a.logFile.Close()

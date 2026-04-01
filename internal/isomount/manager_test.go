@@ -59,6 +59,69 @@ func TestManagerEnsureMountedMountsISOAndReturnsWorkspace(t *testing.T) {
 	}
 }
 
+func TestManagerReleaseSourceIfGenerationSkipsReacquiredMount(t *testing.T) {
+	root := t.TempDir()
+	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				mountPath := args[len(args)-1]
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644)
+			case "umount":
+				umountCalls++
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
+		t.Fatalf("first EnsureMounted returned error: %v", err)
+	}
+	firstGeneration, ok := manager.CurrentGeneration("movies-nightcrawler-iso")
+	if !ok {
+		t.Fatal("expected first generation to be available")
+	}
+	if released, err := manager.ReleaseSourceIfGeneration(context.Background(), "movies-nightcrawler-iso", firstGeneration); err != nil || !released {
+		t.Fatalf("expected first release to succeed, released=%v err=%v", released, err)
+	}
+
+	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
+		t.Fatalf("second EnsureMounted returned error: %v", err)
+	}
+	secondGeneration, ok := manager.CurrentGeneration("movies-nightcrawler-iso")
+	if !ok {
+		t.Fatal("expected second generation to be available")
+	}
+	if secondGeneration == firstGeneration {
+		t.Fatal("expected reacquired mount to receive a new generation")
+	}
+
+	if released, err := manager.ReleaseSourceIfGeneration(context.Background(), "movies-nightcrawler-iso", firstGeneration); err != nil {
+		t.Fatalf("stale release returned error: %v", err)
+	} else if released {
+		t.Fatal("expected stale generation release to be skipped")
+	}
+	if umountCalls != 1 {
+		t.Fatalf("expected only one umount call, got %d", umountCalls)
+	}
+	currentGeneration, ok := manager.CurrentGeneration("movies-nightcrawler-iso")
+	if !ok || currentGeneration != secondGeneration {
+		t.Fatalf("expected current generation %d to remain, got %d ok=%v", secondGeneration, currentGeneration, ok)
+	}
+}
+
 func TestManagerEnsureMountedReusesHealthyMount(t *testing.T) {
 	root := t.TempDir()
 	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
