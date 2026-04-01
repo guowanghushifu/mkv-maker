@@ -220,15 +220,22 @@ func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now
 	mountLock.Lock()
 	defer mountLock.Unlock()
 
+	m.mu.Lock()
+	current := m.entries[sourceID]
+	currentOwner, ok := m.mountOwners[mountPath]
+	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) {
+		m.mu.Unlock()
+		return false, nil
+	}
+	m.mu.Unlock()
+
 	if !m.cleanupMountPath(ctx, mountPath) {
 		return false, errors.New("failed to release source")
 	}
 
 	m.mu.Lock()
-	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+	if current = m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
-	}
-	if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner == sourceID {
 		delete(m.mountOwners, mountPath)
 		delete(m.pendingDirs, mountPath)
 	}
@@ -380,15 +387,22 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, err
 	mountLock.Lock()
 	defer mountLock.Unlock()
 
+	m.mu.Lock()
+	current := m.entries[sourceID]
+	currentOwner, ok := m.mountOwners[mountPath]
+	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) {
+		m.mu.Unlock()
+		return false, nil
+	}
+	m.mu.Unlock()
+
 	if !m.cleanupMountPath(ctx, mountPath) {
 		return false, errors.New("failed to release source")
 	}
 
 	m.mu.Lock()
-	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+	if current = m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
-	}
-	if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner == sourceID {
 		delete(m.mountOwners, mountPath)
 		delete(m.pendingDirs, mountPath)
 	}
@@ -416,15 +430,22 @@ func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) (bool
 	mountLock.Lock()
 	defer mountLock.Unlock()
 
+	m.mu.Lock()
+	current := m.entries[sourceID]
+	currentOwner, ok := m.mountOwners[mountPath]
+	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) {
+		m.mu.Unlock()
+		return false, nil
+	}
+	m.mu.Unlock()
+
 	if !m.cleanupMountPath(ctx, mountPath) {
 		return false, errors.New("failed to release source")
 	}
 
 	m.mu.Lock()
-	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+	if current = m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
-	}
-	if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner == sourceID {
 		delete(m.mountOwners, mountPath)
 		delete(m.pendingDirs, mountPath)
 	}
