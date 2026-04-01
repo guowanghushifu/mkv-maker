@@ -779,6 +779,110 @@ func TestManagerForceReleaseSourceAliasDoesNotExposeLiveMountToResidualCleanup(t
 	}
 }
 
+func TestManagerReleaseSourceDoesNotClearReclaimedOwnerDuringCleanup(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/../disc"
+	reclaimID := "disc"
+	isoPath := filepath.Join(t.TempDir(), "disc.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	releaseStarted := make(chan struct{})
+	releaseGate := make(chan struct{})
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				mountPath := args[len(args)-1]
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+					return err
+				}
+				return nil
+			case "umount":
+				select {
+				case <-releaseStarted:
+				default:
+					close(releaseStarted)
+				}
+				<-releaseGate
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	mountPath, err := manager.EnsureMounted(context.Background(), sourceID, isoPath)
+	if err != nil {
+		t.Fatalf("EnsureMounted returned error: %v", err)
+	}
+
+	releaseDone := make(chan struct {
+		released bool
+		err      error
+	}, 1)
+	go func() {
+		released, err := manager.ReleaseSource(context.Background(), sourceID)
+		releaseDone <- struct {
+			released bool
+			err      error
+		}{released: released, err: err}
+	}()
+
+	select {
+	case <-releaseStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for release to start")
+	}
+
+	reclaimDone := make(chan error, 1)
+	go func() {
+		_, err := manager.EnsureMounted(context.Background(), reclaimID, isoPath)
+		reclaimDone <- err
+	}()
+
+	select {
+	case err := <-reclaimDone:
+		t.Fatalf("reclaiming EnsureMounted finished before release completed: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	close(releaseGate)
+
+	result := <-releaseDone
+	if result.err != nil {
+		t.Fatalf("ReleaseSource returned error: %v", result.err)
+	}
+	if !result.released {
+		t.Fatal("expected ReleaseSource to report an actual release")
+	}
+
+	select {
+	case err := <-reclaimDone:
+		if err != nil {
+			t.Fatalf("reclaiming EnsureMounted returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for reclaiming EnsureMounted")
+	}
+
+	if owner := manager.mountOwners[mountPath]; owner != reclaimID {
+		t.Fatalf("expected reclaimed owner %q, got %q", reclaimID, owner)
+	}
+	if _, ok := manager.entries[reclaimID]; !ok {
+		t.Fatal("expected reclaimed entry to remain tracked")
+	}
+
+	residual := manager.CleanupResidualMountDirs(context.Background())
+	if residual.Released != 0 || residual.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", residual)
+	}
+}
+
 func TestManagerCleanupResidualMountDirsSkipsTrackedMount(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/tracked-disc"
