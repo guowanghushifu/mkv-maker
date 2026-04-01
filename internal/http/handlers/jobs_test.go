@@ -12,8 +12,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
+
+func TestNewJobsHandlerStoresISOManager(t *testing.T) {
+	manager := isomount.NewManager(t.TempDir(), time.Hour, nil)
+	h := NewJobsHandler(&stubTasksManager{}, "/input", "/output", manager)
+
+	if h.ISOManager != manager {
+		t.Fatalf("expected ISO manager to be stored")
+	}
+}
 
 type stubTasksManager struct {
 	startReq     remux.StartRequest

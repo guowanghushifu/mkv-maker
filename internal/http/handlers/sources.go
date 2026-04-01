@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 	mediampls "github.com/guowanghushifu/mkv-maker/internal/media/mpls"
@@ -24,10 +25,11 @@ type SourceScanner interface {
 }
 
 type SourcesHandler struct {
-	InputDir  string
-	OutputDir string
-	Scanner   SourceScanner
-	Inspector PlaylistInspector
+	InputDir   string
+	OutputDir  string
+	Scanner    SourceScanner
+	Inspector  PlaylistInspector
+	ISOManager *isomount.Manager
 }
 
 type sourcesErrorResponse struct {
@@ -97,18 +99,23 @@ var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
 
 const resolveSourceBodyLimit = 2 << 20
 
-func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector) *SourcesHandler {
+func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector, isoManager ...*isomount.Manager) *SourcesHandler {
 	if scanner == nil {
 		scanner = media.NewScanner(filepath.Join(inputDir, "iso_auto_mount"), true)
 	}
 	if inspector == nil {
 		inspector = MKVMergePlaylistInspector{}
 	}
+	var manager *isomount.Manager
+	if len(isoManager) > 0 {
+		manager = isoManager[0]
+	}
 	return &SourcesHandler{
-		InputDir:  inputDir,
-		OutputDir: outputDir,
-		Scanner:   scanner,
-		Inspector: inspector,
+		InputDir:   inputDir,
+		OutputDir:  outputDir,
+		Scanner:    scanner,
+		Inspector:  inspector,
+		ISOManager: manager,
 	}
 }
 

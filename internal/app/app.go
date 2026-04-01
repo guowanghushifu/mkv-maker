@@ -64,11 +64,12 @@ func New(cfg config.Config) (*App, error) {
 		cfg.OutputDir,
 		media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), cfg.EnableISOScan),
 		nil,
+		isoManager,
 	)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	remuxManager := remux.NewManager(nil)
-	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir)
+	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, isoManager)
 	isoHandler := handlers.NewISOMountsHandler(isoManager)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{

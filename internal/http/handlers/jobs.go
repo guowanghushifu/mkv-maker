@@ -9,14 +9,16 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 type JobsHandler struct {
-	Tasks     tasksManager
-	InputDir  string
-	OutputDir string
+	Tasks      tasksManager
+	InputDir   string
+	OutputDir  string
+	ISOManager *isomount.Manager
 }
 
 type tasksManager interface {
@@ -44,11 +46,16 @@ type createJobRequest struct {
 
 const createJobBodyLimit = 2 << 20
 
-func NewJobsHandler(tasks tasksManager, inputDir, outputDir string) *JobsHandler {
+func NewJobsHandler(tasks tasksManager, inputDir, outputDir string, isoManager ...*isomount.Manager) *JobsHandler {
+	var manager *isomount.Manager
+	if len(isoManager) > 0 {
+		manager = isoManager[0]
+	}
 	return &JobsHandler{
-		Tasks:     tasks,
-		InputDir:  strings.TrimSpace(inputDir),
-		OutputDir: strings.TrimSpace(outputDir),
+		Tasks:      tasks,
+		InputDir:   strings.TrimSpace(inputDir),
+		OutputDir:  strings.TrimSpace(outputDir),
+		ISOManager: manager,
 	}
 }
 

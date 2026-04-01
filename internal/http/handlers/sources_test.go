@@ -10,10 +10,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 )
+
+func TestNewSourcesHandlerStoresISOManager(t *testing.T) {
+	manager := isomount.NewManager(t.TempDir(), time.Hour, nil)
+	h := NewSourcesHandler("/input", "/output", stubSourceScanner{}, stubPlaylistInspector{}, manager)
+
+	if h.ISOManager != manager {
+		t.Fatalf("expected ISO manager to be stored")
+	}
+}
 
 type stubSourceScanner struct {
 	items []media.SourceEntry
@@ -450,10 +461,10 @@ func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAre
 		}},
 	}, stubPlaylistInspector{
 		result: PlaylistInspection{
-			AudioTrackIDs:      []string{"2", "4"},
-			AudioLanguages:     []string{"eng", "fre"},
-			SubtitleTrackIDs:   []string{"11", "12"},
-			SubtitleLanguages:  []string{"spa", "chi"},
+			AudioTrackIDs:     []string{"2", "4"},
+			AudioLanguages:    []string{"eng", "fre"},
+			SubtitleTrackIDs:  []string{"11", "12"},
+			SubtitleLanguages: []string{"spa", "chi"},
 		},
 	})
 
@@ -650,21 +661,21 @@ func TestCollectTrackIDsCollapsesTrueHDCoreMultiplexedAudioTracks(t *testing.T) 
 		Tracks: []mkvmergeTrack{
 			{ID: 0, Type: "video"},
 			{
-				ID:    1,
-				Type:  "audio",
-				Codec: "TrueHD Atmos",
+				ID:         1,
+				Type:       "audio",
+				Codec:      "TrueHD Atmos",
 				Properties: mkvmergeTrackProperties{AudioChannels: 8, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
 			},
 			{
-				ID:    2,
-				Type:  "audio",
-				Codec: "AC-3",
+				ID:         2,
+				Type:       "audio",
+				Codec:      "AC-3",
 				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
 			},
 			{
-				ID:    3,
-				Type:  "audio",
-				Codec: "DTS-HD Master Audio",
+				ID:         3,
+				Type:       "audio",
+				Codec:      "DTS-HD Master Audio",
 				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 4353, StreamID: 4353},
 			},
 			{
@@ -688,15 +699,15 @@ func TestCollectTrackIDsPrefersHigherChannelCountWithinMultiplexedGroup(t *testi
 	payload := mkvmergeIdentifyPayload{
 		Tracks: []mkvmergeTrack{
 			{
-				ID:    1,
-				Type:  "audio",
-				Codec: "AC-3",
+				ID:         1,
+				Type:       "audio",
+				Codec:      "AC-3",
 				Properties: mkvmergeTrackProperties{AudioChannels: 2, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
 			},
 			{
-				ID:    2,
-				Type:  "audio",
-				Codec: "DTS-HD Master Audio",
+				ID:         2,
+				Type:       "audio",
+				Codec:      "DTS-HD Master Audio",
 				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
 			},
 		},
@@ -712,15 +723,15 @@ func TestCollectTrackIDsKeepsFirstTrackWhenChannelCountMatches(t *testing.T) {
 	payload := mkvmergeIdentifyPayload{
 		Tracks: []mkvmergeTrack{
 			{
-				ID:    7,
-				Type:  "audio",
-				Codec: "DTS-HD Master Audio",
+				ID:         7,
+				Type:       "audio",
+				Codec:      "DTS-HD Master Audio",
 				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
 			},
 			{
-				ID:    8,
-				Type:  "audio",
-				Codec: "AC-3",
+				ID:         8,
+				Type:       "audio",
+				Codec:      "AC-3",
 				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
 			},
 		},
