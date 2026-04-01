@@ -41,6 +41,7 @@ type Manager struct {
 	entries     map[string]*entry
 	sourceLocks map[string]*sync.Mutex
 	mountOwners map[string]string
+	pendingDirs map[string]struct{}
 }
 
 type systemRunner struct{}
@@ -62,6 +63,7 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 		entries:     map[string]*entry{},
 		sourceLocks: map[string]*sync.Mutex{},
 		mountOwners: map[string]string{},
+		pendingDirs: map[string]struct{}{},
 	}
 }
 
@@ -288,14 +290,16 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 			sourceLock.Unlock()
 			continue
 		}
-		sourceLock.Unlock()
 		if !isMountedBDMVRoot(mountPath) {
+			sourceLock.Unlock()
 			continue
 		}
 		if !m.cleanupMountPath(ctx, mountPath) {
+			sourceLock.Unlock()
 			result.Failed++
 			continue
 		}
+		sourceLock.Unlock()
 		result.Released++
 	}
 	return result
@@ -397,9 +401,31 @@ func (m *Manager) cleanupMount(ctx context.Context, mountPath string) {
 }
 
 func (m *Manager) cleanupMountPath(ctx context.Context, mountPath string) bool {
-	umountErr := m.runner.Run(ctx, "umount", mountPath)
-	removeErr := os.RemoveAll(mountPath)
-	return umountErr == nil && removeErr == nil
+	m.mu.Lock()
+	_, alreadyUnmounted := m.pendingDirs[mountPath]
+	m.mu.Unlock()
+
+	umountSucceeded := false
+	if !alreadyUnmounted {
+		if err := m.runner.Run(ctx, "umount", mountPath); err == nil {
+			umountSucceeded = true
+			m.mu.Lock()
+			m.pendingDirs[mountPath] = struct{}{}
+			m.mu.Unlock()
+		}
+	}
+
+	if err := os.RemoveAll(mountPath); err != nil {
+		return false
+	}
+
+	if alreadyUnmounted || umountSucceeded {
+		m.mu.Lock()
+		delete(m.pendingDirs, mountPath)
+		m.mu.Unlock()
+		return true
+	}
+	return false
 }
 
 func sanitizeID(id string) string {

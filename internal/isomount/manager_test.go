@@ -537,3 +537,142 @@ func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 		t.Fatal("expected completed mount to remain tracked")
 	}
 }
+
+func TestManagerCleanupResidualMountDirsBlocksConcurrentEnsureMounted(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/blocked-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	isoPath := filepath.Join(t.TempDir(), "blocked.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mounted := make(chan struct{})
+	releaseCleanup := make(chan struct{})
+	var mountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "umount":
+				close(mounted)
+				<-releaseCleanup
+				return nil
+			case "mount":
+				mountCalls++
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+					return err
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.mountOwners[mountPath] = sourceID
+
+	done := make(chan ReleaseResult, 1)
+	go func() {
+		done <- manager.CleanupResidualMountDirs(context.Background())
+	}()
+
+	select {
+	case <-mounted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for residual cleanup to reach unmount")
+	}
+
+	ensureDone := make(chan error, 1)
+	go func() {
+		_, err := manager.EnsureMounted(context.Background(), sourceID, isoPath)
+		ensureDone <- err
+	}()
+
+	select {
+	case err := <-ensureDone:
+		t.Fatalf("EnsureMounted finished before cleanup released lock: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	close(releaseCleanup)
+
+	result := <-done
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	}
+
+	select {
+	case err := <-ensureDone:
+		if err != nil {
+			t.Fatalf("EnsureMounted returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for EnsureMounted to finish")
+	}
+
+	if mountCalls != 1 {
+		t.Fatalf("expected EnsureMounted to wait until cleanup completed, got %d mount calls", mountCalls)
+	}
+}
+
+func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/retry-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(root, 0o755) }()
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name == "umount" {
+				umountCalls++
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.mountOwners[mountPath] = sourceID
+	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/retry.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+
+	if err := manager.ReleaseSource(context.Background(), sourceID); err == nil {
+		t.Fatal("expected first release attempt to fail because removal is denied")
+	}
+	if umountCalls != 1 {
+		t.Fatalf("expected one umount call on first attempt, got %d", umountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; !ok {
+		t.Fatal("expected entry to remain after failed cleanup")
+	}
+
+	if err := os.Chmod(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.ReleaseSource(context.Background(), sourceID); err != nil {
+		t.Fatalf("expected retry to succeed without a second umount, got %v", err)
+	}
+	if umountCalls != 1 {
+		t.Fatalf("expected retry to skip umount, got %d total calls", umountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected entry to be removed after successful retry")
+	}
+}
