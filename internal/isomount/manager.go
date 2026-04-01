@@ -93,17 +93,7 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	defer mountLock.Unlock()
 	m.mu.Lock()
 	delete(m.pendingDirs, mountPath)
-	m.mountOwners[mountPath] = sourceKey
 	m.mu.Unlock()
-	mounted := false
-	defer func() {
-		if mounted {
-			return
-		}
-		m.mu.Lock()
-		delete(m.mountOwners, mountPath)
-		m.mu.Unlock()
-	}()
 
 	if err := os.MkdirAll(mountPath, 0o755); err != nil {
 		return "", err
@@ -117,13 +107,13 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	}
 
 	m.mu.Lock()
+	m.mountOwners[mountPath] = sourceKey
 	m.entries[sourceKey] = &entry{
 		ISOPath:       isoPath,
 		MountPath:     mountPath,
 		LastTouchedAt: m.now(),
 	}
 	m.mu.Unlock()
-	mounted = true
 	return mountPath, nil
 }
 
