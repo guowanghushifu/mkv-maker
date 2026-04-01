@@ -82,13 +82,15 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	defer sourceLock.Unlock()
 
 	m.mu.Lock()
-	if existing := m.entries[sourceKey]; existing != nil && isMountedBDMVRoot(existing.MountPath) {
+	existing := m.entries[sourceKey]
+	if existing != nil && isMountedBDMVRoot(existing.MountPath) {
 		existing.LastTouchedAt = m.now()
 		m.mu.Unlock()
 		return existing.MountPath, nil
 	}
 	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
 	preexistingPending := false
+	staleTracked := existing != nil
 	if _, pending := m.pendingDirs[mountPath]; pending {
 		preexistingPending = true
 		if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner != sourceKey {
@@ -107,6 +109,10 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	if (owned && currentOwner != sourceKey) || (pending && currentOwner != "" && currentOwner != sourceKey) {
 		m.mu.Unlock()
 		return "", errors.New("mount path is already owned")
+	}
+	if staleTracked {
+		delete(m.entries, sourceKey)
+		delete(m.mountOwners, mountPath)
 	}
 	m.mu.Unlock()
 
@@ -309,7 +315,6 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 		}
 
 		if retrying {
-			hadPending := pending
 			if err := m.runner.Run(ctx, "umount", mountPath); err != nil {
 				mountLock.Unlock()
 				result.Failed++
@@ -317,9 +322,6 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 			}
 			m.mu.Lock()
 			delete(m.retryMounts, mountPath)
-			if !hadPending {
-				m.pendingDirs[mountPath] = struct{}{}
-			}
 			m.mu.Unlock()
 			if err := os.RemoveAll(mountPath); err != nil {
 				mountLock.Unlock()
@@ -327,9 +329,7 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 				continue
 			}
 			m.mu.Lock()
-			if !hadPending {
-				delete(m.pendingDirs, mountPath)
-			}
+			delete(m.pendingDirs, mountPath)
 			m.mu.Unlock()
 			mountLock.Unlock()
 			result.Released++
@@ -532,9 +532,7 @@ func (m *Manager) cleanupInvalidMountedContent(ctx context.Context, mountPath st
 
 	m.mu.Lock()
 	delete(m.retryMounts, mountPath)
-	if !preservePending {
-		delete(m.pendingDirs, mountPath)
-	}
+	delete(m.pendingDirs, mountPath)
 	m.mu.Unlock()
 	return true
 }

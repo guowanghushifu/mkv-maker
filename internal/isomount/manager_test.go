@@ -198,6 +198,94 @@ func TestManagerEnsureMountedRetriesInvalidContentCleanupAfterUnmountFailure(t *
 	}
 }
 
+func TestManagerEnsureMountedLeavesStaleTrackedEntryCleanupRecoverableAfterFailedRemount(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/stale-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(mountPath, "BDMV")); err != nil {
+		t.Fatal(err)
+	}
+	isoPath := filepath.Join(t.TempDir(), "stale.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var mountCalls int
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				mountCalls++
+				if err := os.RemoveAll(mountPath); err != nil {
+					return err
+				}
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV"), 0o755); err != nil {
+					return err
+				}
+				return nil
+			case "umount":
+				umountCalls++
+				if umountCalls == 1 {
+					return errors.New("device busy")
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/stale.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[mountPath] = sourceID
+	manager.pendingDirs[mountPath] = struct{}{}
+
+	if _, err := manager.EnsureMounted(context.Background(), sourceID, isoPath); err == nil {
+		t.Fatal("expected remount attempt to fail validation")
+	}
+	if mountCalls != 1 {
+		t.Fatalf("expected one remount attempt, got %d", mountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected stale tracked entry to be cleared after failed remount")
+	}
+	if _, ok := manager.mountOwners[mountPath]; ok {
+		t.Fatal("expected stale mount owner to be cleared after failed remount")
+	}
+	if _, retrying := manager.retryMounts[mountPath]; !retrying {
+		t.Fatal("expected failed remount to leave retry state")
+	}
+	if _, pending := manager.pendingDirs[mountPath]; !pending {
+		t.Fatal("expected failed remount to preserve pending state")
+	}
+
+	residual := manager.CleanupResidualMountDirs(context.Background())
+	if residual.Released != 1 || residual.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", residual)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected stale tracked entry to be removed after cleanup")
+	}
+	if _, ok := manager.mountOwners[mountPath]; ok {
+		t.Fatal("expected stale mount owner to be removed after cleanup")
+	}
+	if _, ok := manager.retryMounts[mountPath]; ok {
+		t.Fatal("expected retry state to be cleared after cleanup")
+	}
+	if _, ok := manager.pendingDirs[mountPath]; ok {
+		t.Fatal("expected pending state to be cleared after residual cleanup")
+	}
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected mount dir to be removed after residual cleanup, got stat error %v", statErr)
+	}
+}
+
 func TestManagerEnsureMountedSerializesSameSourceCalls(t *testing.T) {
 	root := t.TempDir()
 	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
@@ -868,26 +956,28 @@ func TestManagerEnsureMountedPreservesPendingCleanupStateOnValidationFailure(t *
 	if _, err := manager.EnsureMounted(context.Background(), sourceID, isoPath); err == nil {
 		t.Fatal("expected EnsureMounted to fail validation")
 	}
-	if _, pending := manager.pendingDirs[mountPath]; !pending {
-		t.Fatal("expected pending cleanup state to survive failed remount")
-	}
-
-	released, err := manager.ReleaseSource(context.Background(), sourceID)
-	if err != nil {
-		t.Fatalf("expected release retry to succeed without a second umount, got %v", err)
-	}
-	if !released {
-		t.Fatal("expected retry release to count as released")
+	residual := manager.CleanupResidualMountDirs(context.Background())
+	if residual.Released != 0 || residual.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", residual)
 	}
 	if umountCalls != 1 {
-		t.Fatalf("expected a single umount call across remount failure and release retry, got %d", umountCalls)
+		t.Fatalf("expected a single umount call across remount failure and cleanup, got %d", umountCalls)
 	}
 	if _, ok := manager.entries[sourceID]; ok {
-		t.Fatal("expected entry to be removed after successful retry")
+		t.Fatal("expected entry to be removed after cleanup")
+	}
+	if _, ok := manager.mountOwners[mountPath]; ok {
+		t.Fatal("expected mount owner to be removed after cleanup")
+	}
+	if _, ok := manager.pendingDirs[mountPath]; ok {
+		t.Fatal("expected pending state to be cleared after cleanup")
+	}
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected mount dir to be removed after cleanup, got stat error %v", statErr)
 	}
 }
 
-func TestManagerReleaseSourceRetriesInvalidContentCleanupWhenPendingAndRetryTracked(t *testing.T) {
+func TestManagerCleanupResidualMountDirsRetriesInvalidContentCleanupWhenPendingAndRetryTracked(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/pending-disc"
 	mountPath := filepath.Join(root, sanitizeID(sourceID))
@@ -934,15 +1024,12 @@ func TestManagerReleaseSourceRetriesInvalidContentCleanupWhenPendingAndRetryTrac
 		t.Fatal("expected retry state to be tracked after invalid cleanup failure")
 	}
 
-	released, err := manager.ReleaseSource(context.Background(), sourceID)
-	if err != nil {
-		t.Fatalf("ReleaseSource returned error: %v", err)
-	}
-	if !released {
-		t.Fatal("expected ReleaseSource to report an actual release")
+	residual := manager.CleanupResidualMountDirs(context.Background())
+	if residual.Released != 1 || residual.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", residual)
 	}
 	if umountCalls != 2 {
-		t.Fatalf("expected ReleaseSource to retry umount, got %d calls", umountCalls)
+		t.Fatalf("expected residual cleanup to retry umount, got %d calls", umountCalls)
 	}
 	if _, ok := manager.entries[sourceID]; ok {
 		t.Fatal("expected entry to be removed after successful retry")
