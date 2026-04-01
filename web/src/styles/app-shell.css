@@ -191,7 +191,7 @@
 
 .workflow-summary-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.55fr) minmax(8rem, 0.7fr) minmax(0, 1.55fr) minmax(7.5rem, 0.7fr);
   gap: 0.9rem;
 }
 
@@ -229,7 +229,28 @@
 }
 
 .summary-value {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.summary-card-wide {
+  min-width: 0;
+}
+
+.summary-card-compact {
+  min-width: 0;
+}
+
+.summary-value-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-break: auto;
 }
 
 .workflow-page-grid {

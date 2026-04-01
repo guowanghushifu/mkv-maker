@@ -474,8 +474,11 @@ describe('App', () => {
       node.textContent?.trim()
     );
     expect(summaryLabels).toEqual(['Selected Source', 'Playlist', 'Output', 'Task State']);
+    expect(document.querySelectorAll('.workflow-summary-card.summary-card-wide')).toHaveLength(2);
+    expect(document.querySelectorAll('.workflow-summary-card.summary-card-compact')).toHaveLength(2);
     const summaryValues = Array.from(document.querySelectorAll('.workflow-summary-row .summary-value'));
     expect(summaryValues).toHaveLength(4);
+    expect(document.querySelectorAll('.workflow-summary-row .summary-value.summary-value-clamp')).toHaveLength(2);
     expect(summaryValues.some((node) => node.getAttribute('title') === 'Nightcrawler Disc')).toBe(true);
     expect(summaryValues.some((node) => node.getAttribute('title') === '00800.MPLS')).toBe(true);
     expect(summaryValues.some((node) => node.getAttribute('title') === 'Nightcrawler - 2160p.mkv')).toBe(true);

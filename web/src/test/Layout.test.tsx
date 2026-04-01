@@ -31,6 +31,9 @@ describe('Layout', () => {
     expect(container.querySelectorAll('.workflow-summary-card')).toHaveLength(4);
     expect(container.querySelectorAll('.workflow-summary-card .summary-label')).toHaveLength(4);
     expect(container.querySelectorAll('.workflow-summary-card .summary-value')).toHaveLength(4);
+    expect(container.querySelectorAll('.workflow-summary-card.summary-card-wide')).toHaveLength(2);
+    expect(container.querySelectorAll('.workflow-summary-card.summary-card-compact')).toHaveLength(2);
+    expect(container.querySelectorAll('.workflow-summary-card .summary-value.summary-value-clamp')).toHaveLength(2);
     expect(container.querySelector('.workflow-page-aside')).toBeNull();
     expect(container.querySelectorAll('.context-card')).toHaveLength(0);
     expect(container.querySelectorAll('.shell-nav-index')).toHaveLength(4);
@@ -66,6 +69,7 @@ describe('Layout', () => {
     expect(container.querySelector('.shell-nav-item.is-active')).not.toBeNull();
     expect(container.querySelector('.topbar')).not.toBeNull();
     expect(container.querySelectorAll('.workflow-summary-row .summary-value wbr').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.workflow-summary-row .summary-value.summary-value-clamp wbr').length).toBeGreaterThan(0);
     expect(container.querySelector('.workflow-page-aside')).toBeNull();
   });
 });

@@ -85,25 +85,25 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
         </header>
         <main className="shell-page">
           <section className="workflow-summary-row" aria-label={text.layout.contextTitle}>
-            <article className="workflow-summary-card">
+            <article className="workflow-summary-card summary-card-wide">
               <span className="summary-label">{text.layout.summaryLabels.source}</span>
-              <strong className="summary-value" title={context.source}>
+              <strong className="summary-value summary-value-clamp" title={context.source}>
                 {renderContextValue(context.source)}
               </strong>
             </article>
-            <article className="workflow-summary-card">
+            <article className="workflow-summary-card summary-card-compact">
               <span className="summary-label">{text.layout.summaryLabels.playlist}</span>
               <strong className="summary-value" title={context.playlist}>
                 {renderContextValue(context.playlist)}
               </strong>
             </article>
-            <article className="workflow-summary-card">
+            <article className="workflow-summary-card summary-card-wide">
               <span className="summary-label">{text.layout.summaryLabels.output}</span>
-              <strong className="summary-value" title={context.output}>
+              <strong className="summary-value summary-value-clamp" title={context.output}>
                 {renderContextValue(context.output)}
               </strong>
             </article>
-            <article className="workflow-summary-card">
+            <article className="workflow-summary-card summary-card-compact">
               <span className="summary-label">{text.layout.summaryLabels.status}</span>
               <strong className="summary-value" title={context.task}>
                 {renderContextValue(context.task)}
