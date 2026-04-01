@@ -7,18 +7,19 @@ import (
 )
 
 type Dependencies struct {
-	RequireAuth    func(http.Handler) http.Handler
-	Login          http.HandlerFunc
-	Logout         http.HandlerFunc
-	ConfigGet      http.HandlerFunc
-	SourcesScan    http.HandlerFunc
-	SourcesList    http.HandlerFunc
-	SourcesResolve http.HandlerFunc
-	BDInfoParse    http.HandlerFunc
-	DraftsPreview  http.HandlerFunc
-	JobsCreate     http.HandlerFunc
-	JobsCurrent    http.HandlerFunc
-	JobsCurrentLog http.HandlerFunc
+	RequireAuth     func(http.Handler) http.Handler
+	Login           http.HandlerFunc
+	Logout          http.HandlerFunc
+	ConfigGet       http.HandlerFunc
+	SourcesScan     http.HandlerFunc
+	SourcesList     http.HandlerFunc
+	SourcesResolve  http.HandlerFunc
+	BDInfoParse     http.HandlerFunc
+	DraftsPreview   http.HandlerFunc
+	ISOMountRelease http.HandlerFunc
+	JobsCreate      http.HandlerFunc
+	JobsCurrent     http.HandlerFunc
+	JobsCurrentLog  http.HandlerFunc
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -35,6 +36,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		protected.Post("/api/sources/{id}/resolve", deps.SourcesResolve)
 		protected.Post("/api/bdinfo/parse", deps.BDInfoParse)
 		protected.Post("/api/drafts/preview-filename", deps.DraftsPreview)
+		protected.Post("/api/iso/release-mounted", deps.ISOMountRelease)
 		protected.Post("/api/jobs", deps.JobsCreate)
 		protected.Get("/api/jobs/current", deps.JobsCurrent)
 		protected.Get("/api/jobs/current/log", deps.JobsCurrentLog)

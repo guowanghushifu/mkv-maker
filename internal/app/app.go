@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -16,15 +17,18 @@ import (
 	httpapi "github.com/guowanghushifu/mkv-maker/internal/http"
 	"github.com/guowanghushifu/mkv-maker/internal/http/handlers"
 	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
+	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 type App struct {
-	Config       config.Config
-	Handler      http.Handler
-	logFile      *os.File
-	remuxManager *remux.Manager
+	Config         config.Config
+	Handler        http.Handler
+	logFile        *os.File
+	remuxManager   *remux.Manager
+	isoManager     *isomount.Manager
+	cancelLifetime context.CancelFunc
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -35,6 +39,14 @@ func New(cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
+	isoManager := isomount.NewManager(filepath.Join(cfg.InputDir, "iso_auto_mount"), time.Hour, nil)
+	startupCleanup := isoManager.CleanupResidualMountDirs(context.Background())
+	if startupCleanup.Failed > 0 {
+		log.Printf("iso startup cleanup completed with %d failures", startupCleanup.Failed)
+	}
+	go isoManager.RunJanitor(lifetimeCtx, time.Minute)
 
 	cookieAuth := auth.NewCookieAuth(cfg.AppPassword, time.Duration(cfg.SessionMaxAge)*time.Second)
 	authHandler := &handlers.AuthHandler{
@@ -57,29 +69,33 @@ func New(cfg config.Config) (*App, error) {
 	draftsHandler := handlers.NewDraftsHandler()
 	remuxManager := remux.NewManager(nil)
 	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir)
+	isoHandler := handlers.NewISOMountsHandler(isoManager)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		RequireAuth:    middleware.RequireAuth(cookieAuth),
-		Login:          authHandler.Login,
-		Logout:         authHandler.Logout,
-		ConfigGet:      configHandler.Get,
-		SourcesScan:    sourcesHandler.Scan,
-		SourcesList:    sourcesHandler.List,
-		SourcesResolve: sourcesHandler.Resolve,
-		BDInfoParse:    bdinfoHandler.Parse,
-		DraftsPreview:  draftsHandler.PreviewFilename,
-		JobsCreate:     jobsHandler.Create,
-		JobsCurrent:    jobsHandler.Current,
-		JobsCurrentLog: jobsHandler.CurrentLog,
+		RequireAuth:     middleware.RequireAuth(cookieAuth),
+		Login:           authHandler.Login,
+		Logout:          authHandler.Logout,
+		ConfigGet:       configHandler.Get,
+		SourcesScan:     sourcesHandler.Scan,
+		SourcesList:     sourcesHandler.List,
+		SourcesResolve:  sourcesHandler.Resolve,
+		BDInfoParse:     bdinfoHandler.Parse,
+		DraftsPreview:   draftsHandler.PreviewFilename,
+		ISOMountRelease: isoHandler.ReleaseMounted,
+		JobsCreate:      jobsHandler.Create,
+		JobsCurrent:     jobsHandler.Current,
+		JobsCurrentLog:  jobsHandler.CurrentLog,
 	})
 
 	handler := withFrontend(router, filepath.Join("web", "dist"))
 
 	return &App{
-		Config:       cfg,
-		Handler:      handler,
-		logFile:      logFile,
-		remuxManager: remuxManager,
+		Config:         cfg,
+		Handler:        handler,
+		logFile:        logFile,
+		remuxManager:   remuxManager,
+		isoManager:     isoManager,
+		cancelLifetime: cancelLifetime,
 	}, nil
 }
 
@@ -87,14 +103,19 @@ func (a *App) Close() error {
 	if a == nil {
 		return nil
 	}
+	if a.cancelLifetime != nil {
+		a.cancelLifetime()
+	}
+	if a.isoManager != nil {
+		a.isoManager.CleanupAll(context.Background())
+	}
 	if a.remuxManager != nil {
 		a.remuxManager.Close()
 	}
-	var err error
 	if a.logFile != nil {
-		err = a.logFile.Close()
+		return a.logFile.Close()
 	}
-	return err
+	return nil
 }
 
 func initAppLogger(dataDir string) (*os.File, error) {
