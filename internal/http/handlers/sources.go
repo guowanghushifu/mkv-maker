@@ -228,6 +228,14 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	if len(subtitleLabels) == 0 {
 		subtitleLabels = compactLabels(parsed.SubtitleLabels)
 	}
+	if err := validateResolvedTrackIDs(audioLabels, inspection.AudioTrackIDs, "audio"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateResolvedTrackIDs(subtitleLabels, inspection.SubtitleTrackIDs, "subtitle"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	video := resolveVideo{
 		Name:       "Main Video",
@@ -426,6 +434,21 @@ func buildResolveTracks(labels []string, languages []string, fallbackLanguages [
 		tracks = append(tracks, track)
 	}
 	return tracks
+}
+
+func validateResolvedTrackIDs(labels []string, trackIDs []string, kind string) error {
+	if len(labels) == 0 {
+		return nil
+	}
+	if len(trackIDs) < len(labels) {
+		return errors.New(kind + " track ids are incomplete")
+	}
+	for i := range labels {
+		if strings.TrimSpace(trackIDs[i]) == "" {
+			return errors.New(kind + " track ids are incomplete")
+		}
+	}
+	return nil
 }
 
 func buildSegmentPaths(sourceRoot string, streamFiles []string) []string {

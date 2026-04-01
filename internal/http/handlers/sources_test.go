@@ -382,6 +382,53 @@ func TestSourcesHandlerResolveUsesSubtitleLanguageColumnInsteadOfGuessingFromLab
 	}
 }
 
+func TestSourcesHandlerResolveRejectsIncompleteSubtitleTrackIDs(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "BrokenDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			SubtitleTrackIDs: []string{"11"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"BrokenDisc",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           English         54.085 kbps\nPresentation Graphics           Chinese         31.415 kbps                    简体中文特效"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/BrokenDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "subtitle track ids") {
+		t.Fatalf("expected subtitle track id error, got %q", w.Body.String())
+	}
+}
+
 func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAreUnavailable(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "FallbackDisc"
