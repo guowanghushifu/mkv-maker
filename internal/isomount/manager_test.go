@@ -231,6 +231,14 @@ func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *t
 	if err := os.WriteFile(filepath.Join(orphanPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	busyID := "library/busy-disc"
+	busyPath := filepath.Join(root, sanitizeID(busyID))
+	if err := os.MkdirAll(filepath.Join(busyPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(busyPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	var umountPaths []string
 	runner := &fakeCommandRunner{
 		runFn: func(_ context.Context, name string, args ...string) error {
@@ -246,8 +254,9 @@ func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *t
 	manager := NewManager(root, time.Hour, runner)
 	manager.now = func() time.Time { return now }
 	manager.entries["idle-disc"] = &entry{ISOPath: "/bd_input/idle.iso", MountPath: filepath.Join(root, "idle-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
-	manager.entries["busy-disc"] = &entry{ISOPath: "/bd_input/busy.iso", MountPath: filepath.Join(root, "busy-disc"), LastTouchedAt: now.Add(-2 * time.Hour), InUse: true}
+	manager.entries[busyID] = &entry{ISOPath: "/bd_input/busy.iso", MountPath: busyPath, LastTouchedAt: now.Add(-2 * time.Hour), InUse: true}
 	manager.entries["broken-disc"] = &entry{ISOPath: "/bd_input/broken.iso", MountPath: filepath.Join(root, "broken-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
+	manager.mountOwners[busyPath] = busyID
 
 	result := manager.ReleaseIdleMounted(context.Background())
 	if result.Released != 2 || result.SkippedInUse != 1 || result.Failed != 1 {
@@ -265,6 +274,11 @@ func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *t
 	}
 	if !foundOrphan {
 		t.Fatalf("expected orphan mount dir to be unmounted, saw paths %v", umountPaths)
+	}
+	for _, mountPath := range umountPaths {
+		if mountPath == busyPath {
+			t.Fatalf("expected sanitized in-use mount to stay mounted, saw paths %v", umountPaths)
+		}
 	}
 }
 
@@ -443,12 +457,13 @@ func TestManagerCleanupResidualMountDirsBestEffort(t *testing.T) {
 
 func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 	root := t.TempDir()
+	sourceID := "library/in-progress-disc"
 	isoPath := filepath.Join(t.TempDir(), "in-progress.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	mountPath := filepath.Join(root, "in-progress-disc")
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
 	mounted := make(chan struct{})
 	releaseMount := make(chan struct{})
 	var umountCalls int
@@ -480,7 +495,7 @@ func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 		err  error
 	}, 1)
 	go func() {
-		path, err := manager.EnsureMounted(context.Background(), "in-progress-disc", isoPath)
+		path, err := manager.EnsureMounted(context.Background(), sourceID, isoPath)
 		done <- struct {
 			path string
 			err  error
@@ -518,7 +533,7 @@ func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 		t.Fatal("timed out waiting for EnsureMounted to finish")
 	}
 
-	if _, ok := manager.entries["in-progress-disc"]; !ok {
+	if _, ok := manager.entries[sourceID]; !ok {
 		t.Fatal("expected completed mount to remain tracked")
 	}
 }

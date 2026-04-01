@@ -40,6 +40,7 @@ type Manager struct {
 	mu          sync.Mutex
 	entries     map[string]*entry
 	sourceLocks map[string]*sync.Mutex
+	mountOwners map[string]string
 }
 
 type systemRunner struct{}
@@ -60,6 +61,7 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 		runner:      runner,
 		entries:     map[string]*entry{},
 		sourceLocks: map[string]*sync.Mutex{},
+		mountOwners: map[string]string{},
 	}
 }
 
@@ -79,8 +81,21 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		m.mu.Unlock()
 		return existing.MountPath, nil
 	}
-	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
 	m.mu.Unlock()
+
+	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
+	m.mu.Lock()
+	m.mountOwners[mountPath] = sourceKey
+	m.mu.Unlock()
+	mounted := false
+	defer func() {
+		if mounted {
+			return
+		}
+		m.mu.Lock()
+		delete(m.mountOwners, mountPath)
+		m.mu.Unlock()
+	}()
 
 	if err := os.MkdirAll(mountPath, 0o755); err != nil {
 		return "", err
@@ -100,6 +115,7 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		LastTouchedAt: m.now(),
 	}
 	m.mu.Unlock()
+	mounted = true
 	return mountPath, nil
 }
 
@@ -197,6 +213,7 @@ func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now
 	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
 	}
+	delete(m.mountOwners, mountPath)
 	m.mu.Unlock()
 	return true, nil
 }
@@ -243,29 +260,42 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 		if !dirEntry.IsDir() {
 			continue
 		}
-		sourceID := dirEntry.Name()
+		mountPath := filepath.Join(m.root, dirEntry.Name())
+
+		m.mu.Lock()
+		sourceID, tracked := m.mountOwners[mountPath]
+		m.mu.Unlock()
+		if !tracked {
+			if !isMountedBDMVRoot(mountPath) {
+				continue
+			}
+			if !m.cleanupMountPath(ctx, mountPath) {
+				result.Failed++
+				continue
+			}
+			result.Released++
+			continue
+		}
+
 		sourceLock := m.sourceLockFor(sourceID)
 		if !sourceLock.TryLock() {
 			continue
 		}
-		mountPath := filepath.Join(m.root, sourceID)
 		m.mu.Lock()
-		tracked := m.entries[sourceID] != nil
+		entryTracked := m.entries[sourceID] != nil
 		m.mu.Unlock()
-		if tracked {
+		if entryTracked {
 			sourceLock.Unlock()
-			continue
-		}
-		if !isMountedBDMVRoot(mountPath) {
-			sourceLock.Unlock()
-			continue
-		}
-		if !m.cleanupMountPath(ctx, mountPath) {
-			sourceLock.Unlock()
-			result.Failed++
 			continue
 		}
 		sourceLock.Unlock()
+		if !isMountedBDMVRoot(mountPath) {
+			continue
+		}
+		if !m.cleanupMountPath(ctx, mountPath) {
+			result.Failed++
+			continue
+		}
 		result.Released++
 	}
 	return result
@@ -329,6 +359,7 @@ func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) error {
 	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
 	}
+	delete(m.mountOwners, mountPath)
 	m.mu.Unlock()
 	return nil
 }
@@ -355,6 +386,7 @@ func (m *Manager) forceReleaseSource(ctx context.Context, sourceID string) error
 	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
 		delete(m.entries, sourceID)
 	}
+	delete(m.mountOwners, mountPath)
 	m.mu.Unlock()
 	return nil
 }
