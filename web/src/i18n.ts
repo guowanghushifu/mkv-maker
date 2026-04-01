@@ -38,7 +38,6 @@ type MessageSet = {
   };
   login: {
     title: string;
-    subtitle: string;
     passwordLabel: string;
     passwordPlaceholder: string;
     continueButton: string;
@@ -192,7 +191,6 @@ export const messages: Record<Locale, MessageSet> = {
     },
     login: {
       title: '登录',
-      subtitle: '单用户本地访问。',
       passwordLabel: '密码',
       passwordPlaceholder: '请输入密码',
       continueButton: '继续',
@@ -344,7 +342,6 @@ export const messages: Record<Locale, MessageSet> = {
     },
     login: {
       title: 'Login',
-      subtitle: 'Single-user local access.',
       passwordLabel: 'Password',
       passwordPlaceholder: 'Enter password',
       continueButton: 'Continue',

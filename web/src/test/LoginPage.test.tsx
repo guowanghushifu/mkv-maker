@@ -1,8 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { messages } from '../i18n';
 import { LoginPage } from '../features/auth/LoginPage';
 
 describe('LoginPage', () => {
+  it('removes the unused login subtitle from both locale message sets', () => {
+    expect('subtitle' in messages.zh.login).toBe(false);
+    expect('subtitle' in messages.en.login).toBe(false);
+  });
+
   it('renders the standalone light login card without the admin shell', () => {
     render(<LoginPage locale="en" onSuccess={vi.fn()} />);
 
