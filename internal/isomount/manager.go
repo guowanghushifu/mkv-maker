@@ -163,7 +163,7 @@ func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) Release
 	m.mu.Lock()
 	ids := make([]string, 0, len(m.entries))
 	for sourceID, entry := range m.entries {
-		if entry == nil || entry.InUse || now.Sub(entry.LastTouchedAt) < m.idleTimeout {
+		if entry == nil || entry.InUse || now.Sub(entry.LastTouchedAt) <= m.idleTimeout {
 			continue
 		}
 		ids = append(ids, sourceID)

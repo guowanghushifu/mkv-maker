@@ -274,11 +274,15 @@ func TestManagerCleanupExpiredIdleReleasesOnlyStaleEntries(t *testing.T) {
 	manager := NewManager(root, time.Hour, &fakeCommandRunner{})
 	manager.now = func() time.Time { return now }
 	manager.entries["stale-disc"] = &entry{ISOPath: "/bd_input/stale.iso", MountPath: filepath.Join(root, "stale-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
+	manager.entries["exact-disc"] = &entry{ISOPath: "/bd_input/exact.iso", MountPath: filepath.Join(root, "exact-disc"), LastTouchedAt: now.Add(-1 * time.Hour)}
 	manager.entries["fresh-disc"] = &entry{ISOPath: "/bd_input/fresh.iso", MountPath: filepath.Join(root, "fresh-disc"), LastTouchedAt: now.Add(-15 * time.Minute)}
 
 	result := manager.CleanupExpiredIdle(context.Background(), now)
 	if result.Released != 1 || result.Failed != 0 {
 		t.Fatalf("unexpected cleanup summary %+v", result)
+	}
+	if _, ok := manager.entries["exact-disc"]; !ok {
+		t.Fatal("expected entry touched exactly at idle timeout to remain tracked")
 	}
 }
 
