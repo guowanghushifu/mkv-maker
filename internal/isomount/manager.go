@@ -171,7 +171,7 @@ func (m *Manager) ReleaseIdleMounted(ctx context.Context) ReleaseResult {
 	return result
 }
 
-func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now time.Time) error {
+func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now time.Time) (bool, error) {
 	sourceLock := m.sourceLockFor(sourceID)
 	sourceLock.Lock()
 	defer sourceLock.Unlock()
@@ -180,17 +180,17 @@ func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now
 	entry := m.entries[sourceID]
 	if entry == nil {
 		m.mu.Unlock()
-		return nil
+		return false, nil
 	}
 	if entry.InUse || now.Sub(entry.LastTouchedAt) <= m.idleTimeout {
 		m.mu.Unlock()
-		return nil
+		return false, nil
 	}
 	mountPath := entry.MountPath
 	m.mu.Unlock()
 
 	if !m.cleanupMountPath(ctx, mountPath) {
-		return errors.New("failed to release source")
+		return false, errors.New("failed to release source")
 	}
 
 	m.mu.Lock()
@@ -198,7 +198,7 @@ func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now
 		delete(m.entries, sourceID)
 	}
 	m.mu.Unlock()
-	return nil
+	return true, nil
 }
 
 func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) ReleaseResult {
@@ -214,11 +214,14 @@ func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) Release
 
 	var result ReleaseResult
 	for _, sourceID := range ids {
-		switch err := m.releaseExpiredSource(ctx, sourceID, now); {
-		case err == nil:
+		released, err := m.releaseExpiredSource(ctx, sourceID, now)
+		switch {
+		case released:
 			result.Released++
 		case errors.Is(err, ErrSourceInUse):
 			result.SkippedInUse++
+		case err == nil:
+			// The entry was re-checked and is no longer idle, so it is left alone.
 		default:
 			result.Failed++
 		}
@@ -227,16 +230,6 @@ func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) Release
 }
 
 func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
-	m.mu.Lock()
-	trackedMountPaths := make(map[string]struct{}, len(m.entries))
-	for _, entry := range m.entries {
-		if entry == nil {
-			continue
-		}
-		trackedMountPaths[entry.MountPath] = struct{}{}
-	}
-	m.mu.Unlock()
-
 	entries, err := os.ReadDir(m.root)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return ReleaseResult{}
@@ -250,17 +243,29 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 		if !dirEntry.IsDir() {
 			continue
 		}
-		mountPath := filepath.Join(m.root, dirEntry.Name())
-		if _, tracked := trackedMountPaths[mountPath]; tracked {
+		sourceID := dirEntry.Name()
+		sourceLock := m.sourceLockFor(sourceID)
+		if !sourceLock.TryLock() {
+			continue
+		}
+		mountPath := filepath.Join(m.root, sourceID)
+		m.mu.Lock()
+		tracked := m.entries[sourceID] != nil
+		m.mu.Unlock()
+		if tracked {
+			sourceLock.Unlock()
 			continue
 		}
 		if !isMountedBDMVRoot(mountPath) {
+			sourceLock.Unlock()
 			continue
 		}
 		if !m.cleanupMountPath(ctx, mountPath) {
+			sourceLock.Unlock()
 			result.Failed++
 			continue
 		}
+		sourceLock.Unlock()
 		result.Released++
 	}
 	return result

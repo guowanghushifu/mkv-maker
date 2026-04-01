@@ -325,38 +325,88 @@ func TestManagerCleanupExpiredIdleRetainsEntryOnFailure(t *testing.T) {
 func TestManagerCleanupExpiredIdleSkipsTouchedCandidateAfterSelection(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
-	path := filepath.Join(root, "stale-disc")
-	if err := os.MkdirAll(filepath.Join(path, "BDMV", "PLAYLIST"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(path, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
-		t.Fatal(err)
+	firstPath := filepath.Join(root, "first-disc")
+	secondPath := filepath.Join(root, "second-disc")
+	for _, path := range []string{firstPath, secondPath} {
+		if err := os.MkdirAll(filepath.Join(path, "BDMV", "PLAYLIST"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	var umountCalls int
+	started := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	blockedPath := make(chan string, 1)
+	var umountPaths []string
 	runner := &fakeCommandRunner{
 		runFn: func(_ context.Context, name string, args ...string) error {
 			if name == "umount" {
-				umountCalls++
+				umountPaths = append(umountPaths, args[0])
+				select {
+				case blockedPath <- args[0]:
+					select {
+					case <-started:
+					default:
+						close(started)
+					}
+					<-releaseFirst
+				default:
+				}
 			}
 			return nil
 		},
 	}
 	manager := NewManager(root, time.Hour, runner)
 	manager.now = func() time.Time { return now }
-	manager.sourceLockFor("stale-disc")
-	manager.entries["stale-disc"] = &entry{ISOPath: "/bd_input/stale.iso", MountPath: path, LastTouchedAt: now.Add(-2 * time.Hour)}
+	manager.entries["first-disc"] = &entry{ISOPath: "/bd_input/first.iso", MountPath: firstPath, LastTouchedAt: now.Add(-2 * time.Hour)}
+	manager.entries["second-disc"] = &entry{ISOPath: "/bd_input/second.iso", MountPath: secondPath, LastTouchedAt: now.Add(-2 * time.Hour)}
 
-	manager.Touch("stale-disc")
+	done := make(chan ReleaseResult, 1)
+	go func() {
+		done <- manager.CleanupExpiredIdle(context.Background(), now)
+	}()
 
-	if err := manager.releaseExpiredSource(context.Background(), "stale-disc", now); err != nil {
-		t.Fatalf("releaseExpiredSource returned error: %v", err)
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for cleanup to start")
 	}
-	if umountCalls != 0 {
-		t.Fatalf("expected refreshed entry not to be unmounted, got %d umount calls", umountCalls)
+
+	blocked := <-blockedPath
+	var touchedID, touchedPath string
+	switch blocked {
+	case firstPath:
+		touchedID = "second-disc"
+		touchedPath = secondPath
+	case secondPath:
+		touchedID = "first-disc"
+		touchedPath = firstPath
+	default:
+		t.Fatalf("unexpected blocked path %q", blocked)
 	}
-	if _, ok := manager.entries["stale-disc"]; !ok {
-		t.Fatal("expected refreshed entry to remain tracked")
+	manager.Touch(touchedID)
+	close(releaseFirst)
+
+	result := <-done
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected cleanup summary %+v", result)
+	}
+	if _, ok := manager.entries[touchedID]; !ok {
+		t.Fatalf("expected touched entry %q to remain tracked", touchedID)
+	}
+	releasedID := "first-disc"
+	if touchedID == "first-disc" {
+		releasedID = "second-disc"
+	}
+	if _, ok := manager.entries[releasedID]; ok {
+		t.Fatalf("expected stale entry %q to be released", releasedID)
+	}
+	for _, mountPath := range umountPaths {
+		if mountPath == touchedPath {
+			t.Fatalf("expected refreshed entry not to be unmounted, saw paths %v", umountPaths)
+		}
 	}
 }
 
@@ -388,5 +438,87 @@ func TestManagerCleanupResidualMountDirsBestEffort(t *testing.T) {
 	}
 	if _, statErr := os.Stat(failPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected failed residual dir to be removed best-effort, got stat error %v", statErr)
+	}
+}
+
+func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
+	root := t.TempDir()
+	isoPath := filepath.Join(t.TempDir(), "in-progress.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mountPath := filepath.Join(root, "in-progress-disc")
+	mounted := make(chan struct{})
+	releaseMount := make(chan struct{})
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+					return err
+				}
+				close(mounted)
+				<-releaseMount
+				return nil
+			case "umount":
+				umountCalls++
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	done := make(chan struct {
+		path string
+		err  error
+	}, 1)
+	go func() {
+		path, err := manager.EnsureMounted(context.Background(), "in-progress-disc", isoPath)
+		done <- struct {
+			path string
+			err  error
+		}{path: path, err: err}
+	}()
+
+	select {
+	case <-mounted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for mount to reach validation")
+	}
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Released != 0 || result.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	}
+	if umountCalls != 0 {
+		t.Fatalf("expected in-progress mount not to be unmounted, got %d calls", umountCalls)
+	}
+	if _, statErr := os.Stat(mountPath); statErr != nil {
+		t.Fatalf("expected mount dir to remain during in-progress mount, got %v", statErr)
+	}
+
+	close(releaseMount)
+
+	select {
+	case outcome := <-done:
+		if outcome.err != nil {
+			t.Fatalf("EnsureMounted returned error: %v", outcome.err)
+		}
+		if outcome.path != mountPath {
+			t.Fatalf("unexpected mount path %q", outcome.path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for EnsureMounted to finish")
+	}
+
+	if _, ok := manager.entries["in-progress-disc"]; !ok {
+		t.Fatal("expected completed mount to remain tracked")
 	}
 }
