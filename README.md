@@ -1,7 +1,10 @@
 # mkv-remux-web
 
 `mkv-remux-web` 是一个用于蓝光盘Remux视频到mkv的Web工具。
-- 当前仅支持 **BDMV 输入**，iso请自行挂载。
+- 当前仅支持 **BDMV 输入**，iso请自行挂载。Linux下挂载非常简单
+```bash
+mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
+```
 - 必须提供 **BDInfo 文本** 来判断播放列表和音轨、字幕轨道名称。
 
 ## Docker运行
