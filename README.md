@@ -1,57 +1,21 @@
 # mkv-remux-web
 
-`mkv-remux-web` is a web UI + Go backend for preparing MKV remux jobs from Blu-ray sources.
-Current product scope is **BDMV-only input** and **BDInfo text is required** to build draft metadata.
+`mkv-remux-web` 是一个用于蓝光盘Remux视频到mkv的Web工具。
+- 当前仅支持 **BDMV 输入**，iso请自行挂载。
+- 必须提供 **BDInfo 文本** 来判断播放列表和音轨、字幕轨道名称。
 
-## Runtime environment variables
+## Docker运行
 
-The server uses these environment variables:
+服务端使用以下环境变量：
 
-- `APP_PASSWORD` (required): login password for the web app
-- `APP_DATA_DIR` (default: `/app/data`): application log directory
-- `BD_INPUT_DIR` (default: `/bd_input`): mounted BDMV source directory
-- `REMUX_OUTPUT_DIR` (default: `/remux`): output directory for remuxed files
-- `LISTEN_ADDR` (default: `:8080`): HTTP listen address
+一般来说你只需要填写 `APP_PASSWORD`
+- `APP_PASSWORD`（必填）：Web 应用登录密码
+- `APP_DATA_DIR`（默认：`/app/data`）：应用日志目录
+- `BD_INPUT_DIR`（默认：`/bd_input`）：挂载的 BDMV 源目录
+- `REMUX_OUTPUT_DIR`（默认：`/remux`）：remux 输出目录
+- `LISTEN_ADDR`（默认：`:8080`）：HTTP 监听地址
 
-## Docker (local)
-
-Build:
-
-```bash
-./scripts/docker-build.sh
-```
-
-Local Docker builds now require Docker Buildx.
-
-Optional custom image tag:
-
-```bash
-IMAGE_TAG=mkv-remux-web:test ./scripts/docker-build.sh
-```
-
-Optional local build controls:
-
-- `NO_CACHE=1`: disable Docker layer cache
-- `PLATFORMS=linux/amd64,linux/arm64`: request a multi-arch Buildx build
-- `PUSH=1`: push the resulting image instead of loading it locally (requires a registry-qualified `IMAGE_TAG`)
-
-Examples:
-
-```bash
-./scripts/docker-build.sh
-PLATFORMS=linux/amd64 ./scripts/docker-build.sh
-PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scripts/docker-build.sh
-```
-
-Note: multi-arch builds are not loaded into the local Docker daemon. Use `PUSH=1` for multi-arch output, or build a single platform.
-
-Run:
-
-```bash
-APP_PASSWORD=change-me ./scripts/docker-run.sh
-```
-
-Docker Compose example:
+Docker Compose 示例：
 
 ```yaml
 services:
@@ -69,39 +33,40 @@ services:
       - /remux:/remux              # remux输出目录
 ```
 
-Optional host mount overrides:
+## Docker构建和运行（本地）
 
-- `APP_DATA_HOST_DIR` (default: `$PWD/.data`): host directory for application logs
-- `BD_INPUT_HOST_DIR` (default: `$PWD/bd_input`)
-- `REMUX_OUTPUT_HOST_DIR` (default: `$PWD/remux_output`)
+构建：
 
-The container publishes `http://localhost:8080`, serves the web UI at `/`, and serves API routes under `/api/*`.
+```bash
+./scripts/docker-build.sh
+```
 
-`mkvtoolnix` is installed from the official MKVToolNix Debian repository for `trixie`, following the vendor instructions at:
-- https://mkvtoolnix.download/downloads.html#debian
+可选：自定义镜像标签：
 
-## Docker Hub + GHCR publish workflow
+```bash
+IMAGE_TAG=mkv-remux-web:test ./scripts/docker-build.sh
+```
 
-Manual release workflow: `.github/workflows/docker-publish.yml`.
+可选：本地构建控制项：
 
-Configure GitHub repository secrets:
+- `NO_CACHE=1`：禁用 Docker 层缓存
+- `PLATFORMS=linux/amd64,linux/arm64`：请求使用 Buildx 进行多架构构建
+- `PUSH=1`：将生成的镜像推送出去，而不是加载到本地（需要带仓库前缀的 `IMAGE_TAG`）
 
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN` (Docker Hub access token)
+示例：
 
-GHCR publishing uses the built-in `GITHUB_TOKEN` provided by GitHub Actions.
-Note: GHCR packages may be private on first publish by default; set package visibility/association if you expect anonymous pulls.
+```bash
+./scripts/docker-build.sh
+NO_CACHE=1 ./scripts/docker-build.sh
+PLATFORMS=linux/amd64 ./scripts/docker-build.sh
+PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scripts/docker-build.sh
+```
 
-Then run the **Docker Publish** workflow with:
+运行：
 
-- `image_tag` (for example `v0.1.0`)
-- `push_latest` (`true` to also push `latest`)
+```bash
+APP_PASSWORD=change-me ./scripts/docker-run.sh
+```
 
-Published images:
 
-- `${DOCKERHUB_USERNAME}/mkv-remux-web:<image_tag>`
-- `${DOCKERHUB_USERNAME}/mkv-remux-web:latest` (optional)
-- `ghcr.io/<github-owner-lowercase>/mkv-remux-web:<image_tag>`
-- `ghcr.io/<github-owner-lowercase>/mkv-remux-web:latest` (optional)
 
-The publish workflow builds a shared multi-arch manifest for `linux/amd64` and `linux/arm64`.
