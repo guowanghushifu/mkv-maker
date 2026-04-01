@@ -24,7 +24,7 @@
 .shell-brand-mark {
   width: 2.2rem;
   height: 2.2rem;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   font-size: 0.82rem;
@@ -70,7 +70,7 @@
   gap: 0.7rem;
   min-height: 3rem;
   padding: 0.8rem 0.9rem;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   color: #334155;
 }
 
@@ -80,7 +80,7 @@
   justify-content: center;
   min-width: 1.6rem;
   height: 1.6rem;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -105,14 +105,14 @@
   gap: 0.75rem;
   padding: 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.82);
 }
 
 .shell-session-badge {
   width: 1.9rem;
   height: 1.9rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   font-size: 0.74rem;
@@ -203,7 +203,7 @@
   gap: 0.35rem;
   background: var(--bg-panel);
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
 }
 
@@ -331,7 +331,7 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 0.24rem 0.65rem;
   font-size: 0.76rem;
   font-weight: 600;
@@ -588,7 +588,7 @@
     justify-content: flex-start;
     min-height: 2.7rem;
     padding: 0.65rem 0.75rem;
-    border-radius: 14px;
+    border-radius: var(--radius-md);
   }
 
   .shell-session-card {
