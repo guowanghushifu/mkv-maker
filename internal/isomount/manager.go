@@ -390,6 +390,10 @@ func (m *Manager) CleanupAll(ctx context.Context) ReleaseResult {
 			result.Released++
 		}
 	}
+	residual := m.CleanupResidualMountDirs(ctx)
+	result.Released += residual.Released
+	result.SkippedInUse += residual.SkippedInUse
+	result.Failed += residual.Failed
 	return result
 }
 

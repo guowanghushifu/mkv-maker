@@ -1556,6 +1556,62 @@ func TestManagerCleanupAllCountsOnlyActualReleasesWhenSourceDisappears(t *testin
 	}
 }
 
+func TestManagerCleanupAllRetriesFreshInvalidContentCleanupFailure(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/fresh-invalid-disc"
+	isoPath := filepath.Join(t.TempDir(), "fresh-invalid.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV"), 0o755); err != nil {
+					return err
+				}
+				return nil
+			case "umount":
+				umountCalls++
+				if umountCalls == 1 {
+					return errors.New("device busy")
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	if _, err := manager.EnsureMounted(context.Background(), sourceID, isoPath); err == nil {
+		t.Fatal("expected invalid mounted content to fail")
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected fresh invalid mount to remain untracked")
+	}
+	if _, retrying := manager.retryMounts[mountPath]; !retrying {
+		t.Fatal("expected retry state to be tracked after failed invalid-content cleanup")
+	}
+
+	result := manager.CleanupAll(context.Background())
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected cleanup summary %+v", result)
+	}
+	if umountCalls != 2 {
+		t.Fatalf("expected CleanupAll to retry unmount, got %d calls", umountCalls)
+	}
+	if _, ok := manager.retryMounts[mountPath]; ok {
+		t.Fatal("expected retry state to be cleared after CleanupAll")
+	}
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected mount dir to be removed after CleanupAll, got stat error %v", statErr)
+	}
+}
+
 func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/retry-disc"
