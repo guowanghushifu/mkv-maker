@@ -79,7 +79,6 @@ export function ReviewPage({
       <section className="review-track-panel review-section-card">
         <div className="section-heading">
           <h3>{text.review.finalTrackList}</h3>
-          <p className="muted-text">{outputPath}</p>
         </div>
         <ol className="ordered-track-list">
           <li>{text.review.video}: {draft.video.name}</li>

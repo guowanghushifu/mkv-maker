@@ -30,7 +30,6 @@ export function LoginPage({ locale = 'zh', onSuccess, error: externalError }: Lo
         <div className="login-brand-mark">MM</div>
         <div className="login-panel-intro">
           <h2>{text.login.title}</h2>
-          <p>{text.login.subtitle}</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form login-card-form">
           <div className="login-form-field">

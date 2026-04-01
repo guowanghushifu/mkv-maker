@@ -56,6 +56,7 @@ describe('ReviewPage', () => {
     expect(container.querySelector('.review-track-panel.review-section-card')).not.toBeNull();
     expect(container.querySelector('.review-actions.review-section-card')).not.toBeNull();
     expect(container.querySelector('.job-console.review-section-card')).not.toBeNull();
+    expect(screen.queryByText('/remux/Nightcrawler - 2160p.mkv', { selector: '.review-track-panel .muted-text' })).toBeNull();
   });
 
   it('renders progress percentage, progress bar, and formatted command preview', () => {

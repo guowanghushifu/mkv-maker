@@ -10,6 +10,7 @@ describe('LoginPage', () => {
     expect(document.querySelector('.admin-shell')).toBeNull();
     expect(screen.getByRole('heading', { name: /login/i }).closest('.login-screen')).not.toBeNull();
     expect(screen.getByRole('heading', { name: /login/i }).closest('.login-card')).not.toBeNull();
+    expect(screen.queryByText(/single-user local access/i)).toBeNull();
     expect(continueButton).toHaveClass('login-submit-button');
     expect(continueButton).toHaveClass('ui-button-primary');
   });
