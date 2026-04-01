@@ -42,6 +42,8 @@ type createJobRequest struct {
 	OutputPath     string `json:"outputPath"`
 }
 
+const createJobBodyLimit = 2 << 20
+
 func NewJobsHandler(tasks tasksManager, inputDir, outputDir string) *JobsHandler {
 	return &JobsHandler{
 		Tasks:     tasks,
@@ -61,8 +63,14 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, createJobBodyLimit)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
@@ -84,8 +92,8 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "source path does not exist", http.StatusBadRequest)
 		return
 	}
-	if !isPathWithinRoot(h.OutputDir, req.OutputPath) {
-		http.Error(w, "output path is outside output root", http.StatusBadRequest)
+	if err := validateNewOutputPathWithinRoot(h.OutputDir, req.OutputPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

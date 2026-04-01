@@ -87,13 +87,15 @@ type PlaylistInspector interface {
 }
 
 type PlaylistInspection struct {
-	AudioTrackIDs    []string
-	AudioLanguages   []string
-	SubtitleTrackIDs []string
+	AudioTrackIDs     []string
+	AudioLanguages    []string
+	SubtitleTrackIDs  []string
 	SubtitleLanguages []string
 }
 
 var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
+
+const resolveSourceBodyLimit = 2 << 20
 
 func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector) *SourcesHandler {
 	if scanner == nil {
@@ -139,8 +141,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req resolveSourceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, resolveSourceBodyLimit, &req) {
 		return
 	}
 	if strings.TrimSpace(req.SourceID) != "" && req.SourceID != pathSourceID {
@@ -245,8 +246,8 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		DVMergeEnabled: dvMergeEnabled,
 		SegmentPaths:   segmentPaths,
 		Video:          video,
-	Audio:          buildResolveTracks(audioLabels, parsed.AudioLanguages, inspection.AudioLanguages, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
-	Subtitles:      buildResolveTracks(subtitleLabels, parsed.SubtitleLanguages, inspection.SubtitleLanguages, nil, inspection.SubtitleTrackIDs, true),
+		Audio:          buildResolveTracks(audioLabels, parsed.AudioLanguages, inspection.AudioLanguages, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
+		Subtitles:      buildResolveTracks(subtitleLabels, parsed.SubtitleLanguages, inspection.SubtitleLanguages, nil, inspection.SubtitleTrackIDs, true),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -308,50 +309,6 @@ func findSourceByID(sources []media.SourceEntry, id string) (media.SourceEntry, 
 		}
 	}
 	return media.SourceEntry{}, false
-}
-
-func isPathWithinRoot(root, path string) bool {
-	resolvedRoot, err := resolvePathForContainment(root, true)
-	if err != nil {
-		return false
-	}
-	resolvedPath, err := resolvePathForContainment(path, false)
-	if err != nil {
-		return false
-	}
-	rel, err := filepath.Rel(resolvedRoot, resolvedPath)
-	if err != nil {
-		return false
-	}
-	return rel == "." || !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
-}
-
-func resolvePathForContainment(path string, mustExist bool) (string, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	if mustExist {
-		return filepath.EvalSymlinks(absPath)
-	}
-
-	dir := absPath
-	if !isDirectoryPath(absPath) {
-		dir = filepath.Dir(absPath)
-	}
-	resolvedDir, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		return "", err
-	}
-	if dir == absPath {
-		return resolvedDir, nil
-	}
-	return filepath.Join(resolvedDir, filepath.Base(absPath)), nil
-}
-
-func isDirectoryPath(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
 }
 
 func findPlaylistFilePath(sourcePath, playlistName string) (string, error) {
@@ -495,9 +452,9 @@ type MKVMergePlaylistInspector struct {
 }
 
 type mkvmergeTrack struct {
-	ID         int    `json:"id"`
-	Type       string `json:"type"`
-	Codec      string `json:"codec"`
+	ID         int                     `json:"id"`
+	Type       string                  `json:"type"`
+	Codec      string                  `json:"codec"`
 	Properties mkvmergeTrackProperties `json:"properties"`
 }
 
@@ -531,10 +488,10 @@ func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspect
 
 	audioSelections, subtitleSelections := collectTrackSelections(payload)
 	return PlaylistInspection{
-		AudioTrackIDs:      collectSelectionIDs(audioSelections),
-		AudioLanguages:     collectSelectionLanguages(audioSelections),
-		SubtitleTrackIDs:   collectSelectionIDs(subtitleSelections),
-		SubtitleLanguages:  collectSelectionLanguages(subtitleSelections),
+		AudioTrackIDs:     collectSelectionIDs(audioSelections),
+		AudioLanguages:    collectSelectionLanguages(audioSelections),
+		SubtitleTrackIDs:  collectSelectionIDs(subtitleSelections),
+		SubtitleLanguages: collectSelectionLanguages(subtitleSelections),
 	}, nil
 }
 

@@ -13,6 +13,8 @@ type previewFilenameResponse struct {
 	Filename string `json:"filename"`
 }
 
+const draftPreviewBodyLimit = 64 << 10
+
 func NewDraftsHandler() *DraftsHandler {
 	return &DraftsHandler{}
 }
@@ -24,8 +26,7 @@ func (h *DraftsHandler) PreviewFilename(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var draft remux.Draft
-	if err := json.NewDecoder(r.Body).Decode(&draft); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, draftPreviewBodyLimit, &draft) {
 		return
 	}
 

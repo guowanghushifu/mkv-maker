@@ -18,6 +18,18 @@ func TestProtectedRouteRejectsAnonymousRequests(t *testing.T) {
 	}
 }
 
+func TestProtectedLogoutRejectsAnonymousRequests(t *testing.T) {
+	router := NewRouter(testDependencies())
+	req := httptest.NewRequest(http.MethodPost, "/api/logout", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", res.Code)
+	}
+}
+
 func TestProtectedPostJobsUsesCreateHandler(t *testing.T) {
 	router := NewRouter(testDependenciesWithAuthBypass(func(deps *Dependencies) {
 		deps.JobsCreate = func(w http.ResponseWriter, r *http.Request) {

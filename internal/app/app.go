@@ -40,6 +40,7 @@ func New(cfg config.Config) (*App, error) {
 		AppPassword:   cfg.AppPassword,
 		Auth:          cookieAuth,
 		SessionMaxAge: cfg.SessionMaxAge,
+		SessionSecure: cfg.SessionCookieSecure,
 	}
 	configHandler := &handlers.ConfigHandler{
 		InputDir:  cfg.InputDir,

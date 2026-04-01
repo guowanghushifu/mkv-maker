@@ -60,6 +60,21 @@ func TestBDInfoHandlerParseReturnsBadRequestOnUnparseableLogText(t *testing.T) {
 	}
 }
 
+func TestBDInfoHandlerParseRejectsOversizedPayload(t *testing.T) {
+	h := NewBDInfoHandler()
+	oversized := `{"rawText":"` + strings.Repeat("A", 3<<20) + `"}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/bdinfo/parse", strings.NewReader(oversized))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Parse(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", w.Code)
+	}
+}
+
 const sampleBDInfoForHandler = `Disc Title: Nightcrawler
 PLAYLIST REPORT:
 Name: 00800.MPLS

@@ -17,6 +17,8 @@ type bdinfoParseRequest struct {
 	LogText string `json:"logText"`
 }
 
+const bdinfoBodyLimit = 2 << 20
+
 func NewBDInfoHandler() *BDInfoHandler {
 	return &BDInfoHandler{
 		Parser: mediabdinfo.Parse,
@@ -30,8 +32,7 @@ func (h *BDInfoHandler) Parse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req bdinfoParseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, bdinfoBodyLimit, &req) {
 		return
 	}
 

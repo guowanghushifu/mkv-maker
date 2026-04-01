@@ -17,6 +17,9 @@ mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 - `BD_INPUT_DIR`（默认：`/bd_input`）：挂载的 BDMV 源目录
 - `REMUX_OUTPUT_DIR`（默认：`/remux`）：remux 输出目录
 - `LISTEN_ADDR`（默认：`:8080`）：HTTP 监听地址
+- `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie。通过 HTTPS 或反向代理访问时可显式设为 `1`
+
+默认配置允许明文 HTTP 访问；若部署在公网或 HTTPS 反向代理之后，建议显式启用 `SESSION_COOKIE_SECURE=1`。
 
 Docker Compose 示例：
 
@@ -70,6 +73,5 @@ PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scr
 ```bash
 APP_PASSWORD=change-me ./scripts/docker-run.sh
 ```
-
 
 

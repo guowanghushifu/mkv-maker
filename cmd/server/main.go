@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -27,7 +28,8 @@ func main() {
 		}
 	}()
 
-	if err := http.ListenAndServe(cfg.ListenAddr, application.Handler); err != nil {
+	server := app.NewHTTPServer(cfg, application.Handler)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("listen on %s: %v", cfg.ListenAddr, err)
 		os.Exit(1)
 	}

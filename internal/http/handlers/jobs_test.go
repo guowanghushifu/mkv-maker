@@ -16,11 +16,11 @@ import (
 )
 
 type stubTasksManager struct {
-	startReq      remux.StartRequest
-	startCalled   bool
-	startFn       func(remux.StartRequest) (remux.Task, error)
-	currentFn     func() (remux.Task, error)
-	currentLogFn  func() (string, error)
+	startReq     remux.StartRequest
+	startCalled  bool
+	startFn      func(remux.StartRequest) (remux.Task, error)
+	currentFn    func() (remux.Task, error)
+	currentLogFn func() (string, error)
 }
 
 func (s *stubTasksManager) Start(req remux.StartRequest) (remux.Task, error) {
@@ -218,6 +218,42 @@ func TestJobsHandlerCreateRejectsSymlinkEscapeInOutputPath(t *testing.T) {
 		"draft":{"playlistName":"00800.MPLS"},
 		"outputFilename":"Disc.mkv",
 		"outputPath":"` + filepath.Join(outputRoot, "outside-link", "Disc.mkv") + `"
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
+	}
+}
+
+func TestJobsHandlerCreateRejectsExistingOutputFile(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourcePath := filepath.Join(inputRoot, "Disc", "BDMV")
+	if err := os.MkdirAll(filepath.Join(sourcePath, "PLAYLIST"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourcePath, "PLAYLIST", "00800.MPLS"), []byte("playlist"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	outputRoot := t.TempDir()
+	existingOutput := filepath.Join(outputRoot, "Disc.mkv")
+	if err := os.WriteFile(existingOutput, []byte("old"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	manager := remux.NewManager(&stubRunner{})
+	defer manager.Close()
+	h := NewJobsHandler(manager, inputRoot, outputRoot)
+	reqBody := `{
+		"source":{"name":"Disc","path":"` + sourcePath + `","type":"bdmv"},
+		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
+		"draft":{"playlistName":"00800.MPLS"},
+		"outputFilename":"Disc.mkv",
+		"outputPath":"` + existingOutput + `"
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")

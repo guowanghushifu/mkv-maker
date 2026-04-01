@@ -40,6 +40,28 @@ func TestAuthHandlerLoginSetsSignedCookie(t *testing.T) {
 	}
 }
 
+func TestAuthHandlerLoginSetsSecureCookieWhenConfigured(t *testing.T) {
+	auth := authpkg.NewCookieAuth("secret", time.Hour)
+	handler := &AuthHandler{
+		AppPassword:   "secret",
+		Auth:          auth,
+		SessionMaxAge: 3600,
+		SessionSecure: true,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"password":"secret"}`))
+	w := httptest.NewRecorder()
+	handler.Login(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", w.Code)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].Secure {
+		t.Fatalf("expected one secure cookie, got %+v", cookies)
+	}
+}
+
 func TestAuthHandlerLogoutClearsCookie(t *testing.T) {
 	handler := &AuthHandler{}
 

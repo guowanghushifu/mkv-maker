@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"crypto/subtle"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -17,11 +16,14 @@ type AuthHandler struct {
 	AppPassword   string
 	Auth          TokenIssuer
 	SessionMaxAge int
+	SessionSecure bool
 }
 
 type loginRequest struct {
 	Password string `json:"password"`
 }
+
+const loginBodyLimit = 4 << 10
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -30,8 +32,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, loginBodyLimit, &req) {
 		return
 	}
 
@@ -56,6 +57,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   h.SessionSecure,
 		MaxAge:   h.SessionMaxAge,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -73,6 +75,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   h.SessionSecure,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 		SameSite: http.SameSiteLaxMode,

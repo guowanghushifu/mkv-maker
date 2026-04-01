@@ -25,10 +25,10 @@ func NewRouter(deps Dependencies) http.Handler {
 	r := chi.NewRouter()
 
 	r.Post("/api/login", deps.Login)
-	r.Post("/api/logout", deps.Logout)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(deps.RequireAuth)
+		protected.Post("/api/logout", deps.Logout)
 		protected.Get("/api/config", deps.ConfigGet)
 		protected.Post("/api/sources/scan", deps.SourcesScan)
 		protected.Get("/api/sources", deps.SourcesList)
