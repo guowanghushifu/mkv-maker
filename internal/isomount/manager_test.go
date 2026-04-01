@@ -322,6 +322,44 @@ func TestManagerCleanupExpiredIdleRetainsEntryOnFailure(t *testing.T) {
 	}
 }
 
+func TestManagerCleanupExpiredIdleSkipsTouchedCandidateAfterSelection(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	path := filepath.Join(root, "stale-disc")
+	if err := os.MkdirAll(filepath.Join(path, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name == "umount" {
+				umountCalls++
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.now = func() time.Time { return now }
+	manager.sourceLockFor("stale-disc")
+	manager.entries["stale-disc"] = &entry{ISOPath: "/bd_input/stale.iso", MountPath: path, LastTouchedAt: now.Add(-2 * time.Hour)}
+
+	manager.Touch("stale-disc")
+
+	if err := manager.releaseExpiredSource(context.Background(), "stale-disc", now); err != nil {
+		t.Fatalf("releaseExpiredSource returned error: %v", err)
+	}
+	if umountCalls != 0 {
+		t.Fatalf("expected refreshed entry not to be unmounted, got %d umount calls", umountCalls)
+	}
+	if _, ok := manager.entries["stale-disc"]; !ok {
+		t.Fatal("expected refreshed entry to remain tracked")
+	}
+}
+
 func TestManagerCleanupResidualMountDirsBestEffort(t *testing.T) {
 	root := t.TempDir()
 	okPath := filepath.Join(root, "ok-disc")

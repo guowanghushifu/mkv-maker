@@ -104,6 +104,10 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 }
 
 func (m *Manager) Touch(sourceID string) {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -113,6 +117,10 @@ func (m *Manager) Touch(sourceID string) {
 }
 
 func (m *Manager) MarkInUse(sourceID string) {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -123,6 +131,10 @@ func (m *Manager) MarkInUse(sourceID string) {
 }
 
 func (m *Manager) MarkIdle(sourceID string) {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -159,6 +171,36 @@ func (m *Manager) ReleaseIdleMounted(ctx context.Context) ReleaseResult {
 	return result
 }
 
+func (m *Manager) releaseExpiredSource(ctx context.Context, sourceID string, now time.Time) error {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
+	m.mu.Lock()
+	entry := m.entries[sourceID]
+	if entry == nil {
+		m.mu.Unlock()
+		return nil
+	}
+	if entry.InUse || now.Sub(entry.LastTouchedAt) <= m.idleTimeout {
+		m.mu.Unlock()
+		return nil
+	}
+	mountPath := entry.MountPath
+	m.mu.Unlock()
+
+	if !m.cleanupMountPath(ctx, mountPath) {
+		return errors.New("failed to release source")
+	}
+
+	m.mu.Lock()
+	if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+		delete(m.entries, sourceID)
+	}
+	m.mu.Unlock()
+	return nil
+}
+
 func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) ReleaseResult {
 	m.mu.Lock()
 	ids := make([]string, 0, len(m.entries))
@@ -172,7 +214,7 @@ func (m *Manager) CleanupExpiredIdle(ctx context.Context, now time.Time) Release
 
 	var result ReleaseResult
 	for _, sourceID := range ids {
-		switch err := m.ReleaseSource(ctx, sourceID); {
+		switch err := m.releaseExpiredSource(ctx, sourceID, now); {
 		case err == nil:
 			result.Released++
 		case errors.Is(err, ErrSourceInUse):
