@@ -69,7 +69,17 @@ func New(cfg config.Config) (*App, error) {
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	remuxManager := remux.NewManager(nil)
-	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, isoManager)
+	remuxManager.SetOnTaskFinished(func(req remux.StartRequest, _ remux.Task) {
+		if isoManager == nil {
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(req.SourceType), "iso") || strings.TrimSpace(req.SourceID) == "" {
+			return
+		}
+		isoManager.MarkIdle(req.SourceID)
+		_, _ = isoManager.ReleaseSource(context.Background(), req.SourceID)
+	})
+	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, handlers.NewISOJobManagerAdapter(isoManager))
 	isoHandler := handlers.NewISOMountsHandler(isoManager)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{

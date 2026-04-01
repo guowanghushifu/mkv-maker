@@ -48,6 +48,22 @@ func (s stubPlaylistInspector) Inspect(playlistPath string) (PlaylistInspection,
 	return s.result, s.err
 }
 
+type stubISOMountManager struct {
+	ensureMountedFn func(context.Context, string, string) (string, error)
+	touched         []string
+}
+
+func (s *stubISOMountManager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
+	if s.ensureMountedFn != nil {
+		return s.ensureMountedFn(ctx, sourceID, isoPath)
+	}
+	return "", nil
+}
+
+func (s *stubISOMountManager) Touch(sourceID string) {
+	s.touched = append(s.touched, sourceID)
+}
+
 func TestSourcesHandlerListReturnsStructuredNotFoundError(t *testing.T) {
 	h := NewSourcesHandler("/missing/input", "/remux", stubSourceScanner{
 		err: &os.PathError{
@@ -115,6 +131,69 @@ func TestSourcesHandlerListReturnsStructuredUnreadableError(t *testing.T) {
 	}
 	if body.Error.Path != "/restricted/input" {
 		t.Fatalf("expected error path /restricted/input, got %q", body.Error.Path)
+	}
+}
+
+func TestSourcesHandlerResolveMountsISOSourceBeforeInspection(t *testing.T) {
+	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mountedRoot := filepath.Join(t.TempDir(), "iso_auto_mount", "movies-nightcrawler-iso")
+	playlistPath := filepath.Join(mountedRoot, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	streamPath := filepath.Join(mountedRoot, "BDMV", "STREAM", "00005.m2ts")
+	if err := os.MkdirAll(filepath.Dir(streamPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inputRoot := t.TempDir()
+	var inspectedPath string
+
+	isoManager := &stubISOMountManager{
+		ensureMountedFn: func(_ context.Context, sourceID, sourcePath string) (string, error) {
+			if sourceID != "movies-nightcrawler-iso" || sourcePath != isoPath {
+				t.Fatalf("unexpected source %q %q", sourceID, sourcePath)
+			}
+			return mountedRoot, nil
+		},
+	}
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{
+		ID: "movies-nightcrawler-iso", Name: "Nightcrawler", Path: isoPath, Type: media.SourceISO,
+	}}}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:    []string{"2"},
+			SubtitleTrackIDs: []string{"9"},
+		},
+		path: &inspectedPath,
+	}, isoManager)
+	reqBody := `{
+		"sourceId":"movies-nightcrawler-iso",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"discTitle":"Nightcrawler",
+			"audioLabels":["English Dolby TrueHD/Atmos Audio"],
+			"subtitleLabels":["English PGS"],
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/movies-nightcrawler-iso/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", "movies-nightcrawler-iso")
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+	if inspectedPath != playlistPath {
+		t.Fatalf("expected ISO-mounted playlist path %q, got %q", playlistPath, inspectedPath)
 	}
 }
 

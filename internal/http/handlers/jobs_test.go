@@ -18,9 +18,10 @@ import (
 
 func TestNewJobsHandlerStoresISOManager(t *testing.T) {
 	manager := isomount.NewManager(t.TempDir(), time.Hour, nil)
-	h := NewJobsHandler(&stubTasksManager{}, "/input", "/output", manager)
+	isoManager := NewISOJobManagerAdapter(manager)
+	h := NewJobsHandler(&stubTasksManager{}, "/input", "/output", isoManager)
 
-	if h.ISOManager != manager {
+	if h.ISOManager != isoManager {
 		t.Fatalf("expected ISO manager to be stored")
 	}
 }
@@ -54,6 +55,39 @@ func (s *stubTasksManager) CurrentLog() (string, error) {
 		return s.currentLogFn()
 	}
 	return "", remux.ErrTaskNotFound
+}
+
+type stubISOJobManager struct {
+	ensureMountedFn func(context.Context, string, string) (string, error)
+	markedInUse     map[string]bool
+	markedIdle      map[string]bool
+	released        []string
+}
+
+func (s *stubISOJobManager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
+	if s.ensureMountedFn != nil {
+		return s.ensureMountedFn(ctx, sourceID, isoPath)
+	}
+	return "", nil
+}
+
+func (s *stubISOJobManager) MarkInUse(sourceID string) {
+	if s.markedInUse == nil {
+		s.markedInUse = map[string]bool{}
+	}
+	s.markedInUse[sourceID] = true
+}
+
+func (s *stubISOJobManager) MarkIdle(sourceID string) {
+	if s.markedIdle == nil {
+		s.markedIdle = map[string]bool{}
+	}
+	s.markedIdle[sourceID] = true
+}
+
+func (s *stubISOJobManager) ReleaseSource(ctx context.Context, sourceID string) error {
+	s.released = append(s.released, sourceID)
+	return nil
 }
 
 type stubRunner struct {
@@ -172,6 +206,68 @@ func TestJobsHandlerCreateReturnsAcceptedTask(t *testing.T) {
 	}
 	if manager.startReq.PayloadJSON != strings.TrimSpace(reqBody) {
 		t.Fatalf("expected payload json to preserve request body, got %q", manager.startReq.PayloadJSON)
+	}
+}
+
+func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
+	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mountedRoot := filepath.Join(t.TempDir(), "iso_auto_mount", "movies-nightcrawler-iso")
+	inputRoot := t.TempDir()
+	playlistPath := filepath.Join(mountedRoot, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outputRoot := t.TempDir()
+	isoManager := &stubISOJobManager{
+		ensureMountedFn: func(_ context.Context, sourceID, sourcePath string) (string, error) {
+			if sourceID != "movies-nightcrawler-iso" || sourcePath != isoPath {
+				t.Fatalf("unexpected source %q %q", sourceID, sourcePath)
+			}
+			return mountedRoot, nil
+		},
+	}
+	manager := &stubTasksManager{
+		startFn: func(_ remux.StartRequest) (remux.Task, error) {
+			return remux.Task{
+				ID:           "task-123",
+				SourceName:   "Nightcrawler",
+				OutputName:   "Nightcrawler.mkv",
+				OutputPath:   filepath.Join(outputRoot, "Nightcrawler.mkv"),
+				PlaylistName: "00800.MPLS",
+				CreatedAt:    "2026-04-01T00:00:00Z",
+				Status:       "running",
+			}, nil
+		},
+	}
+	h := NewJobsHandler(manager, inputRoot, outputRoot, isoManager)
+	reqBody := `{
+		"source":{"id":"movies-nightcrawler-iso","name":"Nightcrawler","path":"` + isoPath + `","type":"iso"},
+		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
+		"draft":{"playlistName":"00800.MPLS"},
+		"outputFilename":"Nightcrawler.mkv",
+		"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler.mkv") + `"
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
+	}
+	if !isoManager.markedInUse["movies-nightcrawler-iso"] {
+		t.Fatal("expected ISO source to be marked in use")
+	}
+	if manager.startReq.SourceType != "iso" || manager.startReq.SourceID != "movies-nightcrawler-iso" {
+		t.Fatalf("unexpected start request %+v", manager.startReq)
+	}
+	if !strings.Contains(manager.startReq.PayloadJSON, mountedRoot) {
+		t.Fatalf("expected payload JSON to reference mounted root, got %q", manager.startReq.PayloadJSON)
 	}
 }
 
