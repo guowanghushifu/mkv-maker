@@ -20,6 +20,9 @@
   --danger: #dc4c64;
   --shadow-lg: 0 28px 70px rgba(74, 96, 134, 0.16);
   --shadow-md: 0 18px 40px rgba(99, 118, 154, 0.1);
+  --radius-lg: 10px;
+  --radius-md: 6px;
+  --radius-sm: 4px;
   font-family: var(--font-body);
   color: var(--text);
   background: var(--bg);

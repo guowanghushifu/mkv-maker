@@ -3,6 +3,28 @@ import { describe, expect, it, vi } from 'vitest';
 import { Layout } from '../components/Layout';
 
 describe('Layout', () => {
+  it('renders the wide and compact summary-card class hooks used by the tightened radius system', () => {
+    const { container } = render(
+      <Layout
+        currentStep="scan"
+        locale="en"
+        onToggleLocale={vi.fn()}
+        context={{
+          source: 'Nightcrawler Disc',
+          playlist: 'Waiting',
+          output: 'Nightcrawler - 2160p.mkv',
+          task: 'Ready',
+        }}
+      >
+        <div>scan body</div>
+      </Layout>
+    );
+
+    expect(container.querySelectorAll('.workflow-summary-card.summary-card-wide')).toHaveLength(2);
+    expect(container.querySelectorAll('.workflow-summary-card.summary-card-compact')).toHaveLength(2);
+    expect(container.querySelectorAll('.workflow-summary-card .summary-value.summary-value-clamp')).toHaveLength(2);
+  });
+
   it('renders summary cards and the aside context stack required by the light shell', () => {
     const { container } = render(
       <Layout
