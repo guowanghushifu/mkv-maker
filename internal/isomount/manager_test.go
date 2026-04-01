@@ -624,6 +624,43 @@ func TestManagerCleanupResidualMountDirsBlocksConcurrentEnsureMounted(t *testing
 	}
 }
 
+func TestManagerCleanupResidualMountDirsRetriesPendingUnmountedDir(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/pending-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	if err := os.MkdirAll(mountPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name == "umount" {
+				umountCalls++
+			}
+			return nil
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/pending.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[mountPath] = sourceID
+	manager.pendingDirs[mountPath] = struct{}{}
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	}
+	if umountCalls != 0 {
+		t.Fatalf("expected retry-pending dir not to be unmounted again, got %d calls", umountCalls)
+	}
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected pending dir to be removed, got stat error %v", statErr)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected entry to be removed after retry cleanup")
+	}
+}
+
 func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/retry-disc"

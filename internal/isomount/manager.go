@@ -257,6 +257,17 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 		return ReleaseResult{Failed: 1}
 	}
 
+	m.mu.Lock()
+	pendingPaths := make(map[string]struct{}, len(m.pendingDirs))
+	for mountPath := range m.pendingDirs {
+		pendingPaths[mountPath] = struct{}{}
+	}
+	owners := make(map[string]string, len(m.mountOwners))
+	for mountPath, sourceID := range m.mountOwners {
+		owners[mountPath] = sourceID
+	}
+	m.mu.Unlock()
+
 	var result ReleaseResult
 	for _, dirEntry := range entries {
 		if !dirEntry.IsDir() {
@@ -264,13 +275,46 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 		}
 		mountPath := filepath.Join(m.root, dirEntry.Name())
 
-		m.mu.Lock()
-		sourceID, tracked := m.mountOwners[mountPath]
-		m.mu.Unlock()
-		if !tracked {
-			if !isMountedBDMVRoot(mountPath) {
+		sourceID, tracked := owners[mountPath]
+		_, pending := pendingPaths[mountPath]
+		if tracked {
+			sourceLock := m.sourceLockFor(sourceID)
+			if !sourceLock.TryLock() {
 				continue
 			}
+
+			m.mu.Lock()
+			entry := m.entries[sourceID]
+			inUse := entry != nil && entry.InUse
+			m.mu.Unlock()
+			if inUse {
+				sourceLock.Unlock()
+				continue
+			}
+
+			if !pending && !isMountedBDMVRoot(mountPath) {
+				sourceLock.Unlock()
+				continue
+			}
+			if !m.cleanupMountPath(ctx, mountPath) {
+				sourceLock.Unlock()
+				result.Failed++
+				continue
+			}
+
+			m.mu.Lock()
+			if current := m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+				delete(m.entries, sourceID)
+			}
+			delete(m.mountOwners, mountPath)
+			delete(m.pendingDirs, mountPath)
+			m.mu.Unlock()
+			sourceLock.Unlock()
+			result.Released++
+			continue
+		}
+
+		if pending {
 			if !m.cleanupMountPath(ctx, mountPath) {
 				result.Failed++
 				continue
@@ -279,27 +323,13 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 			continue
 		}
 
-		sourceLock := m.sourceLockFor(sourceID)
-		if !sourceLock.TryLock() {
-			continue
-		}
-		m.mu.Lock()
-		entryTracked := m.entries[sourceID] != nil
-		m.mu.Unlock()
-		if entryTracked {
-			sourceLock.Unlock()
-			continue
-		}
 		if !isMountedBDMVRoot(mountPath) {
-			sourceLock.Unlock()
 			continue
 		}
 		if !m.cleanupMountPath(ctx, mountPath) {
-			sourceLock.Unlock()
 			result.Failed++
 			continue
 		}
-		sourceLock.Unlock()
 		result.Released++
 	}
 	return result
