@@ -345,6 +345,27 @@ func TestManagerReleaseIdleMountedCountsOnlyActualReleasesWhenSourceDisappears(t
 	}
 }
 
+func TestManagerCleanupResidualMountDirsRemovesLeftoverUnmountedDirAfterRestart(t *testing.T) {
+	root := t.TempDir()
+	leftoverPath := filepath.Join(root, "movies-nightcrawler-iso")
+	if err := os.MkdirAll(leftoverPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(leftoverPath, "stale.txt"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := NewManager(root, time.Hour, &fakeCommandRunner{})
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", result)
+	}
+	if _, statErr := os.Stat(leftoverPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected leftover directory cleanup, got stat error %v", statErr)
+	}
+}
+
 func TestManagerCleanupExpiredIdleReleasesOnlyStaleEntries(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
@@ -655,6 +676,59 @@ func TestManagerEnsureMountedClearsStalePendingDirState(t *testing.T) {
 	}
 	if !released {
 		t.Fatal("expected ReleaseSource to report an actual release")
+	}
+}
+
+func TestManagerEnsureMountedPreservesPendingCleanupStateOnValidationFailure(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/pending-disc"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := filepath.Join(t.TempDir(), "pending.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				return os.MkdirAll(mountPath, 0o755)
+			case "umount":
+				umountCalls++
+				if umountCalls > 1 {
+					return errors.New("unexpected second umount")
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/old.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[mountPath] = sourceID
+	manager.pendingDirs[mountPath] = struct{}{}
+
+	if _, err := manager.EnsureMounted(context.Background(), sourceID, isoPath); err == nil {
+		t.Fatal("expected EnsureMounted to fail validation")
+	}
+	if _, pending := manager.pendingDirs[mountPath]; !pending {
+		t.Fatal("expected pending cleanup state to survive failed remount")
+	}
+
+	released, err := manager.ReleaseSource(context.Background(), sourceID)
+	if err != nil {
+		t.Fatalf("expected release retry to succeed without a second umount, got %v", err)
+	}
+	if !released {
+		t.Fatal("expected retry release to count as released")
+	}
+	if umountCalls != 1 {
+		t.Fatalf("expected a single umount call across remount failure and release retry, got %d", umountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected entry to be removed after successful retry")
 	}
 }
 

@@ -98,7 +98,6 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	mountLock.Lock()
 	defer mountLock.Unlock()
 	m.mu.Lock()
-	delete(m.pendingDirs, mountPath)
 	m.mu.Unlock()
 
 	if err := os.MkdirAll(mountPath, 0o755); err != nil {
@@ -114,6 +113,7 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 
 	m.mu.Lock()
 	m.mountOwners[mountPath] = sourceKey
+	delete(m.pendingDirs, mountPath)
 	m.entries[sourceKey] = &entry{
 		ISOPath:       isoPath,
 		MountPath:     mountPath,
@@ -312,7 +312,13 @@ func (m *Manager) CleanupResidualMountDirs(ctx context.Context) ReleaseResult {
 		}
 
 		if !isMountedBDMVRoot(mountPath) {
+			if err := os.RemoveAll(mountPath); err != nil {
+				mountLock.Unlock()
+				result.Failed++
+				continue
+			}
 			mountLock.Unlock()
+			result.Released++
 			continue
 		}
 		if !m.cleanupMountPath(ctx, mountPath) {
