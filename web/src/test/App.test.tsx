@@ -156,6 +156,21 @@ async function goToReviewStep() {
   await screen.findByRole('heading', { name: /^review$/i, level: 2 });
 }
 
+async function goToBDInfoStep() {
+  fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+  fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+  await screen.findByRole('heading', { name: /扫描片源/i });
+
+  fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
+  await screen.findByRole('heading', { name: /scan sources/i });
+
+  fireEvent.click(screen.getByRole('button', { name: /scan sources/i }));
+  await screen.findByLabelText(/select nightcrawler disc/i);
+  fireEvent.click(screen.getByRole('button', { name: /continue to bdinfo/i }));
+
+  await screen.findByRole('heading', { name: /required bdinfo/i });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -456,6 +471,35 @@ describe('App', () => {
     await screen.findByRole('heading', { name: /scan sources/i });
     const sourceRadio = await screen.findByLabelText(/select nightcrawler disc/i);
     expect(screen.queryByRole('heading', { name: /^review$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue to bdinfo/i })).toBeDisabled();
+    expect(sourceRadio).not.toBeChecked();
+  });
+
+  it('can jump back to scan from the bdinfo topbar action and clears prior workflow state', async () => {
+    installFetchMock({
+      currentJob: {
+        id: 'job-999',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+      },
+      currentLog: '[2026-03-29T12:30:00Z] remux completed',
+    });
+    render(<App />);
+
+    await goToBDInfoStep();
+    fireEvent.change(screen.getByPlaceholderText(/paste full bdinfo text here/i), {
+      target: { value: 'PLAYLIST REPORT' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /back to scan/i }));
+
+    await screen.findByRole('heading', { name: /scan sources/i });
+    const sourceRadio = await screen.findByLabelText(/select nightcrawler disc/i);
+    expect(screen.queryByRole('heading', { name: /required bdinfo/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue to bdinfo/i })).toBeDisabled();
     expect(sourceRadio).not.toBeChecked();
   });

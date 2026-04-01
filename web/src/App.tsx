@@ -28,6 +28,8 @@ function App() {
       currentStep={workflow.currentStep}
       locale={workflow.locale}
       onToggleLocale={workflow.toggleLocale}
+      onBackToScan={workflow.handleStartNextRemux}
+      backToScanDisabled={workflow.currentJob?.status === 'running'}
       context={workflow.layoutContext}
     >
       {workflow.step === 'scan' ? (

@@ -15,6 +15,7 @@ type MessageSet = {
       task: string;
     };
     localeToggle: string;
+    backToScan: string;
     shellNavAria: string;
     shellSessionTitle: string;
     shellSessionSubtitle: string;
@@ -152,6 +153,7 @@ export const messages: Record<Locale, MessageSet> = {
         task: '任务',
       },
       localeToggle: '中文 / EN',
+      backToScan: '返回扫描',
       shellNavAria: '工作流分区',
       shellSessionTitle: 'Remux 会话',
       shellSessionSubtitle: '当前操作上下文',
@@ -303,6 +305,7 @@ export const messages: Record<Locale, MessageSet> = {
         task: 'Task',
       },
       localeToggle: '中文 / EN',
+      backToScan: 'Back to Scan',
       shellNavAria: 'Workflow sections',
       shellSessionTitle: 'Remux Session',
       shellSessionSubtitle: 'Current operator context',

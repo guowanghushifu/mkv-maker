@@ -9,6 +9,8 @@ type LayoutProps = PropsWithChildren<{
   currentStep: WorkflowStep;
   locale: Locale;
   onToggleLocale: () => void;
+  onBackToScan?: () => Promise<void> | void;
+  backToScanDisabled?: boolean;
   context: {
     source: string;
     playlist: string;
@@ -35,10 +37,20 @@ function renderContextValue(value: string) {
   ));
 }
 
-export function Layout({ currentStep, locale, onToggleLocale, context, children }: LayoutProps) {
+export function Layout({
+  currentStep,
+  locale,
+  onToggleLocale,
+  onBackToScan,
+  backToScanDisabled = false,
+  context,
+  children,
+}: LayoutProps) {
   const text = getMessages(locale);
   const activeStep = currentStep === 'login' ? 'scan' : currentStep;
   const meta = getShellMeta(activeStep, text);
+  const showBackToScan =
+    !!onBackToScan && (currentStep === 'bdinfo' || currentStep === 'editor' || currentStep === 'review');
 
   return (
     <div className="admin-shell">
@@ -78,6 +90,11 @@ export function Layout({ currentStep, locale, onToggleLocale, context, children 
             <p>{meta.subtitle}</p>
           </div>
           <div className="topbar-actions">
+            {showBackToScan ? (
+              <Button variant="subtle" onClick={() => void onBackToScan()} disabled={backToScanDisabled}>
+                {text.layout.backToScan}
+              </Button>
+            ) : null}
             <Button variant="subtle" className="locale-toggle" onClick={onToggleLocale}>
               {text.layout.localeToggle}
             </Button>
