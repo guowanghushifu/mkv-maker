@@ -59,10 +59,10 @@ func (s *stubTasksManager) CurrentLog() (string, error) {
 }
 
 type stubISOJobManager struct {
-	ensureMountedFn  func(context.Context, string, string) (string, error)
-	acquireLeaseFn   func(string) (uint64, bool)
-	acquireLeaseSeen bool
-	released         []string
+	ensureMountedFn                  func(context.Context, string, string) (string, error)
+	ensureMountedAndAcquireLeaseFn   func(context.Context, string, string) (string, uint64, error)
+	ensureMountedAndAcquireLeaseSeen bool
+	released                         []string
 }
 
 func (s *stubISOJobManager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
@@ -72,12 +72,16 @@ func (s *stubISOJobManager) EnsureMounted(ctx context.Context, sourceID, isoPath
 	return "", nil
 }
 
-func (s *stubISOJobManager) AcquireLease(sourceID string) (uint64, bool) {
-	s.acquireLeaseSeen = true
-	if s.acquireLeaseFn != nil {
-		return s.acquireLeaseFn(sourceID)
+func (s *stubISOJobManager) EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error) {
+	s.ensureMountedAndAcquireLeaseSeen = true
+	if s.ensureMountedAndAcquireLeaseFn != nil {
+		return s.ensureMountedAndAcquireLeaseFn(ctx, sourceID, isoPath)
 	}
-	return 1, true
+	if s.ensureMountedFn != nil {
+		mountPath, err := s.ensureMountedFn(ctx, sourceID, isoPath)
+		return mountPath, 1, err
+	}
+	return "", 0, nil
 }
 
 func (s *stubISOJobManager) ReleaseSource(ctx context.Context, sourceID string) error {
@@ -269,8 +273,8 @@ func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
 	}
-	if !isoManager.acquireLeaseSeen {
-		t.Fatal("expected ISO source lease to be acquired")
+	if !isoManager.ensureMountedAndAcquireLeaseSeen {
+		t.Fatal("expected ISO source lease to be acquired with the mount")
 	}
 	if manager.startReq.SourceType != "iso" || manager.startReq.SourceID != "movies-nightcrawler-iso" {
 		t.Fatalf("unexpected start request %+v", manager.startReq)

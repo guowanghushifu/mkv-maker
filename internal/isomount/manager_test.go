@@ -149,18 +149,21 @@ func TestManagerReleaseSourceIfLeaseGenerationSkipsImmediateSameSourceHandoff(t 
 	}
 	manager := NewManager(root, time.Hour, runner)
 
-	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
-		t.Fatalf("first EnsureMounted returned error: %v", err)
+	var firstLease, secondLease uint64
+	if _, lease, err := manager.EnsureMountedAndAcquireLease(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
+		t.Fatalf("first EnsureMountedAndAcquireLease returned error: %v", err)
+	} else {
+		firstLease = lease
 	}
-	firstLease, ok := manager.AcquireLease("movies-nightcrawler-iso")
-	if !ok {
+	if firstLease == 0 {
 		t.Fatal("expected first lease to be available")
 	}
-	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
-		t.Fatalf("second EnsureMounted returned error: %v", err)
+	if _, lease, err := manager.EnsureMountedAndAcquireLease(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
+		t.Fatalf("second EnsureMountedAndAcquireLease returned error: %v", err)
+	} else {
+		secondLease = lease
 	}
-	secondLease, ok := manager.AcquireLease("movies-nightcrawler-iso")
-	if !ok {
+	if secondLease == 0 {
 		t.Fatal("expected second lease to be available")
 	}
 	if secondLease == firstLease {
@@ -188,6 +191,73 @@ func TestManagerReleaseSourceIfLeaseGenerationSkipsImmediateSameSourceHandoff(t 
 	mountPath := filepath.Join(root, "movies-nightcrawler-iso")
 	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected mount dir cleanup after active release, got stat error %v", statErr)
+	}
+}
+
+func TestManagerReleaseSourceIfLeaseGenerationClearsInUseAfterCleanupFailure(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "movies-nightcrawler-iso"
+	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "umount":
+				umountCalls++
+				if umountCalls == 1 {
+					return errors.New("device busy")
+				}
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.mountOwners[mountPath] = sourceID
+	manager.entries[sourceID] = &entry{
+		ISOPath:         "/bd_input/nightcrawler.iso",
+		MountPath:       mountPath,
+		MountGeneration: 1,
+		LeaseGeneration: 2,
+		LastTouchedAt:   time.Now(),
+		InUse:           true,
+	}
+
+	released, err := manager.ReleaseSourceIfLeaseGeneration(context.Background(), sourceID, 2)
+	if err == nil {
+		t.Fatal("expected first lease release attempt to fail")
+	}
+	if released {
+		t.Fatal("expected first lease release attempt not to count as released")
+	}
+	entry := manager.entries[sourceID]
+	if entry == nil {
+		t.Fatal("expected entry to remain tracked after cleanup failure")
+	}
+	if entry.InUse {
+		t.Fatal("expected cleanup failure to clear in-use state")
+	}
+	if entry.LeaseGeneration != 0 {
+		t.Fatalf("expected cleanup failure to clear active lease token, got %d", entry.LeaseGeneration)
+	}
+
+	result := manager.ReleaseIdleMounted(context.Background())
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected release summary %+v", result)
+	}
+	if umountCalls != 2 {
+		t.Fatalf("expected retryable cleanup to call umount twice, got %d", umountCalls)
+	}
+	if _, ok := manager.entries[sourceID]; ok {
+		t.Fatal("expected entry to be removed after retry")
 	}
 }
 

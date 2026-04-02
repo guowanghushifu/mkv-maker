@@ -32,7 +32,7 @@ type tasksManager interface {
 
 type ISOJobManager interface {
 	EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error)
-	AcquireLease(sourceID string) (uint64, bool)
+	EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error)
 	ReleaseSource(ctx context.Context, sourceID string) error
 	ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error)
 }
@@ -52,8 +52,8 @@ func (a isoJobManagerAdapter) EnsureMounted(ctx context.Context, sourceID, isoPa
 	return a.manager.EnsureMounted(ctx, sourceID, isoPath)
 }
 
-func (a isoJobManagerAdapter) AcquireLease(sourceID string) (uint64, bool) {
-	return a.manager.AcquireLease(sourceID)
+func (a isoJobManagerAdapter) EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error) {
+	return a.manager.EnsureMountedAndAcquireLease(ctx, sourceID, isoPath)
 }
 
 func (a isoJobManagerAdapter) ReleaseSource(ctx context.Context, sourceID string) error {
@@ -179,13 +179,12 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sourcePath := strings.TrimSpace(req.Source.Path)
 	sourcePlaylistRoot := sourcePath
 	sourceLeaseGeneration := uint64(0)
-	leaseAcquired := false
 	isoMounted := false
 	releaseMountedISO := func() {
 		if !isoMounted || h.ISOManager == nil || sourceID == "" {
 			return
 		}
-		if leaseAcquired && sourceLeaseGeneration != 0 {
+		if sourceLeaseGeneration != 0 {
 			_, _ = h.ISOManager.ReleaseSourceIfLeaseGeneration(context.Background(), sourceID, sourceLeaseGeneration)
 			return
 		}
@@ -231,12 +230,13 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "iso manager is not configured", http.StatusInternalServerError)
 			return
 		}
-		mountedRoot, err := h.ISOManager.EnsureMounted(r.Context(), sourceID, sourcePath)
+		mountedRoot, leaseGeneration, err := h.ISOManager.EnsureMountedAndAcquireLease(r.Context(), sourceID, sourcePath)
 		if err != nil {
 			http.Error(w, "failed to mount iso source", http.StatusBadRequest)
 			return
 		}
 		isoMounted = true
+		sourceLeaseGeneration = leaseGeneration
 		sourcePlaylistRoot = mountedRoot
 		sourcePath = mountedRoot
 		payloadJSON, err := rewriteMountedISOPayloadJSON(body, mountedRoot, sourceID, sourceName)
@@ -250,14 +250,6 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 			return
 		}
-		leaseGeneration, ok := h.ISOManager.AcquireLease(sourceID)
-		if !ok {
-			releaseMountedISO()
-			http.Error(w, "failed to load iso lease state", http.StatusInternalServerError)
-			return
-		}
-		sourceLeaseGeneration = leaseGeneration
-		leaseAcquired = true
 		startRequest := remux.StartRequest{
 			SourceID:              sourceID,
 			SourceType:            strings.TrimSpace(string(source.Type)),

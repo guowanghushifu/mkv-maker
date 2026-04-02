@@ -76,9 +76,18 @@ func NewManager(root string, idleTimeout time.Duration, runner CommandRunner) *M
 }
 
 func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
+	mountPath, _, err := m.ensureMounted(ctx, sourceID, isoPath, false)
+	return mountPath, err
+}
+
+func (m *Manager) EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error) {
+	return m.ensureMounted(ctx, sourceID, isoPath, true)
+}
+
+func (m *Manager) ensureMounted(ctx context.Context, sourceID, isoPath string, claimLease bool) (string, uint64, error) {
 	sourceKey := strings.TrimSpace(sourceID)
 	if sourceKey == "" {
-		return "", errors.New("source ID is required")
+		return "", 0, errors.New("source ID is required")
 	}
 
 	sourceLock := m.sourceLockFor(sourceKey)
@@ -89,8 +98,15 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	existing := m.entries[sourceKey]
 	if existing != nil && isMountedBDMVRoot(existing.MountPath) {
 		existing.LastTouchedAt = m.now()
+		var leaseGeneration uint64
+		if claimLease {
+			leaseGeneration = m.nextGen
+			m.nextGen++
+			existing.LeaseGeneration = leaseGeneration
+			existing.InUse = true
+		}
 		m.mu.Unlock()
-		return existing.MountPath, nil
+		return existing.MountPath, leaseGeneration, nil
 	}
 	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
 	preexistingPending := false
@@ -99,7 +115,7 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 		preexistingPending = true
 		if currentOwner, ok := m.mountOwners[mountPath]; ok && currentOwner != sourceKey {
 			m.mu.Unlock()
-			return "", errors.New("mount path is already owned")
+			return "", 0, errors.New("mount path is already owned")
 		}
 	}
 	m.mu.Unlock()
@@ -112,7 +128,7 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	_, pending := m.pendingDirs[mountPath]
 	if (owned && currentOwner != sourceKey) || (pending && currentOwner != "" && currentOwner != sourceKey) {
 		m.mu.Unlock()
-		return "", errors.New("mount path is already owned")
+		return "", 0, errors.New("mount path is already owned")
 	}
 	if staleTracked {
 		delete(m.entries, sourceKey)
@@ -121,29 +137,37 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	m.mu.Unlock()
 
 	if err := os.MkdirAll(mountPath, 0o755); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if err := m.runner.Run(ctx, "mount", "-o", "loop,ro", isoPath, mountPath); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if !isMountedBDMVRoot(mountPath) {
 		m.cleanupInvalidMountedContent(ctx, mountPath, preexistingPending)
-		return "", errors.New("mounted ISO does not contain a valid BDMV structure")
+		return "", 0, errors.New("mounted ISO does not contain a valid BDMV structure")
 	}
 
 	m.mu.Lock()
-	gen := m.nextGen
+	mountGeneration := m.nextGen
 	m.nextGen++
 	m.mountOwners[mountPath] = sourceKey
 	delete(m.pendingDirs, mountPath)
-	m.entries[sourceKey] = &entry{
+	leaseGeneration := uint64(0)
+	newEntry := &entry{
 		ISOPath:         isoPath,
 		MountPath:       mountPath,
-		MountGeneration: gen,
+		MountGeneration: mountGeneration,
 		LastTouchedAt:   m.now(),
 	}
+	if claimLease {
+		leaseGeneration = m.nextGen
+		m.nextGen++
+		newEntry.LeaseGeneration = leaseGeneration
+		newEntry.InUse = true
+	}
+	m.entries[sourceKey] = newEntry
 	m.mu.Unlock()
-	return mountPath, nil
+	return mountPath, leaseGeneration, nil
 }
 
 func (m *Manager) CurrentGeneration(sourceID string) (uint64, bool) {
@@ -513,6 +537,14 @@ func (m *Manager) releaseSource(ctx context.Context, sourceID string, generation
 	m.mu.Unlock()
 
 	if !m.cleanupMountPath(ctx, mountPath) {
+		m.mu.Lock()
+		if current = m.entries[sourceID]; current != nil && current.MountPath == mountPath {
+			current.InUse = false
+			if guardLease {
+				current.LeaseGeneration = 0
+			}
+		}
+		m.mu.Unlock()
 		return false, errors.New("failed to release source")
 	}
 
