@@ -185,6 +185,54 @@ describe('App', () => {
     expect(document.querySelector('.admin-shell')).toBeNull();
   });
 
+  it('shows ISO entries from the real scan flow', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/login') && method === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/sources/scan') && method === 'POST') {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'iso-1',
+              name: 'Nightcrawler ISO',
+              path: '/bd_input/Nightcrawler.iso',
+              type: 'iso',
+              size: 1,
+              modifiedAt: '2026-03-29T12:00:00Z',
+            },
+          ]),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+    await screen.findByRole('heading', { name: /扫描片源/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /扫描片源/i }));
+
+    expect(await screen.findByText(/ISO 文件/i)).toBeInTheDocument();
+  });
+
   it('wires the scan-page release button through the app shell', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

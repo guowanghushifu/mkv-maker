@@ -13,6 +13,15 @@ const source = {
   modifiedAt: '2026-03-29T12:00:00Z',
 };
 
+const isoSource = {
+  id: 'iso-1',
+  name: 'Nightcrawler ISO',
+  path: '/bd_input/Nightcrawler.iso',
+  type: 'iso' as const,
+  size: 1,
+  modifiedAt: '2026-03-29T12:00:00Z',
+};
+
 const parsedBDInfo = {
   playlistName: '00800.MPLS',
   rawText: 'PLAYLIST REPORT',
@@ -61,6 +70,13 @@ function installFetchMock({
 
     if (url.endsWith('/api/sources/scan') && method === 'POST') {
       return new Response(JSON.stringify(scanSources), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.endsWith('/api/iso/release-mounted') && method === 'POST') {
+      return new Response(JSON.stringify({ released: 1, skippedInUse: 0, failed: 0 }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -203,10 +219,72 @@ describe('useRemuxWorkflow', () => {
     const { result } = renderHook(() => useRemuxWorkflow());
 
     await act(async () => {
-      await (result.current as any).handleReleaseMountedISOs();
+      await result.current.handleReleaseMountedISOs();
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/iso/release-mounted', expect.objectContaining({ method: 'POST' }));
-    expect((result.current as any).releasingMountedISOs).toBe(false);
+    expect(result.current.releasingMountedISOs).toBe(false);
+  });
+
+  it('clears stale scan errors after successfully releasing mounted ISOs', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem('mkv-maker-locale', 'en');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/sources/scan') && method === 'POST') {
+        return new Response('', { status: 500 });
+      }
+      if (url.endsWith('/api/iso/release-mounted') && method === 'POST') {
+        return new Response(JSON.stringify({ released: 1, skippedInUse: 0, failed: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await act(async () => {
+      await result.current.handleScan();
+    });
+
+    expect(result.current.scanError).not.toBeNull();
+
+    await act(async () => {
+      await result.current.handleReleaseMountedISOs();
+    });
+
+    expect(result.current.scanError).toBeNull();
+  });
+
+  it('surfaces a fallback scan error when releasing mounted ISOs fails', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/iso/release-mounted') && method === 'POST') {
+        return new Response('', { status: 500 });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await act(async () => {
+      await result.current.handleReleaseMountedISOs();
+    });
+
+    expect(result.current.scanError).toBe('Failed to release mounted ISOs.');
   });
 });

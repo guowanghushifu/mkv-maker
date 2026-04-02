@@ -139,6 +139,7 @@ type MessageSet = {
     scanFailed: string;
     bdinfoParseFailed: string;
     currentJobRunning: string;
+    releaseMountedISOsFailed: string;
     submitFailed: string;
   };
 };
@@ -296,6 +297,7 @@ export const messages: Record<Locale, MessageSet> = {
       scanFailed: '片源扫描失败。',
       bdinfoParseFailed: 'BDInfo 解析失败。',
       currentJobRunning: '已有转封装任务在运行，请等待其完成。',
+      releaseMountedISOsFailed: '释放已挂载 ISO 失败。',
       submitFailed: '启动转封装任务失败。',
     },
   },
@@ -451,6 +453,7 @@ export const messages: Record<Locale, MessageSet> = {
       scanFailed: 'Source scan failed.',
       bdinfoParseFailed: 'BDInfo parse failed.',
       currentJobRunning: 'A remux is already running. Please wait for it to finish.',
+      releaseMountedISOsFailed: 'Failed to release mounted ISOs.',
       submitFailed: 'Failed to start remux job.',
     },
   },
