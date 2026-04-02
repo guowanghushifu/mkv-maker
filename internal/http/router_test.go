@@ -109,6 +109,23 @@ func TestProtectedPostCurrentJobStopUsesStopHandler(t *testing.T) {
 	}
 }
 
+func TestProtectedGetCurrentJobStopReturnsMethodNotAllowed(t *testing.T) {
+	router := NewRouter(testDependenciesWithAuthBypass(func(deps *Dependencies) {
+		deps.JobsCurrentStop = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/current/stop", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", res.Code)
+	}
+}
+
 func TestProtectedPostReleaseMountedISOUsesHandler(t *testing.T) {
 	router := testDependenciesWithAuthBypass(func(deps *Dependencies) {
 		deps.ISOMountRelease = func(w http.ResponseWriter, r *http.Request) {

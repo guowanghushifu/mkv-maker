@@ -401,6 +401,21 @@ func TestJobsHandlerStopCurrentReturnsNotFoundWithoutRunningTask(t *testing.T) {
 	}
 }
 
+func TestJobsHandlerStopCurrentReturnsInternalServerErrorOnUnexpectedError(t *testing.T) {
+	manager := &stubTasksManager{
+		stopFn: func() error { return errors.New("boom") },
+	}
+	h := NewJobsHandler(manager, "/bd_input", "/remux")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs/current/stop", nil)
+	w := httptest.NewRecorder()
+	h.StopCurrent(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
 func TestJobsHandlerCreateRejectsPlaylistTraversal(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourcePath := filepath.Join(inputRoot, "Disc", "BDMV")
