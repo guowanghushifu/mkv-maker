@@ -2,6 +2,8 @@ package isomount
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/url"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 type CommandRunner interface {
@@ -108,7 +111,7 @@ func (m *Manager) ensureMounted(ctx context.Context, sourceID, isoPath string, c
 		m.mu.Unlock()
 		return existing.MountPath, leaseGeneration, nil
 	}
-	mountPath := filepath.Join(m.root, sanitizeID(sourceKey))
+	mountPath := filepath.Join(m.root, buildMountDirName(m.root, isoPath))
 	preexistingPending := false
 	staleTracked := existing != nil
 	if _, pending := m.pendingDirs[mountPath]; pending {
@@ -690,6 +693,58 @@ func sanitizeID(id string) string {
 		return ""
 	}
 	return url.PathEscape(filepath.ToSlash(filepath.Clean(trimmed)))
+}
+
+func buildMountDirName(root, isoPath string) string {
+	hashInput := normalizedMountHashInput(root, isoPath)
+	prefix := normalizeMountPrefix(strings.TrimSuffix(filepath.Base(isoPath), filepath.Ext(isoPath)))
+	if prefix == "" {
+		prefix = "iso"
+	}
+	prefix = truncateRunes(prefix, 40)
+	return prefix + "-" + shortMountHash(hashInput)
+}
+
+func normalizedMountHashInput(root, isoPath string) string {
+	inputRoot := filepath.Dir(filepath.Clean(root))
+	if rel, err := filepath.Rel(inputRoot, isoPath); err == nil {
+		rel = filepath.ToSlash(filepath.Clean(rel))
+		if rel != "." && !strings.HasPrefix(rel, "../") {
+			return rel
+		}
+	}
+	return filepath.ToSlash(filepath.Clean(isoPath))
+}
+
+func normalizeMountPrefix(name string) string {
+	var b strings.Builder
+	prevDash := false
+	for _, r := range name {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(r)
+			prevDash = false
+		case unicode.IsSpace(r) || strings.ContainsRune("._-()[]{}", r):
+			if b.Len() > 0 && !prevDash {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func truncateRunes(value string, limit int) string {
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
+}
+
+func shortMountHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 func isMountedBDMVRoot(path string) bool {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type fakeCommandRunner struct {
@@ -24,6 +25,91 @@ func (r *fakeCommandRunner) Run(ctx context.Context, name string, args ...string
 		return r.runFn(ctx, name, args...)
 	}
 	return nil
+}
+
+func expectedMountPath(root, isoPath string) string {
+	return filepath.Join(root, buildMountDirName(root, isoPath))
+}
+
+func TestBuildMountDirNamePreservesChineseWithoutEscaping(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "iso_auto_mount")
+	isoPath := filepath.Join(filepath.Dir(root), "速度与激情7.Furious Seven 2015", "速度与激情7.iso")
+	if err := os.MkdirAll(filepath.Dir(isoPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := buildMountDirName(root, isoPath)
+
+	if strings.Contains(got, "%") {
+		t.Fatalf("expected unescaped mount dir name, got %q", got)
+	}
+	if !strings.Contains(got, "速度与激情7") {
+		t.Fatalf("expected Chinese prefix to be preserved, got %q", got)
+	}
+}
+
+func TestBuildMountDirNameCapsReadablePrefixAtFortyRunes(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "iso_auto_mount")
+	isoPath := filepath.Join(filepath.Dir(root), "输入", "速度与激情7-Furious-Seven-2015-2in1-2160p-UHD-Blu-ray-HEVC.iso")
+
+	got := buildMountDirName(root, isoPath)
+	parts := strings.Split(got, "-")
+	if len(parts) < 2 {
+		t.Fatalf("expected prefix-hash format, got %q", got)
+	}
+	prefix := strings.Join(parts[:len(parts)-1], "-")
+	if utf8.RuneCountInString(prefix) > 40 {
+		t.Fatalf("expected prefix to be <= 40 runes, got %d in %q", utf8.RuneCountInString(prefix), prefix)
+	}
+}
+
+func TestBuildMountDirNameDistinguishesSameFilenameInDifferentDirectories(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "iso_auto_mount")
+	isoA := filepath.Join(filepath.Dir(root), "folder-a", "Movie.iso")
+	isoB := filepath.Join(filepath.Dir(root), "folder-b", "Movie.iso")
+
+	gotA := buildMountDirName(root, isoA)
+	gotB := buildMountDirName(root, isoB)
+
+	if gotA == gotB {
+		t.Fatalf("expected different mount dir names, got %q and %q", gotA, gotB)
+	}
+	if !strings.HasPrefix(gotA, "Movie-") || !strings.HasPrefix(gotB, "Movie-") {
+		t.Fatalf("expected readable Movie prefix, got %q and %q", gotA, gotB)
+	}
+}
+
+func TestManagerEnsureMountedUsesShortReadableMountDirName(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "iso_auto_mount")
+	isoPath := filepath.Join(filepath.Dir(root), "速度与激情7.Furious Seven 2015", "速度与激情7.iso")
+	if err := os.MkdirAll(filepath.Dir(isoPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name != "mount" {
+				return nil
+			}
+			mountPath := args[len(args)-1]
+			if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644)
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	mountPath, err := manager.EnsureMounted(context.Background(), "dummy-source-id", isoPath)
+	if err != nil {
+		t.Fatalf("EnsureMounted returned error: %v", err)
+	}
+	if strings.Contains(filepath.Base(mountPath), "%25") || strings.Contains(filepath.Base(mountPath), "%2F") {
+		t.Fatalf("expected short readable mount dir, got %q", mountPath)
+	}
 }
 
 func TestManagerEnsureMountedMountsISOAndReturnsWorkspace(t *testing.T) {
@@ -51,7 +137,7 @@ func TestManagerEnsureMountedMountsISOAndReturnsWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureMounted returned error: %v", err)
 	}
-	if mountPath != filepath.Join(root, "movies-nightcrawler-iso") {
+	if mountPath != expectedMountPath(root, isoPath) {
 		t.Fatalf("unexpected mount path %q", mountPath)
 	}
 	if runner.calls["mount"] != 1 {
@@ -197,7 +283,8 @@ func TestManagerReleaseSourceIfLeaseGenerationSkipsImmediateSameSourceHandoff(t 
 func TestManagerReleaseSourceIfLeaseGenerationClearsInUseAfterCleanupFailure(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "movies-nightcrawler-iso"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := "/bd_input/nightcrawler.iso"
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +310,7 @@ func TestManagerReleaseSourceIfLeaseGenerationClearsInUseAfterCleanupFailure(t *
 	manager := NewManager(root, time.Hour, runner)
 	manager.mountOwners[mountPath] = sourceID
 	manager.entries[sourceID] = &entry{
-		ISOPath:         "/bd_input/nightcrawler.iso",
+		ISOPath:         isoPath,
 		MountPath:       mountPath,
 		MountGeneration: 1,
 		LeaseGeneration: 2,
@@ -358,7 +445,7 @@ func TestManagerEnsureMountedRetriesInvalidContentCleanupAfterUnmountFailure(t *
 		t.Fatal(err)
 	}
 
-	mountPath := filepath.Join(root, "movies-nightcrawler-iso")
+	mountPath := expectedMountPath(root, isoPath)
 	var umountCalls int
 	runner := &fakeCommandRunner{
 		runFn: func(_ context.Context, name string, args ...string) error {
@@ -403,7 +490,8 @@ func TestManagerEnsureMountedRetriesInvalidContentCleanupAfterUnmountFailure(t *
 func TestManagerEnsureMountedLeavesStaleTrackedEntryCleanupRecoverableAfterFailedRemount(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/stale-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := filepath.Join(t.TempDir(), "stale.iso")
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -413,7 +501,6 @@ func TestManagerEnsureMountedLeavesStaleTrackedEntryCleanupRecoverableAfterFaile
 	if err := os.RemoveAll(filepath.Join(mountPath, "BDMV")); err != nil {
 		t.Fatal(err)
 	}
-	isoPath := filepath.Join(t.TempDir(), "stale.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -569,7 +656,7 @@ func TestManagerEnsureMountedRejectsCollidingClaimAfterMountLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mountPath := filepath.Join(root, sanitizeID(primaryID))
+	mountPath := expectedMountPath(root, isoPath)
 	primaryEntered := make(chan struct{})
 	releasePrimary := make(chan struct{})
 	var mountCalls int
@@ -677,7 +764,8 @@ func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *t
 		t.Fatal(err)
 	}
 	busyID := "library/busy-disc"
-	busyPath := filepath.Join(root, sanitizeID(busyID))
+	busyISOPath := "/bd_input/busy.iso"
+	busyPath := expectedMountPath(root, busyISOPath)
 	if err := os.MkdirAll(filepath.Join(busyPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -699,7 +787,7 @@ func TestManagerReleaseIdleMountedSkipsInUseAndContinuesAfterUnmountFailure(t *t
 	manager := NewManager(root, time.Hour, runner)
 	manager.now = func() time.Time { return now }
 	manager.entries["idle-disc"] = &entry{ISOPath: "/bd_input/idle.iso", MountPath: filepath.Join(root, "idle-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
-	manager.entries[busyID] = &entry{ISOPath: "/bd_input/busy.iso", MountPath: busyPath, LastTouchedAt: now.Add(-2 * time.Hour), InUse: true}
+	manager.entries[busyID] = &entry{ISOPath: busyISOPath, MountPath: busyPath, LastTouchedAt: now.Add(-2 * time.Hour), InUse: true}
 	manager.entries["broken-disc"] = &entry{ISOPath: "/bd_input/broken.iso", MountPath: filepath.Join(root, "broken-disc"), LastTouchedAt: now.Add(-2 * time.Hour)}
 	manager.mountOwners[busyPath] = busyID
 
@@ -992,7 +1080,7 @@ func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	mountPath := expectedMountPath(root, isoPath)
 	mounted := make(chan struct{})
 	releaseMount := make(chan struct{})
 	var umountCalls int
@@ -1070,14 +1158,14 @@ func TestManagerCleanupResidualMountDirsSkipsInProgressMount(t *testing.T) {
 func TestManagerEnsureMountedClearsStalePendingDirState(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/reused-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := filepath.Join(t.TempDir(), "reused.iso")
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	isoPath := filepath.Join(t.TempDir(), "reused.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1127,8 +1215,8 @@ func TestManagerEnsureMountedClearsStalePendingDirState(t *testing.T) {
 func TestManagerEnsureMountedPreservesPendingCleanupStateOnValidationFailure(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/pending-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
 	isoPath := filepath.Join(t.TempDir(), "pending.iso")
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1182,11 +1270,11 @@ func TestManagerEnsureMountedPreservesPendingCleanupStateOnValidationFailure(t *
 func TestManagerCleanupResidualMountDirsRetriesInvalidContentCleanupWhenPendingAndRetryTracked(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/pending-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := filepath.Join(t.TempDir(), "pending.iso")
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	isoPath := filepath.Join(t.TempDir(), "pending.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1250,8 +1338,8 @@ func TestManagerCleanupResidualMountDirsRetriesInvalidContentCleanupWhenPendingA
 func TestManagerEnsureMountedRetainsPendingStateOnMountFailure(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/pending-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
 	isoPath := filepath.Join(t.TempDir(), "pending.iso")
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1316,7 +1404,7 @@ func TestManagerReleaseSourceAliasDoesNotExposeLiveMountToResidualCleanup(t *tes
 	if err != nil {
 		t.Fatalf("EnsureMounted returned error: %v", err)
 	}
-	if mountPath != filepath.Join(root, sanitizeID(sourceID)) {
+	if mountPath != expectedMountPath(root, isoPath) {
 		t.Fatalf("unexpected mount path %q", mountPath)
 	}
 
@@ -1718,7 +1806,8 @@ func TestManagerEnsureMountedRejectsClaimWhenSanitizedPathAlreadyHasTrackedPendi
 func TestManagerCleanupResidualMountDirsSkipsTrackedMount(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/tracked-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := "/bd_input/tracked.iso"
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1736,7 +1825,7 @@ func TestManagerCleanupResidualMountDirsSkipsTrackedMount(t *testing.T) {
 		},
 	}
 	manager := NewManager(root, time.Hour, runner)
-	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/tracked.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+	manager.entries[sourceID] = &entry{ISOPath: isoPath, MountPath: mountPath, LastTouchedAt: time.Now()}
 	manager.mountOwners[mountPath] = sourceID
 
 	result := manager.CleanupResidualMountDirs(context.Background())
@@ -1853,7 +1942,7 @@ func TestManagerCleanupAllRetriesFreshInvalidContentCleanupFailure(t *testing.T)
 		t.Fatal(err)
 	}
 
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	mountPath := expectedMountPath(root, isoPath)
 	var umountCalls int
 	runner := &fakeCommandRunner{
 		runFn: func(_ context.Context, name string, args ...string) error {
@@ -1904,7 +1993,8 @@ func TestManagerCleanupAllRetriesFreshInvalidContentCleanupFailure(t *testing.T)
 func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *testing.T) {
 	root := t.TempDir()
 	sourceID := "library/retry-disc"
-	mountPath := filepath.Join(root, sanitizeID(sourceID))
+	isoPath := "/bd_input/retry.iso"
+	mountPath := expectedMountPath(root, isoPath)
 	if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1927,7 +2017,7 @@ func TestManagerReleaseSourceRetriesAfterRemovalFailureWithoutReUnmounting(t *te
 	}
 	manager := NewManager(root, time.Hour, runner)
 	manager.mountOwners[mountPath] = sourceID
-	manager.entries[sourceID] = &entry{ISOPath: "/bd_input/retry.iso", MountPath: mountPath, LastTouchedAt: time.Now()}
+	manager.entries[sourceID] = &entry{ISOPath: isoPath, MountPath: mountPath, LastTouchedAt: time.Now()}
 
 	released, err := manager.ReleaseSource(context.Background(), sourceID)
 	if err == nil {
