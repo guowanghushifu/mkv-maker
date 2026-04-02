@@ -360,7 +360,7 @@ export function useRemuxWorkflow() {
         handleUnauthorized();
         return;
       }
-      setSubmitError(error instanceof Error ? error.message : text.app.stopFailed);
+      setSubmitError(text.app.stopFailed);
     } finally {
       setStoppingJob(false);
     }
