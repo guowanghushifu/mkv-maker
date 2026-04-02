@@ -19,6 +19,7 @@ type Dependencies struct {
 	ISOMountRelease http.HandlerFunc
 	JobsCreate      http.HandlerFunc
 	JobsCurrent     http.HandlerFunc
+	JobsCurrentStop http.HandlerFunc
 	JobsCurrentLog  http.HandlerFunc
 }
 
@@ -39,6 +40,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		protected.Post("/api/iso/release-mounted", deps.ISOMountRelease)
 		protected.Post("/api/jobs", deps.JobsCreate)
 		protected.Get("/api/jobs/current", deps.JobsCurrent)
+		protected.Post("/api/jobs/current/stop", deps.JobsCurrentStop)
 		protected.Get("/api/jobs/current/log", deps.JobsCurrentLog)
 	})
 

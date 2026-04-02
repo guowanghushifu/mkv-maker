@@ -90,6 +90,25 @@ func TestProtectedGetCurrentJobLogUsesCurrentLogHandler(t *testing.T) {
 	}
 }
 
+func TestProtectedPostCurrentJobStopUsesStopHandler(t *testing.T) {
+	router := NewRouter(testDependenciesWithAuthBypass(func(deps *Dependencies) {
+		deps.JobsCurrentStop = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+		}
+		deps.JobsCurrent = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs/current/stop", nil)
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", res.Code)
+	}
+}
+
 func TestProtectedPostReleaseMountedISOUsesHandler(t *testing.T) {
 	router := testDependenciesWithAuthBypass(func(deps *Dependencies) {
 		deps.ISOMountRelease = func(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +149,7 @@ func testDependenciesWithAuthBypass(mutator func(*Dependencies)) Dependencies {
 		DraftsPreview:   noop,
 		JobsCreate:      noop,
 		JobsCurrent:     noop,
+		JobsCurrentStop: noop,
 		JobsCurrentLog:  noop,
 		ISOMountRelease: noop,
 	}

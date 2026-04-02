@@ -103,6 +103,7 @@ func New(cfg config.Config) (*App, error) {
 		ISOMountRelease: isoHandler.ReleaseMounted,
 		JobsCreate:      jobsHandler.Create,
 		JobsCurrent:     jobsHandler.Current,
+		JobsCurrentStop: jobsHandler.StopCurrent,
 		JobsCurrentLog:  jobsHandler.CurrentLog,
 	})
 

@@ -28,6 +28,7 @@ type tasksManager interface {
 	Start(req remux.StartRequest) (remux.Task, error)
 	Current() (remux.Task, error)
 	CurrentLog() (string, error)
+	StopCurrent() error
 }
 
 type ISOJobManager interface {
@@ -401,4 +402,26 @@ func (h *JobsHandler) CurrentLog(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write([]byte(logText)); err != nil {
 		http.Error(w, "failed to write response", http.StatusInternalServerError)
 	}
+}
+
+func (h *JobsHandler) StopCurrent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if h.Tasks == nil {
+		http.Error(w, "jobs service is not configured", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.Tasks.StopCurrent(); err != nil {
+		if errors.Is(err, remux.ErrTaskNotFound) {
+			http.Error(w, "task not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "failed to stop current task", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

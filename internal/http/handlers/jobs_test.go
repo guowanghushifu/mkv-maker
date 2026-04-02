@@ -33,6 +33,8 @@ type stubTasksManager struct {
 	startFn      func(remux.StartRequest) (remux.Task, error)
 	currentFn    func() (remux.Task, error)
 	currentLogFn func() (string, error)
+	stopFn       func() error
+	stopCalled   bool
 }
 
 func (s *stubTasksManager) Start(req remux.StartRequest) (remux.Task, error) {
@@ -56,6 +58,14 @@ func (s *stubTasksManager) CurrentLog() (string, error) {
 		return s.currentLogFn()
 	}
 	return "", remux.ErrTaskNotFound
+}
+
+func (s *stubTasksManager) StopCurrent() error {
+	s.stopCalled = true
+	if s.stopFn != nil {
+		return s.stopFn()
+	}
+	return nil
 }
 
 type stubISOJobManager struct {
@@ -355,6 +365,39 @@ func TestJobsHandlerCreateUsesCanonicalISOScanData(t *testing.T) {
 	}
 	if manager.startReq.SourceID != "movies-nightcrawler-iso" {
 		t.Fatalf("expected canonical source id, got %q", manager.startReq.SourceID)
+	}
+}
+
+func TestJobsHandlerStopCurrentReturnsAccepted(t *testing.T) {
+	manager := &stubTasksManager{
+		stopFn: func() error { return nil },
+	}
+	h := NewJobsHandler(manager, "/bd_input", "/remux")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs/current/stop", nil)
+	w := httptest.NewRecorder()
+	h.StopCurrent(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", w.Code)
+	}
+	if !manager.stopCalled {
+		t.Fatal("expected StopCurrent to be called")
+	}
+}
+
+func TestJobsHandlerStopCurrentReturnsNotFoundWithoutRunningTask(t *testing.T) {
+	manager := &stubTasksManager{
+		stopFn: func() error { return remux.ErrTaskNotFound },
+	}
+	h := NewJobsHandler(manager, "/bd_input", "/remux")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/jobs/current/stop", nil)
+	w := httptest.NewRecorder()
+	h.StopCurrent(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
 
