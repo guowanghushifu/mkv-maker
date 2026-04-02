@@ -661,6 +661,70 @@ func TestManagerEnsureMountedLeavesStaleTrackedEntryCleanupRecoverableAfterFaile
 	}
 }
 
+func TestManagerEnsureMountedClearsOldOwnerWhenStaleTrackedEntryRemountsToNewPath(t *testing.T) {
+	root := t.TempDir()
+	sourceID := "library/stale-disc"
+	oldISOPath := filepath.Join(t.TempDir(), "old.iso")
+	newISOPath := filepath.Join(t.TempDir(), "new.iso")
+	oldMountPath := expectedMountPath(root, oldISOPath)
+	newMountPath := expectedMountPath(root, newISOPath)
+	if oldMountPath == newMountPath {
+		t.Fatal("expected remount to use a different mount path")
+	}
+	if err := os.MkdirAll(oldMountPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, isoPath := range []string{oldISOPath, newISOPath} {
+		if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			if name != "mount" {
+				return nil
+			}
+			mountPath := args[len(args)-1]
+			if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644)
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+	manager.entries[sourceID] = &entry{ISOPath: oldISOPath, MountPath: oldMountPath, LastTouchedAt: time.Now()}
+	manager.mountOwners[oldMountPath] = sourceID
+
+	mountPath, err := manager.EnsureMounted(context.Background(), sourceID, newISOPath)
+	if err != nil {
+		t.Fatalf("EnsureMounted returned error: %v", err)
+	}
+	if mountPath != newMountPath {
+		t.Fatalf("expected %q, got %q", newMountPath, mountPath)
+	}
+	if owner, ok := manager.mountOwners[oldMountPath]; ok {
+		t.Fatalf("expected stale owner entry for %q to be cleared, still owned by %q", oldMountPath, owner)
+	}
+	if owner := manager.mountOwners[newMountPath]; owner != sourceID {
+		t.Fatalf("expected new mount path %q to be owned by %q, got %q", newMountPath, sourceID, owner)
+	}
+
+	residual := manager.CleanupResidualMountDirs(context.Background())
+	if residual.Released != 1 || residual.Failed != 0 {
+		t.Fatalf("unexpected residual cleanup summary %+v", residual)
+	}
+	if _, statErr := os.Stat(oldMountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected stale old mount dir to be removed, got stat error %v", statErr)
+	}
+	if _, ok := manager.mountOwners[oldMountPath]; ok {
+		t.Fatal("expected stale old mount owner to remain cleared after residual cleanup")
+	}
+	if owner := manager.mountOwners[newMountPath]; owner != sourceID {
+		t.Fatalf("expected new mount path %q to remain owned by %q, got %q", newMountPath, sourceID, owner)
+	}
+}
+
 func TestManagerEnsureMountedSerializesSameSourceCalls(t *testing.T) {
 	root := t.TempDir()
 	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")

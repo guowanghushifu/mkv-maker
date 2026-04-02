@@ -99,6 +99,7 @@ func (m *Manager) ensureMounted(ctx context.Context, sourceID, isoPath string, c
 
 	m.mu.Lock()
 	existing := m.entries[sourceKey]
+	staleMountPath := ""
 	if existing != nil && isMountedBDMVRoot(existing.MountPath) {
 		existing.LastTouchedAt = m.now()
 		var leaseGeneration uint64
@@ -110,6 +111,9 @@ func (m *Manager) ensureMounted(ctx context.Context, sourceID, isoPath string, c
 		}
 		m.mu.Unlock()
 		return existing.MountPath, leaseGeneration, nil
+	}
+	if existing != nil {
+		staleMountPath = existing.MountPath
 	}
 	mountPath := filepath.Join(m.root, buildMountDirName(m.root, isoPath))
 	preexistingPending := false
@@ -135,6 +139,7 @@ func (m *Manager) ensureMounted(ctx context.Context, sourceID, isoPath string, c
 	}
 	if staleTracked {
 		delete(m.entries, sourceKey)
+		delete(m.mountOwners, staleMountPath)
 		delete(m.mountOwners, mountPath)
 	}
 	m.mu.Unlock()
