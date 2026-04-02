@@ -59,11 +59,10 @@ func (s *stubTasksManager) CurrentLog() (string, error) {
 }
 
 type stubISOJobManager struct {
-	ensureMountedFn func(context.Context, string, string) (string, error)
-	currentGenFn    func(string) (uint64, bool)
-	markedInUse     map[string]bool
-	markedIdle      map[string]bool
-	released        []string
+	ensureMountedFn  func(context.Context, string, string) (string, error)
+	acquireLeaseFn   func(string) (uint64, bool)
+	acquireLeaseSeen bool
+	released         []string
 }
 
 func (s *stubISOJobManager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
@@ -73,25 +72,12 @@ func (s *stubISOJobManager) EnsureMounted(ctx context.Context, sourceID, isoPath
 	return "", nil
 }
 
-func (s *stubISOJobManager) CurrentGeneration(sourceID string) (uint64, bool) {
-	if s.currentGenFn != nil {
-		return s.currentGenFn(sourceID)
+func (s *stubISOJobManager) AcquireLease(sourceID string) (uint64, bool) {
+	s.acquireLeaseSeen = true
+	if s.acquireLeaseFn != nil {
+		return s.acquireLeaseFn(sourceID)
 	}
 	return 1, true
-}
-
-func (s *stubISOJobManager) MarkInUse(sourceID string) {
-	if s.markedInUse == nil {
-		s.markedInUse = map[string]bool{}
-	}
-	s.markedInUse[sourceID] = true
-}
-
-func (s *stubISOJobManager) MarkIdle(sourceID string) {
-	if s.markedIdle == nil {
-		s.markedIdle = map[string]bool{}
-	}
-	s.markedIdle[sourceID] = true
 }
 
 func (s *stubISOJobManager) ReleaseSource(ctx context.Context, sourceID string) error {
@@ -99,7 +85,7 @@ func (s *stubISOJobManager) ReleaseSource(ctx context.Context, sourceID string) 
 	return nil
 }
 
-func (s *stubISOJobManager) ReleaseSourceIfGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
+func (s *stubISOJobManager) ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
 	s.released = append(s.released, sourceID)
 	return true, nil
 }
@@ -283,14 +269,14 @@ func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
 	}
-	if !isoManager.markedInUse["movies-nightcrawler-iso"] {
-		t.Fatal("expected ISO source to be marked in use")
+	if !isoManager.acquireLeaseSeen {
+		t.Fatal("expected ISO source lease to be acquired")
 	}
 	if manager.startReq.SourceType != "iso" || manager.startReq.SourceID != "movies-nightcrawler-iso" {
 		t.Fatalf("unexpected start request %+v", manager.startReq)
 	}
-	if manager.startReq.SourceMountGeneration != 1 {
-		t.Fatalf("expected mount generation 1, got %d", manager.startReq.SourceMountGeneration)
+	if manager.startReq.SourceLeaseGeneration != 1 {
+		t.Fatalf("expected lease generation 1, got %d", manager.startReq.SourceLeaseGeneration)
 	}
 	if !strings.Contains(manager.startReq.PayloadJSON, mountedRoot) {
 		t.Fatalf("expected payload JSON to reference mounted root, got %q", manager.startReq.PayloadJSON)

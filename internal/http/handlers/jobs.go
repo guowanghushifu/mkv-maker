@@ -32,11 +32,9 @@ type tasksManager interface {
 
 type ISOJobManager interface {
 	EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error)
-	CurrentGeneration(sourceID string) (uint64, bool)
-	MarkInUse(sourceID string)
-	MarkIdle(sourceID string)
+	AcquireLease(sourceID string) (uint64, bool)
 	ReleaseSource(ctx context.Context, sourceID string) error
-	ReleaseSourceIfGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error)
+	ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error)
 }
 
 type isoJobManagerAdapter struct {
@@ -54,16 +52,8 @@ func (a isoJobManagerAdapter) EnsureMounted(ctx context.Context, sourceID, isoPa
 	return a.manager.EnsureMounted(ctx, sourceID, isoPath)
 }
 
-func (a isoJobManagerAdapter) CurrentGeneration(sourceID string) (uint64, bool) {
-	return a.manager.CurrentGeneration(sourceID)
-}
-
-func (a isoJobManagerAdapter) MarkInUse(sourceID string) {
-	a.manager.MarkInUse(sourceID)
-}
-
-func (a isoJobManagerAdapter) MarkIdle(sourceID string) {
-	a.manager.MarkIdle(sourceID)
+func (a isoJobManagerAdapter) AcquireLease(sourceID string) (uint64, bool) {
+	return a.manager.AcquireLease(sourceID)
 }
 
 func (a isoJobManagerAdapter) ReleaseSource(ctx context.Context, sourceID string) error {
@@ -71,8 +61,8 @@ func (a isoJobManagerAdapter) ReleaseSource(ctx context.Context, sourceID string
 	return err
 }
 
-func (a isoJobManagerAdapter) ReleaseSourceIfGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
-	return a.manager.ReleaseSourceIfGeneration(ctx, sourceID, generation)
+func (a isoJobManagerAdapter) ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
+	return a.manager.ReleaseSourceIfLeaseGeneration(ctx, sourceID, generation)
 }
 
 type createJobRequest struct {
@@ -188,13 +178,18 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sourceName := strings.TrimSpace(req.Source.Name)
 	sourcePath := strings.TrimSpace(req.Source.Path)
 	sourcePlaylistRoot := sourcePath
-	sourceMountGeneration := uint64(0)
+	sourceLeaseGeneration := uint64(0)
+	leaseAcquired := false
 	isoMounted := false
 	releaseMountedISO := func() {
-		if !isoMounted || h.ISOManager == nil || sourceID == "" || sourceMountGeneration == 0 {
+		if !isoMounted || h.ISOManager == nil || sourceID == "" {
 			return
 		}
-		_, _ = h.ISOManager.ReleaseSourceIfGeneration(context.Background(), sourceID, sourceMountGeneration)
+		if leaseAcquired && sourceLeaseGeneration != 0 {
+			_, _ = h.ISOManager.ReleaseSourceIfLeaseGeneration(context.Background(), sourceID, sourceLeaseGeneration)
+			return
+		}
+		_ = h.ISOManager.ReleaseSource(context.Background(), sourceID)
 	}
 
 	switch sourceType {
@@ -241,13 +236,6 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "failed to mount iso source", http.StatusBadRequest)
 			return
 		}
-		gen, ok := h.ISOManager.CurrentGeneration(sourceID)
-		if !ok {
-			_ = h.ISOManager.ReleaseSource(context.Background(), sourceID)
-			http.Error(w, "failed to load iso mount state", http.StatusInternalServerError)
-			return
-		}
-		sourceMountGeneration = gen
 		isoMounted = true
 		sourcePlaylistRoot = mountedRoot
 		sourcePath = mountedRoot
@@ -262,11 +250,18 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 			return
 		}
-		h.ISOManager.MarkInUse(sourceID)
+		leaseGeneration, ok := h.ISOManager.AcquireLease(sourceID)
+		if !ok {
+			releaseMountedISO()
+			http.Error(w, "failed to load iso lease state", http.StatusInternalServerError)
+			return
+		}
+		sourceLeaseGeneration = leaseGeneration
+		leaseAcquired = true
 		startRequest := remux.StartRequest{
 			SourceID:              sourceID,
 			SourceType:            strings.TrimSpace(string(source.Type)),
-			SourceMountGeneration: sourceMountGeneration,
+			SourceLeaseGeneration: sourceLeaseGeneration,
 			SourceName:            sourceName,
 			OutputName:            strings.TrimSpace(req.OutputFilename),
 			OutputPath:            strings.TrimSpace(req.OutputPath),

@@ -122,6 +122,75 @@ func TestManagerReleaseSourceIfGenerationSkipsReacquiredMount(t *testing.T) {
 	}
 }
 
+func TestManagerReleaseSourceIfLeaseGenerationSkipsImmediateSameSourceHandoff(t *testing.T) {
+	root := t.TempDir()
+	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var umountCalls int
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error {
+			switch name {
+			case "mount":
+				mountPath := args[len(args)-1]
+				if err := os.MkdirAll(filepath.Join(mountPath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(mountPath, "BDMV", "index.bdmv"), []byte("index"), 0o644)
+			case "umount":
+				umountCalls++
+				return nil
+			default:
+				return nil
+			}
+		},
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
+		t.Fatalf("first EnsureMounted returned error: %v", err)
+	}
+	firstLease, ok := manager.AcquireLease("movies-nightcrawler-iso")
+	if !ok {
+		t.Fatal("expected first lease to be available")
+	}
+	if _, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath); err != nil {
+		t.Fatalf("second EnsureMounted returned error: %v", err)
+	}
+	secondLease, ok := manager.AcquireLease("movies-nightcrawler-iso")
+	if !ok {
+		t.Fatal("expected second lease to be available")
+	}
+	if secondLease == firstLease {
+		t.Fatal("expected immediate handoff to receive a new lease generation")
+	}
+	if runner.calls["mount"] != 1 {
+		t.Fatalf("expected same mount to be reused, got %d mount calls", runner.calls["mount"])
+	}
+
+	if released, err := manager.ReleaseSourceIfLeaseGeneration(context.Background(), "movies-nightcrawler-iso", firstLease); err != nil {
+		t.Fatalf("stale lease release returned error: %v", err)
+	} else if released {
+		t.Fatal("expected stale lease release to be skipped")
+	}
+	if umountCalls != 0 {
+		t.Fatalf("expected stale lease release to leave mount intact, got %d umount calls", umountCalls)
+	}
+
+	if released, err := manager.ReleaseSourceIfLeaseGeneration(context.Background(), "movies-nightcrawler-iso", secondLease); err != nil || !released {
+		t.Fatalf("expected active lease release to succeed, released=%v err=%v", released, err)
+	}
+	if umountCalls != 1 {
+		t.Fatalf("expected one umount call after active lease release, got %d", umountCalls)
+	}
+	mountPath := filepath.Join(root, "movies-nightcrawler-iso")
+	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected mount dir cleanup after active release, got stat error %v", statErr)
+	}
+}
+
 func TestManagerEnsureMountedReusesHealthyMount(t *testing.T) {
 	root := t.TempDir()
 	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")

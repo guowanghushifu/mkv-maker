@@ -30,7 +30,7 @@ type Task struct {
 type StartRequest struct {
 	SourceID              string
 	SourceType            string
-	SourceMountGeneration uint64
+	SourceLeaseGeneration uint64
 	SourceName            string
 	OutputName            string
 	OutputPath            string

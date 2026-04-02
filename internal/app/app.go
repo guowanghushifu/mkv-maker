@@ -74,10 +74,10 @@ func New(cfg config.Config) (*App, error) {
 		if isoManager == nil {
 			return
 		}
-		if !strings.EqualFold(strings.TrimSpace(req.SourceType), "iso") || strings.TrimSpace(req.SourceID) == "" || req.SourceMountGeneration == 0 {
+		if !strings.EqualFold(strings.TrimSpace(req.SourceType), "iso") || strings.TrimSpace(req.SourceID) == "" || req.SourceLeaseGeneration == 0 {
 			return
 		}
-		_, _ = isoManager.ReleaseSourceIfGeneration(context.Background(), req.SourceID, req.SourceMountGeneration)
+		_, _ = isoManager.ReleaseSourceIfLeaseGeneration(context.Background(), req.SourceID, req.SourceLeaseGeneration)
 	})
 	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, scanner, handlers.NewISOJobManagerAdapter(isoManager))
 	isoHandler := handlers.NewISOMountsHandler(isoManager)

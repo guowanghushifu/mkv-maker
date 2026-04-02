@@ -25,11 +25,12 @@ type ReleaseResult struct {
 var ErrSourceInUse = errors.New("source is in use")
 
 type entry struct {
-	ISOPath       string
-	MountPath     string
-	Generation    uint64
-	LastTouchedAt time.Time
-	InUse         bool
+	ISOPath         string
+	MountPath       string
+	MountGeneration uint64
+	LeaseGeneration uint64
+	LastTouchedAt   time.Time
+	InUse           bool
 }
 
 type Manager struct {
@@ -136,10 +137,10 @@ func (m *Manager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (
 	m.mountOwners[mountPath] = sourceKey
 	delete(m.pendingDirs, mountPath)
 	m.entries[sourceKey] = &entry{
-		ISOPath:       isoPath,
-		MountPath:     mountPath,
-		Generation:    gen,
-		LastTouchedAt: m.now(),
+		ISOPath:         isoPath,
+		MountPath:       mountPath,
+		MountGeneration: gen,
+		LastTouchedAt:   m.now(),
 	}
 	m.mu.Unlock()
 	return mountPath, nil
@@ -157,7 +158,28 @@ func (m *Manager) CurrentGeneration(sourceID string) (uint64, bool) {
 	if entry == nil {
 		return 0, false
 	}
-	return entry.Generation, true
+	return entry.MountGeneration, true
+}
+
+// AcquireLease mints a new job lease token for the mounted source.
+func (m *Manager) AcquireLease(sourceID string) (uint64, bool) {
+	sourceLock := m.sourceLockFor(sourceID)
+	sourceLock.Lock()
+	defer sourceLock.Unlock()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	entry := m.entries[sourceID]
+	if entry == nil {
+		return 0, false
+	}
+	generation := m.nextGen
+	m.nextGen++
+	entry.LeaseGeneration = generation
+	entry.InUse = true
+	entry.LastTouchedAt = m.now()
+	return generation, true
 }
 
 func (m *Manager) Touch(sourceID string) {
@@ -432,14 +454,19 @@ func (m *Manager) sourceLockFor(sourceID string) *sync.Mutex {
 }
 
 func (m *Manager) ReleaseSource(ctx context.Context, sourceID string) (bool, error) {
-	return m.releaseSource(ctx, sourceID, 0, false)
+	return m.releaseSource(ctx, sourceID, 0, false, false)
 }
 
 func (m *Manager) ReleaseSourceIfGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
-	return m.releaseSource(ctx, sourceID, generation, true)
+	return m.releaseSource(ctx, sourceID, generation, true, false)
 }
 
-func (m *Manager) releaseSource(ctx context.Context, sourceID string, generation uint64, guardGeneration bool) (bool, error) {
+// ReleaseSourceIfLeaseGeneration ignores stale completion hooks from earlier leases.
+func (m *Manager) ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
+	return m.releaseSource(ctx, sourceID, generation, true, true)
+}
+
+func (m *Manager) releaseSource(ctx context.Context, sourceID string, generation uint64, guardGeneration, guardLease bool) (bool, error) {
 	sourceLock := m.sourceLockFor(sourceID)
 	sourceLock.Lock()
 	defer sourceLock.Unlock()
@@ -450,7 +477,11 @@ func (m *Manager) releaseSource(ctx context.Context, sourceID string, generation
 		m.mu.Unlock()
 		return false, nil
 	}
-	if guardGeneration && entry.Generation != generation {
+	currentGeneration := entry.MountGeneration
+	if guardLease {
+		currentGeneration = entry.LeaseGeneration
+	}
+	if guardGeneration && currentGeneration != generation {
 		m.mu.Unlock()
 		return false, nil
 	}
@@ -468,7 +499,14 @@ func (m *Manager) releaseSource(ctx context.Context, sourceID string, generation
 	m.mu.Lock()
 	current := m.entries[sourceID]
 	currentOwner, ok := m.mountOwners[mountPath]
-	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) || (guardGeneration && current.Generation != generation) {
+	currentGeneration = 0
+	if current != nil {
+		currentGeneration = current.MountGeneration
+		if guardLease {
+			currentGeneration = current.LeaseGeneration
+		}
+	}
+	if current == nil || current.MountPath != mountPath || (ok && currentOwner != sourceID) || (guardGeneration && currentGeneration != generation) {
 		m.mu.Unlock()
 		return false, nil
 	}
