@@ -5,9 +5,11 @@ import { getMessages, type Locale } from '../../i18n';
 type ScanPageProps = {
   locale?: Locale;
   loading: boolean;
+  releasingMountedISOs?: boolean;
   error?: string | null;
   sources: SourceEntry[];
   selectedSourceId: string | null;
+  onReleaseMountedISOs: () => Promise<void> | void;
   onScan: () => Promise<void> | void;
   onSelectSource: (sourceId: string) => void;
   onNext: () => void;
@@ -39,9 +41,11 @@ function formatModifiedDate(value: string, locale: Locale): string {
 export function ScanPage({
   locale = 'zh',
   loading,
+  releasingMountedISOs = false,
   error,
   sources,
   selectedSourceId,
+  onReleaseMountedISOs,
   onScan,
   onSelectSource,
   onNext,
@@ -51,6 +55,9 @@ export function ScanPage({
   const typeLabel = (type: SourceEntry['type']) => {
     if (type === 'bdmv') {
       return text.scan.typeBDMV;
+    }
+    if (type === 'iso') {
+      return text.scan.typeISO;
     }
     return type;
   };
@@ -63,6 +70,9 @@ export function ScanPage({
           <p className="panel-description">{text.scan.subtitle}</p>
         </div>
         <div className="workspace-toolbar">
+          <Button onClick={() => void onReleaseMountedISOs()} disabled={loading || releasingMountedISOs}>
+            {releasingMountedISOs ? text.scan.releasingMountedISOsButton : text.scan.releaseMountedISOsButton}
+          </Button>
           <Button onClick={() => void onScan()} disabled={loading}>
             {loading ? text.scan.scanningButton : text.scan.scanButton}
           </Button>

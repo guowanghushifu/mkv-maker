@@ -18,6 +18,14 @@ const secondSource = {
   path: '/bd_input/Another Disc/BDMV',
 };
 
+const isoSource = {
+  ...longPathSource,
+  id: 'iso-1',
+  name: 'Nightcrawler',
+  path: '/bd_input/Nightcrawler.iso',
+  type: 'iso' as const,
+};
+
 describe('ScanPage', () => {
   it('renders scan content inside the workspace card and toolbar layout', () => {
     const { container } = render(
@@ -27,6 +35,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -46,6 +55,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -67,6 +77,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -84,6 +95,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -103,6 +115,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -122,6 +135,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={longPathSource.id}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -141,6 +155,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={onSelectSource}
         onNext={onNext}
@@ -161,6 +176,7 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={secondSource.id}
+        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={onSelectSource}
         onNext={onNext}
@@ -171,5 +187,31 @@ describe('ScanPage', () => {
     expect(enabledNextButton).not.toBeDisabled();
     fireEvent.click(enabledNextButton);
     expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the release button before scan sources and shows the ISO badge', () => {
+    const ScanPageAny = ScanPage as any;
+
+    render(
+      <ScanPageAny
+        locale="en"
+        loading={false}
+        releasingMountedISOs={false}
+        error={null}
+        sources={[isoSource]}
+        selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(Array.from(document.querySelectorAll('.workspace-toolbar button')).map((node) => node.textContent?.trim())).toEqual([
+      'Release Mounted ISOs',
+      'Scan Sources',
+      'Continue to BDInfo',
+    ]);
+    expect(screen.getByText(/ISO File/i)).toBeInTheDocument();
   });
 });

@@ -182,4 +182,31 @@ describe('useRemuxWorkflow', () => {
       expect(result.current.outputFilename).toBe('');
     });
   });
+
+  it('releases mounted ISOs from the workflow hook', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/iso/release-mounted') && method === 'POST') {
+        return new Response(JSON.stringify({ released: 1, skippedInUse: 0, failed: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await act(async () => {
+      await (result.current as any).handleReleaseMountedISOs();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/iso/release-mounted', expect.objectContaining({ method: 'POST' }));
+    expect((result.current as any).releasingMountedISOs).toBe(false);
+  });
 });

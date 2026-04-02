@@ -185,6 +185,41 @@ describe('App', () => {
     expect(document.querySelector('.admin-shell')).toBeNull();
   });
 
+  it('wires the scan-page release button through the app shell', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      if (url.endsWith('/api/login') && method === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/iso/release-mounted') && method === 'POST') {
+        return new Response(JSON.stringify({ released: 1, skippedInUse: 0, failed: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/密码/i), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /继续/i }));
+    await screen.findByRole('heading', { name: /扫描片源/i });
+    fireEvent.click(screen.getByRole('button', { name: /中文 \/ EN/i }));
+    await screen.findByRole('heading', { name: /scan sources/i });
+    fireEvent.click(screen.getByRole('button', { name: /release mounted isos/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/iso/release-mounted', expect.anything()));
+  });
+
   it('defaults to Chinese and persists the selected locale', async () => {
     installFetchMock({ currentJob: null, currentLog: '' });
     render(<App />);
