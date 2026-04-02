@@ -193,3 +193,69 @@ Dolby TrueHD/Atmos Audio        English         3886 kbps       7.1 / 48 kHz / 3
 		t.Fatalf("expected codec info TrueHD.7.1.Atmos, got %+v", parsed.AudioCodecInfo)
 	}
 }
+
+func TestParseNormalizesUnicodeWhitespaceAndFullwidthColons(t *testing.T) {
+	raw := `DISC INFO：
+
+Disc Title：     Dame, König, As, Spion - 4K UHD
+
+PLAYLIST REPORT：
+
+Name：                   00002.MPLS
+Length：                 2:07:22.134 (h:m:s.ms)
+
+VIDEO：
+
+Codec                   Bitrate             Description     
+-----                   -------             -----------     
+MPEG-H HEVC Video       77112 kbps          2160p / 23.976 fps / 16:9 / Main 10 @ Level 5.1 @ High / 4:2:0 / 10 bits / HDR10 / Limited Range / BT.2020 / 
+* MPEG-H HEVC Video     76 kbps             1080p / 23.976 fps / 16:9 / Main 10 @ Level 5.1 @ High / 4:2:0 / 10 bits / Dolby Vision / Limited Range / BT.2020 /
+
+AUDIO：
+
+Codec                           Language        Bitrate         Description     
+-----                           --------        -------         -----------     
+DTS-HD Master Audio             German          2358 kbps       5.1 / 48 kHz /  2358 kbps / 24-bit
+DTS-HD Master Audio             English         3230 kbps       5.1 / 48 kHz /  3230 kbps / 24-bit
+Dolby Digital Audio             Chinese         192 kbps        2.0 / 48 kHz /   192 kbps / 普通话
+
+SUBTITLES：
+
+Codec                           Language        Bitrate         Description     
+-----                           --------        -------         -----------     
+Presentation Graphics           German          0.945 kbps
+Presentation Graphics           English         25.265 kbps
+Presentation Graphics           Chinese         99.216 kbps                     简体中文`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if parsed.RawText != raw {
+		t.Fatal("expected raw text to be preserved exactly")
+	}
+	if parsed.DiscTitle != "Dame, König, As, Spion - 4K UHD" {
+		t.Fatalf("expected normalized disc title, got %q", parsed.DiscTitle)
+	}
+	if parsed.PlaylistName != "00002.MPLS" {
+		t.Fatalf("expected playlist 00002.MPLS, got %q", parsed.PlaylistName)
+	}
+	if parsed.Duration != "2:07:22.134 (h:m:s.ms)" {
+		t.Fatalf("expected normalized duration, got %q", parsed.Duration)
+	}
+	if parsed.Video.Codec != "HEVC" {
+		t.Fatalf("expected HEVC video codec, got %q", parsed.Video.Codec)
+	}
+	if parsed.Video.Resolution != "2160p" {
+		t.Fatalf("expected 2160p resolution, got %q", parsed.Video.Resolution)
+	}
+	if parsed.Video.HDRType != "DV.HDR" {
+		t.Fatalf("expected DV.HDR type, got %q", parsed.Video.HDRType)
+	}
+	if !reflect.DeepEqual(parsed.AudioLabels, []string{"German DTS-HD Master Audio", "English DTS-HD Master Audio", "普通话"}) {
+		t.Fatalf("expected normalized audio labels, got %+v", parsed.AudioLabels)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLabels, []string{"German", "English", "简体中文"}) {
+		t.Fatalf("expected normalized subtitle labels, got %+v", parsed.SubtitleLabels)
+	}
+}

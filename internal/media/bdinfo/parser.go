@@ -68,6 +68,7 @@ var (
 )
 
 func Parse(rawText string) (Parsed, error) {
+	normalizedText := normalizeBDInfoText(rawText)
 	parsed := Parsed{
 		RawText:        rawText,
 		AudioLabels:    []string{},
@@ -85,7 +86,7 @@ func Parse(rawText string) (Parsed, error) {
 	audioRows := make([]audioRow, 0, 8)
 	subtitleRows := make([]subtitleRow, 0, 8)
 	videoRows := make([]videoRow, 0, 2)
-	scanner := bufio.NewScanner(strings.NewReader(rawText))
+	scanner := bufio.NewScanner(strings.NewReader(normalizedText))
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -184,7 +185,7 @@ func Parse(rawText string) (Parsed, error) {
 		return Parsed{}, ErrNoRecognizedFields
 	}
 	if parsed.PlaylistName == "" {
-		if match := playlistPattern.FindStringSubmatch(rawText); len(match) == 2 {
+		if match := playlistPattern.FindStringSubmatch(normalizedText); len(match) == 2 {
 			parsed.PlaylistName = strings.ToUpper(match[1])
 		}
 	}
@@ -208,13 +209,44 @@ func Parse(rawText string) (Parsed, error) {
 		parsed.SubtitleLanguages = append(parsed.SubtitleLanguages, row.Language)
 	}
 	if len(videoRows) > 0 {
-		parsed.Video, parsed.DVMergeEnabled = buildVideo(videoRows, rawText)
+		parsed.Video, parsed.DVMergeEnabled = buildVideo(videoRows, normalizedText)
 	} else {
-		parsed.Video.HDRType = inferHDRType(rawText, false)
-		parsed.DVMergeEnabled = strings.Contains(strings.ToUpper(rawText), "DOLBY VISION")
+		parsed.Video.HDRType = inferHDRType(normalizedText, false)
+		parsed.DVMergeEnabled = strings.Contains(strings.ToUpper(normalizedText), "DOLBY VISION")
 	}
 
 	return parsed, nil
+}
+
+func normalizeBDInfoText(raw string) string {
+	var b strings.Builder
+	b.Grow(len(raw))
+
+	for _, r := range raw {
+		switch {
+		case isZeroWidthRune(r):
+			continue
+		case r == '：':
+			b.WriteByte(':')
+		case r == '\n' || r == '\r':
+			b.WriteRune(r)
+		case unicode.IsSpace(r):
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
+}
+
+func isZeroWidthRune(r rune) bool {
+	switch r {
+	case '\u200b', '\u200c', '\u200d', '\ufeff':
+		return true
+	default:
+		return false
+	}
 }
 
 func parseVideoTableRow(line string) (videoRow, bool) {
