@@ -1049,6 +1049,30 @@ func TestManagerCleanupResidualMountDirsRemovesLeftoverUnmountedDirAfterRestart(
 	}
 }
 
+func TestManagerCleanupResidualMountDirsRemovesLegacyEscapedMountDir(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "iso_auto_mount")
+	legacyDir := filepath.Join(root, "%25E9%2580%259F%25E5%25BA%25A6%252FFurious_Seven.iso")
+	if err := os.MkdirAll(filepath.Join(legacyDir, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &fakeCommandRunner{
+		runFn: func(_ context.Context, name string, args ...string) error { return nil },
+	}
+	manager := NewManager(root, time.Hour, runner)
+
+	result := manager.CleanupResidualMountDirs(context.Background())
+	if result.Released != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected cleanup result %+v", result)
+	}
+	if _, err := os.Stat(legacyDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected legacy dir to be removed, stat err=%v", err)
+	}
+}
+
 func TestManagerCleanupExpiredIdleReleasesOnlyStaleEntries(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
