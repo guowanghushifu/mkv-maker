@@ -2,7 +2,6 @@
 
 `mkv-remux-web` 是一个用于蓝光盘Remux视频到mkv的Web工具。
 - 支持 **BDMV 输入**，并可在 Linux 容器/主机上按需扫描 `.iso` 输入源。
-- `ENABLE_ISO_SCAN`（默认：`0`）：是否扫描 `.iso` 输入源；只有在需要容器内自动挂载 ISO 时才设为 `1`
 - `/bd_input/iso_auto_mount`：程序保留的 ISO 自动挂载目录，扫描时会被忽略，不应放置用户输入
 - ISO 支持仅限 Linux；启用自动扫描时需要容器具备挂载 loop 设备的权限。若不满足这些条件，请保持 `ENABLE_ISO_SCAN=0`，先手动挂载 ISO 再使用 BDMV 输入
 ```bash
@@ -13,13 +12,9 @@ mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 ## Docker运行
 
 服务端使用以下环境变量：
-
-一般来说你只需要填写 `APP_PASSWORD`
 - `APP_PASSWORD`（必填）：Web 应用登录密码
 - `ENABLE_ISO_SCAN`（默认：`0`）：是否扫描 `.iso` 输入源；仅在需要容器内自动挂载 ISO 时设为 `1`
-- `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie。通过 HTTPS 或反向代理访问时可显式设为 `1`
-
-默认配置允许明文 HTTP 访问；若部署在公网或 HTTPS 反向代理之后，建议显式启用 `SESSION_COOKIE_SECURE=1`。
+- `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie。通过 HTTPS 或反向代理访问时可显式设为 `1`；默认配置允许明文 HTTP 访问；若部署在公网或 HTTPS 反向代理之后，建议显式启用 `SESSION_COOKIE_SECURE=1`。
 
 Docker Compose 示例：普通 BDMV 场景（默认，不扫描 ISO）：
 
@@ -35,7 +30,7 @@ services:
       APP_PASSWORD: "你的登录密码"
     volumes:
       - ./data:/app/data           # 日志目录
-      - /dld:/bd_input:ro          # 蓝光盘存放目录；如需使用 ISO，请先在宿主机手动挂载
+      - /dld:/bd_input:rshared     # 蓝光盘存放目录；如需使用 ISO，请先在宿主机手动挂载
       - /remux:/remux              # remux输出目录
 ```
 
@@ -64,6 +59,8 @@ services:
       - /dev/loop1:/dev/loop1
       - /dev/loop2:/dev/loop2
       - /dev/loop3:/dev/loop3
+      - /dev/loop4:/dev/loop4
+      - /dev/loop5:/dev/loop5
     volumes:
       - ./data:/app/data           # 日志目录
       - /dld:/bd_input:rshared     # 蓝光盘存放目录；ISO 文件也可放在此目录下
@@ -72,7 +69,7 @@ services:
 
 如果容器内无法以 `mount -o loop,ro` 和 `umount` 完成自动挂载，请保持 `ENABLE_ISO_SCAN=0`，并改为在宿主机上手动挂载 ISO 后把 BDMV 目录挂入容器。
 
-## Docker构建和运行（本地）
+## Docker构建和运行（本地测试流程，普通用户忽略）
 
 构建：
 
