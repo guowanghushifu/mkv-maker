@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { UnauthorizedError, buildFilenamePreview, createApiClient } from './api/client';
 import type { Draft, Job, ParsedBDInfo, SourceEntry } from './api/types';
 import type { WorkflowStep } from './components/Layout';
@@ -51,6 +51,7 @@ export function useRemuxWorkflow() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [currentJobLog, setCurrentJobLog] = useState('');
+  const currentJobSnapshotRequestRef = useRef(0);
 
   const text = getMessages(locale);
   const selectedSource = sources.find((source) => source.id === selectedSourceId) ?? null;
@@ -114,6 +115,10 @@ export function useRemuxWorkflow() {
     setLoginError(null);
     setToken(null);
     setStep('login');
+  };
+
+  const invalidateCurrentJobSnapshots = () => {
+    currentJobSnapshotRequestRef.current += 1;
   };
 
   useEffect(() => {
@@ -253,18 +258,36 @@ export function useRemuxWorkflow() {
   };
 
   const loadCurrentJobSnapshot = async () => {
+    const requestId = currentJobSnapshotRequestRef.current + 1;
+    currentJobSnapshotRequestRef.current = requestId;
     const [nextJob, nextLog] = await Promise.all([
       api.currentJob(token ?? undefined),
       api.currentJobLog(token ?? undefined),
     ]);
-    return { nextJob, nextLog: nextJob ? nextLog : '' };
+    return { requestId, nextJob, nextLog: nextJob ? nextLog : '' };
+  };
+
+  const applyCurrentJobSnapshot = ({
+    requestId,
+    nextJob,
+    nextLog,
+  }: {
+    requestId: number;
+    nextJob: Job | null;
+    nextLog: string;
+  }) => {
+    if (requestId !== currentJobSnapshotRequestRef.current) {
+      return false;
+    }
+    setCurrentJob(nextJob);
+    setCurrentJobLog(nextLog);
+    return true;
   };
 
   const refreshCurrentJob = async () => {
     try {
-      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
-      setCurrentJob(nextJob);
-      setCurrentJobLog(nextLog);
+      const snapshot = await loadCurrentJobSnapshot();
+      applyCurrentJobSnapshot(snapshot);
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         handleUnauthorized();
@@ -281,7 +304,7 @@ export function useRemuxWorkflow() {
   }, [token]);
 
   useEffect(() => {
-    if (!currentJob || currentJob.status !== 'running') {
+    if (!currentJob || currentJob.status !== 'running' || submittingJob || stoppingJob) {
       return;
     }
 
@@ -292,7 +315,7 @@ export function useRemuxWorkflow() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [currentJob, token]);
+  }, [currentJob, submittingJob, stoppingJob, token]);
 
   const handleSubmitJob = async () => {
     if (!selectedSource || !parsedBDInfo || !draft) {
@@ -308,6 +331,7 @@ export function useRemuxWorkflow() {
       return;
     }
 
+    invalidateCurrentJobSnapshots();
     setSubmittingJob(true);
     setSubmitError(null);
     setCurrentJob(null);
@@ -327,10 +351,9 @@ export function useRemuxWorkflow() {
       setCurrentJobLog('');
       setStep('review');
 
-      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
-      if (nextJob && nextJob.id === startedJob.id) {
-        setCurrentJob(nextJob);
-        setCurrentJobLog(nextLog);
+      const snapshot = await loadCurrentJobSnapshot();
+      if (snapshot.nextJob && snapshot.nextJob.id === startedJob.id) {
+        applyCurrentJobSnapshot(snapshot);
       }
     } catch (error) {
       if (error instanceof UnauthorizedError) {
@@ -344,17 +367,17 @@ export function useRemuxWorkflow() {
   };
 
   const handleStopCurrentJob = async () => {
-    if (!currentJob || currentJob.status !== 'running') {
+    if (!currentJob || currentJob.status !== 'running' || submittingJob || stoppingJob) {
       return;
     }
 
+    invalidateCurrentJobSnapshots();
     setStoppingJob(true);
     setSubmitError(null);
     try {
       await api.stopCurrentJob(token ?? undefined);
-      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
-      setCurrentJob(nextJob);
-      setCurrentJobLog(nextJob ? nextLog : '');
+      const snapshot = await loadCurrentJobSnapshot();
+      applyCurrentJobSnapshot(snapshot);
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         handleUnauthorized();

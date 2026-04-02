@@ -105,7 +105,7 @@ export function ReviewPage({
           </Button>
           <Button
             onClick={() => void onStopCurrentJob()}
-            disabled={stoppingJob || currentJob?.status !== 'running'}
+            disabled={submitting || stoppingJob || currentJob?.status !== 'running'}
           >
             {stoppingJob ? text.review.stoppingRemuxButton : text.review.stopRemuxButton}
           </Button>

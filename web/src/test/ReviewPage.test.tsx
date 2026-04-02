@@ -344,6 +344,112 @@ describe('ReviewPage', () => {
     expect(screen.getByRole('button', { name: /emergency stop remux/i })).toBeDisabled();
   });
 
+  it('keeps the emergency stop button in the primary action row and matches running, submitting, and stopping states', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
+      audio: [],
+      subtitles: [],
+    } as const;
+    const currentJob = {
+      id: 'job-123',
+      sourceName: 'Nightcrawler Disc',
+      outputName: 'Nightcrawler - 2160p.mkv',
+      outputPath: '/remux/Nightcrawler - 2160p.mkv',
+      playlistName: '00800.MPLS',
+      createdAt: '2026-04-02T00:00:00Z',
+      status: 'running' as const,
+    };
+
+    const { rerender } = render(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        stoppingJob={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={currentJob}
+        currentLog=""
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onStopCurrentJob={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    const stopButton = screen.getByRole('button', { name: /emergency stop remux/i });
+    expect(stopButton).toBeEnabled();
+    expect(stopButton.closest('.review-actions-primary')).not.toBeNull();
+    expect(stopButton.closest('.review-actions-secondary')).toBeNull();
+
+    rerender(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={true}
+        stoppingJob={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={currentJob}
+        currentLog=""
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onStopCurrentJob={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /emergency stop remux/i })).toBeDisabled();
+
+    rerender(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        stoppingJob={true}
+        startDisabled={false}
+        submitError={null}
+        currentJob={currentJob}
+        currentLog=""
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onStopCurrentJob={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /stopping remux/i })).toBeDisabled();
+  });
+
   it('still shows start next remux when no current task snapshot is available', () => {
     const source = {
       id: 'disc-1',
