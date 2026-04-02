@@ -117,6 +117,52 @@ describe('Layout', () => {
     expect(container.querySelectorAll('.workflow-summary-card')).toHaveLength(4);
   });
 
+  it('renders the injected build time in the sidebar card', () => {
+    vi.stubEnv('VITE_BUILD_TIME', '2026.04.02 18:30');
+
+    const { container } = render(
+      <Layout
+        currentStep="scan"
+        locale="zh"
+        onToggleLocale={vi.fn()}
+        context={{
+          source: 'Nightcrawler Disc',
+          playlist: '00800.MPLS',
+          output: 'Nightcrawler - 2160p.mkv',
+          task: '就绪',
+        }}
+      >
+        <div>scan body</div>
+      </Layout>
+    );
+
+    expect(container.querySelector('.shell-session-card')).toHaveTextContent('构建时间');
+    expect(container.querySelector('.shell-session-card')).toHaveTextContent('2026.04.02 18:30');
+  });
+
+  it('renders a fallback build time label when no build time is injected', () => {
+    vi.unstubAllEnvs();
+
+    const { container } = render(
+      <Layout
+        currentStep="scan"
+        locale="zh"
+        onToggleLocale={vi.fn()}
+        context={{
+          source: 'Nightcrawler Disc',
+          playlist: '00800.MPLS',
+          output: 'Nightcrawler - 2160p.mkv',
+          task: '就绪',
+        }}
+      >
+        <div>scan body</div>
+      </Layout>
+    );
+
+    expect(container.querySelector('.shell-session-card')).toHaveTextContent('构建时间');
+    expect(container.querySelector('.shell-session-card')).toHaveTextContent('未注入');
+  });
+
   it('shows Back to Scan before the locale toggle only on bdinfo, editor, and review steps', () => {
     const onBackToScan = vi.fn();
     const context = {

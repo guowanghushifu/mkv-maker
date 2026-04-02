@@ -17,8 +17,8 @@ type MessageSet = {
     localeToggle: string;
     backToScan: string;
     shellNavAria: string;
-    shellSessionTitle: string;
-    shellSessionSubtitle: string;
+    buildTimeTitle: string;
+    buildTimeFallback: string;
     stepNumbers: Record<'scan' | 'bdinfo' | 'editor' | 'review', string>;
     stepDescriptions: Record<'scan' | 'bdinfo' | 'editor' | 'review', string>;
     summaryLabels: {
@@ -160,8 +160,8 @@ export const messages: Record<Locale, MessageSet> = {
       localeToggle: '中文 / EN',
       backToScan: '返回扫描',
       shellNavAria: '工作流分区',
-      shellSessionTitle: 'Remux 会话',
-      shellSessionSubtitle: '当前操作上下文',
+      buildTimeTitle: '构建时间',
+      buildTimeFallback: '未注入',
       stepNumbers: {
         scan: '01',
         bdinfo: '02',
@@ -318,8 +318,8 @@ export const messages: Record<Locale, MessageSet> = {
       localeToggle: '中文 / EN',
       backToScan: 'Back to Scan',
       shellNavAria: 'Workflow sections',
-      shellSessionTitle: 'Remux Session',
-      shellSessionSubtitle: 'Current operator context',
+      buildTimeTitle: 'Build Time',
+      buildTimeFallback: 'Not injected',
       stepNumbers: {
         scan: '01',
         bdinfo: '02',

@@ -47,6 +47,7 @@ export function Layout({
   children,
 }: LayoutProps) {
   const text = getMessages(locale);
+  const buildTime = import.meta.env.VITE_BUILD_TIME || text.layout.buildTimeFallback;
   const activeStep = currentStep === 'login' ? 'scan' : currentStep;
   const meta = getShellMeta(activeStep, text);
   const showBackToScan =
@@ -77,8 +78,8 @@ export function Layout({
         <div className="shell-session-card">
           <div className="shell-session-badge">MK</div>
           <div>
-            <strong>{text.layout.shellSessionTitle}</strong>
-            <p>{text.layout.shellSessionSubtitle}</p>
+            <strong>{text.layout.buildTimeTitle}</strong>
+            <p>{buildTime}</p>
           </div>
         </div>
       </aside>
