@@ -36,3 +36,28 @@ func TestLoadAllowsEnablingSecureCookieForHTTPS(t *testing.T) {
 		t.Fatal("expected SESSION_COOKIE_SECURE=1 to enable the secure cookie flag")
 	}
 }
+
+func TestLoadDefaultsEnableISOScanToTrue(t *testing.T) {
+	t.Setenv("APP_PASSWORD", "secret")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if !cfg.EnableISOScan {
+		t.Fatal("expected ISO scanning to be enabled by default")
+	}
+}
+
+func TestLoadAllowsDisablingISOScan(t *testing.T) {
+	t.Setenv("APP_PASSWORD", "secret")
+	t.Setenv("ENABLE_ISO_SCAN", "0")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.EnableISOScan {
+		t.Fatal("expected ENABLE_ISO_SCAN=0 to disable ISO scanning")
+	}
+}

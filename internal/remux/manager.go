@@ -28,11 +28,14 @@ type Task struct {
 }
 
 type StartRequest struct {
-	SourceName   string
-	OutputName   string
-	OutputPath   string
-	PlaylistName string
-	PayloadJSON  string
+	SourceID              string
+	SourceType            string
+	SourceLeaseGeneration uint64
+	SourceName            string
+	OutputName            string
+	OutputPath            string
+	PlaylistName          string
+	PayloadJSON           string
 }
 
 type taskState struct {
@@ -42,14 +45,15 @@ type taskState struct {
 }
 
 type Manager struct {
-	mu       sync.RWMutex
-	current  *taskState
-	latest   *taskState
-	executor *JobRunner
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	closed   bool
+	mu             sync.RWMutex
+	current        *taskState
+	latest         *taskState
+	executor       *JobRunner
+	ctx            context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
+	closed         bool
+	onTaskFinished func(StartRequest, Task)
 }
 
 func NewManager(runner CommandRunner) *Manager {
@@ -59,6 +63,16 @@ func NewManager(runner CommandRunner) *Manager {
 		ctx:      ctx,
 		cancel:   cancel,
 	}
+}
+
+func (m *Manager) SetOnTaskFinished(fn func(StartRequest, Task)) {
+	if m == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onTaskFinished = fn
 }
 
 func (m *Manager) Start(req StartRequest) (Task, error) {
@@ -168,13 +182,13 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 	if err != nil {
 		message := normalizeRunnerError(err)
 		m.appendLog(state, logLine(message))
-		m.finish(state, "failed", message)
+		m.finish(state, req, "failed", message)
 		return
 	}
 
 	m.setProgress(state, 100)
 	m.appendLog(state, logLine("completed"))
-	m.finish(state, "succeeded", "")
+	m.finish(state, req, "succeeded", "")
 }
 
 func (m *Manager) Close() {
@@ -212,15 +226,20 @@ func (m *Manager) appendLog(state *taskState, content string) {
 	state.log += content
 }
 
-func (m *Manager) finish(state *taskState, status, message string) {
+func (m *Manager) finish(state *taskState, req StartRequest, status, message string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	state.task.Status = status
 	state.task.Message = strings.TrimSpace(message)
 	m.latest = state
 	if m.current == state {
 		m.current = nil
+	}
+	hook := m.onTaskFinished
+	task := state.task
+	m.mu.Unlock()
+
+	if hook != nil {
+		hook(req, task)
 	}
 }
 

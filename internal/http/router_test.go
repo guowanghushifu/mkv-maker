@@ -90,6 +90,21 @@ func TestProtectedGetCurrentJobLogUsesCurrentLogHandler(t *testing.T) {
 	}
 }
 
+func TestProtectedPostReleaseMountedISOUsesHandler(t *testing.T) {
+	router := testDependenciesWithAuthBypass(func(deps *Dependencies) {
+		deps.ISOMountRelease = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/iso/release-mounted", nil)
+	res := httptest.NewRecorder()
+
+	NewRouter(router).ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+}
+
 func testDependencies() Dependencies {
 	return testDependenciesWithAuthBypass(nil)
 }
@@ -105,17 +120,18 @@ func testDependenciesWithAuthBypass(mutator func(*Dependencies)) Dependencies {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 			})
 		},
-		Login:          noop,
-		Logout:         noop,
-		ConfigGet:      noop,
-		SourcesScan:    noop,
-		SourcesList:    noop,
-		SourcesResolve: noop,
-		BDInfoParse:    noop,
-		DraftsPreview:  noop,
-		JobsCreate:     noop,
-		JobsCurrent:    noop,
-		JobsCurrentLog: noop,
+		Login:           noop,
+		Logout:          noop,
+		ConfigGet:       noop,
+		SourcesScan:     noop,
+		SourcesList:     noop,
+		SourcesResolve:  noop,
+		BDInfoParse:     noop,
+		DraftsPreview:   noop,
+		JobsCreate:      noop,
+		JobsCurrent:     noop,
+		JobsCurrentLog:  noop,
+		ISOMountRelease: noop,
 	}
 	if mutator != nil {
 		mutator(&deps)

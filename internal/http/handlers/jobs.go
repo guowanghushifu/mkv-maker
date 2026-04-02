@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,14 +10,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/guowanghushifu/mkv-maker/internal/isomount"
+	"github.com/guowanghushifu/mkv-maker/internal/media"
 	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 type JobsHandler struct {
-	Tasks     tasksManager
-	InputDir  string
-	OutputDir string
+	Tasks      tasksManager
+	InputDir   string
+	OutputDir  string
+	Scanner    SourceScanner
+	ISOManager ISOJobManager
 }
 
 type tasksManager interface {
@@ -25,8 +30,44 @@ type tasksManager interface {
 	CurrentLog() (string, error)
 }
 
+type ISOJobManager interface {
+	EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error)
+	EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error)
+	ReleaseSource(ctx context.Context, sourceID string) error
+	ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error)
+}
+
+type isoJobManagerAdapter struct {
+	manager *isomount.Manager
+}
+
+func NewISOJobManagerAdapter(manager *isomount.Manager) ISOJobManager {
+	if manager == nil {
+		return nil
+	}
+	return isoJobManagerAdapter{manager: manager}
+}
+
+func (a isoJobManagerAdapter) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
+	return a.manager.EnsureMounted(ctx, sourceID, isoPath)
+}
+
+func (a isoJobManagerAdapter) EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error) {
+	return a.manager.EnsureMountedAndAcquireLease(ctx, sourceID, isoPath)
+}
+
+func (a isoJobManagerAdapter) ReleaseSource(ctx context.Context, sourceID string) error {
+	_, err := a.manager.ReleaseSource(ctx, sourceID)
+	return err
+}
+
+func (a isoJobManagerAdapter) ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
+	return a.manager.ReleaseSourceIfLeaseGeneration(ctx, sourceID, generation)
+}
+
 type createJobRequest struct {
 	Source struct {
+		ID   string `json:"id"`
 		Name string `json:"name"`
 		Path string `json:"path"`
 		Type string `json:"type"`
@@ -44,11 +85,25 @@ type createJobRequest struct {
 
 const createJobBodyLimit = 2 << 20
 
-func NewJobsHandler(tasks tasksManager, inputDir, outputDir string) *JobsHandler {
+func NewJobsHandler(tasks tasksManager, inputDir, outputDir string, deps ...any) *JobsHandler {
+	var manager ISOJobManager
+	var scanner SourceScanner
+	for _, dep := range deps {
+		switch v := dep.(type) {
+		case SourceScanner:
+			scanner = v
+		case ISOJobManager:
+			manager = v
+		case *isomount.Manager:
+			manager = NewISOJobManagerAdapter(v)
+		}
+	}
 	return &JobsHandler{
-		Tasks:     tasks,
-		InputDir:  strings.TrimSpace(inputDir),
-		OutputDir: strings.TrimSpace(outputDir),
+		Tasks:      tasks,
+		InputDir:   strings.TrimSpace(inputDir),
+		OutputDir:  strings.TrimSpace(outputDir),
+		Scanner:    scanner,
+		ISOManager: manager,
 	}
 }
 
@@ -80,16 +135,13 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	if sourceType := strings.TrimSpace(req.Source.Type); sourceType != "" && !strings.EqualFold(sourceType, "bdmv") {
+	sourceType := strings.ToLower(strings.TrimSpace(req.Source.Type))
+	if sourceType != "" && sourceType != "bdmv" && sourceType != "iso" {
 		http.Error(w, "only bdmv sources are supported", http.StatusBadRequest)
 		return
 	}
-	if !isPathWithinRoot(h.InputDir, req.Source.Path) {
+	if sourceType != "iso" && !isPathWithinRoot(h.InputDir, req.Source.Path) {
 		http.Error(w, "source path is outside input root", http.StatusBadRequest)
-		return
-	}
-	if _, err := os.Stat(req.Source.Path); err != nil {
-		http.Error(w, "source path does not exist", http.StatusBadRequest)
 		return
 	}
 	if err := validateNewOutputPathWithinRoot(h.OutputDir, req.OutputPath); err != nil {
@@ -101,15 +153,6 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid bdinfo payload", http.StatusBadRequest)
 		return
-	}
-	payloadJSON := strings.TrimSpace(string(body))
-	if payloadJSON == "" {
-		encoded, err := json.Marshal(req)
-		if err != nil {
-			http.Error(w, "failed to encode job payload", http.StatusInternalServerError)
-			return
-		}
-		payloadJSON = string(encoded)
 	}
 
 	playlistName := strings.ToUpper(strings.TrimSpace(parsed.PlaylistName))
@@ -130,16 +173,139 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "draft playlist mismatch", http.StatusBadRequest)
 		return
 	}
-	sourcePlaylistRoot := strings.TrimSpace(req.Source.Path)
-	if strings.EqualFold(filepath.Base(sourcePlaylistRoot), "BDMV") {
-		sourcePlaylistRoot = filepath.Dir(sourcePlaylistRoot)
+
+	sourceID := strings.TrimSpace(req.Source.ID)
+	sourceName := strings.TrimSpace(req.Source.Name)
+	sourcePath := strings.TrimSpace(req.Source.Path)
+	sourcePlaylistRoot := sourcePath
+	sourceLeaseGeneration := uint64(0)
+	isoMounted := false
+	releaseMountedISO := func() {
+		if !isoMounted || h.ISOManager == nil || sourceID == "" {
+			return
+		}
+		if sourceLeaseGeneration != 0 {
+			_, _ = h.ISOManager.ReleaseSourceIfLeaseGeneration(context.Background(), sourceID, sourceLeaseGeneration)
+			return
+		}
+		_ = h.ISOManager.ReleaseSource(context.Background(), sourceID)
+	}
+
+	switch sourceType {
+	case "iso":
+		if h.Scanner == nil {
+			http.Error(w, "jobs source scanner is not configured", http.StatusInternalServerError)
+			return
+		}
+		if sourceID == "" {
+			http.Error(w, "missing source id", http.StatusBadRequest)
+			return
+		}
+		sources, err := h.Scanner.Scan(h.InputDir)
+		if err != nil {
+			http.Error(w, "failed to scan sources", http.StatusInternalServerError)
+			return
+		}
+		source, ok := findSourceByID(sources, sourceID)
+		if !ok {
+			http.Error(w, "source not found", http.StatusNotFound)
+			return
+		}
+		if source.Type != media.SourceISO {
+			http.Error(w, "selected source is not an iso", http.StatusBadRequest)
+			return
+		}
+		if !isPathWithinRoot(h.InputDir, source.Path) {
+			http.Error(w, "source path is outside input root", http.StatusBadRequest)
+			return
+		}
+		sourceID = source.ID
+		sourceName = source.Name
+		sourcePath = source.Path
+		if _, err := os.Stat(sourcePath); err != nil {
+			http.Error(w, "source path does not exist", http.StatusBadRequest)
+			return
+		}
+		if h.ISOManager == nil {
+			http.Error(w, "iso manager is not configured", http.StatusInternalServerError)
+			return
+		}
+		mountedRoot, leaseGeneration, err := h.ISOManager.EnsureMountedAndAcquireLease(r.Context(), sourceID, sourcePath)
+		if err != nil {
+			http.Error(w, "failed to mount iso source", http.StatusBadRequest)
+			return
+		}
+		isoMounted = true
+		sourceLeaseGeneration = leaseGeneration
+		sourcePlaylistRoot = mountedRoot
+		sourcePath = mountedRoot
+		payloadJSON, err := rewriteMountedISOPayloadJSON(body, mountedRoot, sourceID, sourceName)
+		if err != nil {
+			releaseMountedISO()
+			http.Error(w, "failed to encode job payload", http.StatusInternalServerError)
+			return
+		}
+		if _, err := findPlaylistFilePath(sourcePlaylistRoot, playlistName); err != nil {
+			releaseMountedISO()
+			http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
+			return
+		}
+		startRequest := remux.StartRequest{
+			SourceID:              sourceID,
+			SourceType:            strings.TrimSpace(string(source.Type)),
+			SourceLeaseGeneration: sourceLeaseGeneration,
+			SourceName:            sourceName,
+			OutputName:            strings.TrimSpace(req.OutputFilename),
+			OutputPath:            strings.TrimSpace(req.OutputPath),
+			PlaylistName:          playlistName,
+			PayloadJSON:           payloadJSON,
+		}
+		task, err := h.Tasks.Start(startRequest)
+		if err != nil {
+			releaseMountedISO()
+			if errors.Is(err, remux.ErrTaskAlreadyRunning) {
+				http.Error(w, "task already running", http.StatusConflict)
+				return
+			}
+			http.Error(w, "failed to create job", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(task); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		}
+		return
+	case "bdmv":
+		if _, err := os.Stat(sourcePath); err != nil {
+			http.Error(w, "source path does not exist", http.StatusBadRequest)
+			return
+		}
+		if strings.EqualFold(filepath.Base(sourcePlaylistRoot), "BDMV") {
+			sourcePlaylistRoot = filepath.Dir(sourcePlaylistRoot)
+		}
+	default:
+		http.Error(w, "only bdmv sources are supported", http.StatusBadRequest)
+		return
 	}
 	if _, err := findPlaylistFilePath(sourcePlaylistRoot, playlistName); err != nil {
 		http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
 		return
 	}
+	payloadJSON := strings.TrimSpace(string(body))
+	if payloadJSON == "" {
+		encoded, err := json.Marshal(req)
+		if err != nil {
+			http.Error(w, "failed to encode job payload", http.StatusInternalServerError)
+			return
+		}
+		payloadJSON = string(encoded)
+	}
 	startRequest := remux.StartRequest{
-		SourceName:   strings.TrimSpace(req.Source.Name),
+		SourceID:     sourceID,
+		SourceType:   strings.TrimSpace(req.Source.Type),
+		SourceName:   sourceName,
 		OutputName:   strings.TrimSpace(req.OutputFilename),
 		OutputPath:   strings.TrimSpace(req.OutputPath),
 		PlaylistName: playlistName,
@@ -160,6 +326,29 @@ func (h *JobsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(task); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+func rewriteMountedISOPayloadJSON(body []byte, mountedRoot, sourceID, sourceName string) (string, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", err
+	}
+
+	source, _ := payload["source"].(map[string]any)
+	if source == nil {
+		source = map[string]any{}
+		payload["source"] = source
+	}
+	source["id"] = sourceID
+	source["name"] = sourceName
+	source["path"] = mountedRoot
+	source["type"] = "bdmv"
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }
 
 func (h *JobsHandler) Current(w http.ResponseWriter, r *http.Request) {

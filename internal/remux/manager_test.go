@@ -233,6 +233,40 @@ func TestManagerFailureTransitionKeepsLatestAndFailureLog(t *testing.T) {
 	}
 }
 
+func TestManagerCallsOnTaskFinishedHook(t *testing.T) {
+	runner := &stubRunner{output: "ok"}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	done := make(chan StartRequest, 1)
+	manager.SetOnTaskFinished(func(req StartRequest, task Task) {
+		if task.Status == "succeeded" {
+			done <- req
+		}
+	})
+	_, err := manager.Start(StartRequest{
+		SourceID:     "movies-nightcrawler-iso",
+		SourceType:   "iso",
+		SourceName:   "Nightcrawler",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	select {
+	case req := <-done:
+		if req.SourceID != "movies-nightcrawler-iso" {
+			t.Fatalf("unexpected hook request %+v", req)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected terminal hook to run")
+	}
+}
+
 func TestManagerCloseCancelsInFlightTask(t *testing.T) {
 	runner := &controlledRunner{
 		started: make(chan struct{}),
