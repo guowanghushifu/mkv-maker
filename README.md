@@ -1,7 +1,10 @@
 # mkv-remux-web
 
 `mkv-remux-web` 是一个用于蓝光盘Remux视频到mkv的Web工具。
-- 当前仅支持 **BDMV 输入**，iso请自行挂载。Linux下挂载非常简单
+- 支持 **BDMV 输入**，并可在 Linux 容器/主机上自动扫描 `.iso` 输入源。
+- `ENABLE_ISO_SCAN`（默认：`1`）：是否扫描 `.iso` 输入源；当容器环境无法执行 `mount -o loop,ro` / `umount` 时，建议设为 `0`
+- `/bd_input/iso_auto_mount`：程序保留的 ISO 自动挂载目录，扫描时会被忽略，不应放置用户输入
+- ISO 支持仅限 Linux；需要容器具备挂载 loop 设备的权限。若不满足这些条件，请先手动挂载 ISO 再使用 BDMV 输入
 ```bash
 mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 ```
@@ -33,11 +36,26 @@ services:
       - "38080:8080"
     environment:
       APP_PASSWORD: "你的登录密码"
+      ENABLE_ISO_SCAN: "1"
+    user: "0:0"
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    devices:
+      - /dev/loop-control:/dev/loop-control
+      - /dev/loop0:/dev/loop0
+      - /dev/loop1:/dev/loop1
+      - /dev/loop2:/dev/loop2
+      - /dev/loop3:/dev/loop3
     volumes:
       - ./data:/app/data           # 日志目录
-      - /dld:/bd_input:rshared     # 蓝光盘存放目录，目前不支持iso
+      - /dld:/bd_input:rshared     # 蓝光盘存放目录；ISO 文件也可放在此目录下
       - /remux:/remux              # remux输出目录
 ```
+
+如果容器内无法以 `mount -o loop,ro` 和 `umount` 完成自动挂载，请将 `ENABLE_ISO_SCAN=0`，并改为在宿主机上手动挂载 ISO 后把 BDMV 目录挂入容器。
 
 ## Docker构建和运行（本地）
 
@@ -73,5 +91,4 @@ PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scr
 ```bash
 APP_PASSWORD=change-me ./scripts/docker-run.sh
 ```
-
 
