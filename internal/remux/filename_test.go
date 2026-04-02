@@ -78,3 +78,23 @@ func TestBuildFilenameSanitizesIllegalCharacters(t *testing.T) {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
 }
+
+func TestBuildFilenamePreservesASCIIParenthesesAndRewritesUnderscores(t *testing.T) {
+	draft := Draft{
+		Title: "Alien_(1979)",
+		Video: VideoTrack{
+			Resolution: "2160p",
+			Codec:      "HEVC",
+			HDRType:    "HDR",
+		},
+		Audio: []AudioTrack{
+			{CodecLabel: "DTS_HD.MA.5.1", Selected: true, Default: true},
+		},
+	}
+
+	got := BuildFilename(draft)
+	want := "Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv"
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}

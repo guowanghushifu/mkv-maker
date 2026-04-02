@@ -25,15 +25,17 @@ export class UnauthorizedError extends Error {
 
 function normalizeCodecLabel(value: string): string {
   return value
-    .replace(/[()[\]]/g, ' ')
+    .replace(/[\[\]]/g, ' ')
+    .replace(/_/g, '.')
     .replace(/\s+/g, '.')
-    .replace(/[^A-Za-z0-9.+-]/g, '')
+    .replace(/[^A-Za-z0-9().+-]/g, '')
     .replace(/\.+/g, '.')
     .replace(/^\.+|\.+$/g, '');
 }
 
 function sanitizeFilename(name: string): string {
   return name
+    .replace(/_/g, '.')
     .replace(sanitizeCharsPattern, '')
     .replace(/\s+/g, ' ')
     .replace(/\.+/g, '.')

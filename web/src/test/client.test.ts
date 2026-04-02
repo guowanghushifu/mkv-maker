@@ -29,6 +29,34 @@ describe('buildFilenamePreview', () => {
 
     expect(filename).toBe('Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.UnknownAudio.mkv');
   });
+
+  it('preserves ascii parentheses and rewrites underscores to dots', () => {
+    const filename = buildFilenamePreview(
+      {
+        title: 'Alien_(1979)',
+        video: {
+          name: 'Main Video',
+          codec: 'HEVC',
+          resolution: '2160p',
+          hdrType: 'HDR',
+        },
+        audio: [
+          {
+            id: 'a1',
+            name: 'English',
+            language: 'eng',
+            codecLabel: 'DTS_HD.MA.5.1',
+            selected: true,
+            default: true,
+          },
+        ],
+        subtitles: [],
+      },
+      'Alien'
+    );
+
+    expect(filename).toBe('Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv');
+  });
 });
 
 describe('createApiClient currentJob', () => {

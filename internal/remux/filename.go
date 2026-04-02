@@ -46,14 +46,18 @@ func sanitizeFilename(value string) string {
 
 	for _, r := range value {
 		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
+		case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '(' || r == ')':
 			builder.WriteRune(r)
 			lastDot = false
 			lastSpace = false
-		case r == '.' || r == '+' || r == '-':
+		case r == '.' || r == '+' || r == '-' || r == '_':
+			out := r
+			if r == '_' {
+				out = '.'
+			}
 			if !lastDot && builder.Len() > 0 {
-				builder.WriteRune(r)
-				lastDot = r == '.'
+				builder.WriteRune(out)
+				lastDot = out == '.'
 				lastSpace = false
 			}
 		case unicode.IsSpace(r):
