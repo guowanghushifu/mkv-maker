@@ -274,7 +274,7 @@ func TestManagerReleaseSourceIfLeaseGenerationSkipsImmediateSameSourceHandoff(t 
 	if umountCalls != 1 {
 		t.Fatalf("expected one umount call after active lease release, got %d", umountCalls)
 	}
-	mountPath := filepath.Join(root, "movies-nightcrawler-iso")
+	mountPath := expectedMountPath(root, isoPath)
 	if _, statErr := os.Stat(mountPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected mount dir cleanup after active release, got stat error %v", statErr)
 	}
@@ -433,7 +433,7 @@ func TestManagerEnsureMountedCleansUpInvalidMountedContent(t *testing.T) {
 	if runner.calls["umount"] != 1 {
 		t.Fatalf("expected one umount call, got %d", runner.calls["umount"])
 	}
-	if _, statErr := os.Stat(filepath.Join(root, "movies-nightcrawler-iso")); !errors.Is(statErr, os.ErrNotExist) {
+	if _, statErr := os.Stat(expectedMountPath(root, isoPath)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected mount directory cleanup, got stat error %v", statErr)
 	}
 }
