@@ -235,6 +235,80 @@ describe('useRemuxWorkflow', () => {
     });
   });
 
+  it('refreshes the log again when a terminal snapshot first lands with a stale log', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      }),
+    );
+
+    let stopped = false;
+    let logRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current/stop') && method === 'POST') {
+        stopped = true;
+        return new Response('', { status: 202 });
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-04-02T00:00:00Z',
+            status: stopped ? 'failed' : 'running',
+            message: stopped ? 'Remux canceled.' : undefined,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') {
+        logRequests += 1;
+        if (!stopped) {
+          return new Response('[2026-04-02T00:00:00Z] remux started', { status: 200 });
+        }
+        return new Response(
+          logRequests === 2
+            ? '[2026-04-02T00:00:00Z] remux started'
+            : '[2026-04-02T00:00:01Z] remux canceled',
+          { status: 200 }
+        );
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+    await waitFor(() => expect(result.current.currentJob?.status).toBe('running'));
+
+    await act(async () => {
+      await result.current.handleStopCurrentJob();
+    });
+
+    await waitFor(() => {
+      expect(result.current.currentJob?.status).toBe('failed');
+      expect(result.current.currentJobLog).toContain('remux canceled');
+    });
+
+    expect(logRequests).toBe(3);
+  });
+
   it('surfaces the localized stop failure message when stopping the current remux fails', async () => {
     window.localStorage.setItem(tokenStorageKey, 'session');
     window.localStorage.setItem(localeStorageKey, 'en');
@@ -293,6 +367,72 @@ describe('useRemuxWorkflow', () => {
     });
   });
 
+  it('does not keep stopFailed when stop races with a job that already finished', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      }),
+    );
+
+    let stopAttempted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current/stop') && method === 'POST') {
+        stopAttempted = true;
+        return new Response('', { status: 404 });
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-04-02T00:00:00Z',
+            status: stopAttempted ? 'failed' : 'running',
+            message: stopAttempted ? 'Remux canceled.' : undefined,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') {
+        return new Response(
+          stopAttempted ? '[2026-04-02T00:00:01Z] remux canceled' : '[2026-04-02T00:00:00Z] remux started',
+          { status: 200 }
+        );
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+    await waitFor(() => expect(result.current.currentJob?.status).toBe('running'));
+
+    await act(async () => {
+      await result.current.handleStopCurrentJob();
+    });
+
+    await waitFor(() => {
+      expect(result.current.currentJob?.status).toBe('failed');
+      expect(result.current.currentJobLog).toContain('canceled');
+      expect(result.current.submitError).toBeNull();
+    });
+  });
+
   it('does not let a stale polling snapshot overwrite the canceled job after stop', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(tokenStorageKey, 'session');
@@ -315,7 +455,6 @@ describe('useRemuxWorkflow', () => {
     let currentJobRequests = 0;
     let currentLogRequests = 0;
     let resolveStaleJob: ((response: Response) => void) | null = null;
-    let resolveStaleLog: ((response: Response) => void) | null = null;
 
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -370,11 +509,6 @@ describe('useRemuxWorkflow', () => {
         if (currentLogRequests === 1) {
           return Promise.resolve(new Response('[2026-04-02T00:00:00Z] remux started', { status: 200 }));
         }
-        if (currentLogRequests === 2) {
-          return new Promise((resolve) => {
-            resolveStaleLog = resolve;
-          });
-        }
         return Promise.resolve(new Response('[2026-04-02T00:00:01Z] remux canceled', { status: 200 }));
       }
 
@@ -394,7 +528,6 @@ describe('useRemuxWorkflow', () => {
     });
 
     expect(resolveStaleJob).not.toBeNull();
-    expect(resolveStaleLog).not.toBeNull();
 
     await act(async () => {
       await result.current.handleStopCurrentJob();
@@ -419,7 +552,6 @@ describe('useRemuxWorkflow', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       );
-      resolveStaleLog?.(new Response('[2026-04-02T00:00:00Z] remux started', { status: 200 }));
       await Promise.resolve();
     });
 

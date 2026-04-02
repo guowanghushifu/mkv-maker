@@ -260,10 +260,14 @@ export function useRemuxWorkflow() {
   const loadCurrentJobSnapshot = async () => {
     const requestId = currentJobSnapshotRequestRef.current + 1;
     currentJobSnapshotRequestRef.current = requestId;
-    const [nextJob, nextLog] = await Promise.all([
-      api.currentJob(token ?? undefined),
-      api.currentJobLog(token ?? undefined),
-    ]);
+    const nextJob = await api.currentJob(token ?? undefined);
+    if (!nextJob) {
+      return { requestId, nextJob, nextLog: '' };
+    }
+    let nextLog = await api.currentJobLog(token ?? undefined);
+    if (nextJob.status !== 'running') {
+      nextLog = await api.currentJobLog(token ?? undefined);
+    }
     return { requestId, nextJob, nextLog: nextJob ? nextLog : '' };
   };
 
@@ -382,6 +386,19 @@ export function useRemuxWorkflow() {
       if (error instanceof UnauthorizedError) {
         handleUnauthorized();
         return;
+      }
+      try {
+        const snapshot = await loadCurrentJobSnapshot();
+        const applied = applyCurrentJobSnapshot(snapshot);
+        if (applied && snapshot.nextJob && snapshot.nextJob.status !== 'running') {
+          setSubmitError(null);
+          return;
+        }
+      } catch (refreshError) {
+        if (refreshError instanceof UnauthorizedError) {
+          handleUnauthorized();
+          return;
+        }
       }
       setSubmitError(text.app.stopFailed);
     } finally {
