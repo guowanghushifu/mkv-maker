@@ -35,6 +35,7 @@ export function useRemuxWorkflow() {
   const [sources, setSources] = useState<SourceEntry[]>(() => initialWorkflow?.sources ?? []);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(() => initialWorkflow?.selectedSourceId ?? null);
   const [scanning, setScanning] = useState(false);
+  const [releasingMountedISOs, setReleasingMountedISOs] = useState(false);
   const [bdinfoText, setBdinfoText] = useState(() => initialWorkflow?.bdinfoText ?? '');
   const [parsedBDInfo, setParsedBDInfo] = useState<ParsedBDInfo | null>(() => initialWorkflow?.parsedBDInfo ?? null);
   const [bdinfoError, setBdinfoError] = useState<string | null>(null);
@@ -102,6 +103,7 @@ export function useRemuxWorkflow() {
     setCurrentJob(null);
     setCurrentJobLog('');
     setScanError(null);
+    setReleasingMountedISOs(false);
   };
 
   const handleUnauthorized = () => {
@@ -182,6 +184,19 @@ export function useRemuxWorkflow() {
       setScanError(error instanceof Error ? error.message : text.app.scanFailed);
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleReleaseMountedISOs = async () => {
+    setReleasingMountedISOs(true);
+    try {
+      await api.releaseMountedISOs(token ?? undefined);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        handleUnauthorized();
+      }
+    } finally {
+      setReleasingMountedISOs(false);
     }
   };
 
@@ -330,6 +345,7 @@ export function useRemuxWorkflow() {
     selectedSourceId,
     selectedSource,
     scanning,
+    releasingMountedISOs,
     bdinfoText,
     parsedBDInfo,
     bdinfoError,
@@ -356,6 +372,7 @@ export function useRemuxWorkflow() {
       setDraft(normalizeDraft(nextDraft));
     },
     handleLogin,
+    handleReleaseMountedISOs,
     handleScan,
     handleSourceSelect,
     handleParseBDInfo,

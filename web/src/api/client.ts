@@ -1,4 +1,11 @@
-import type { Draft, DraftTrack, Job, ParsedBDInfo, SourceEntry } from './types';
+import type {
+  Draft,
+  DraftTrack,
+  Job,
+  ParsedBDInfo,
+  ReleaseMountedISOsResult,
+  SourceEntry,
+} from './types';
 
 type SubmitJobRequest = {
   source: SourceEntry;
@@ -124,6 +131,14 @@ export function createApiClient(basePath = '/api') {
 
     async scanSources(token?: string): Promise<SourceEntry[]> {
       return await requestJSON<SourceEntry[]>(`${basePath}/sources/scan`, { method: 'POST' }, token);
+    },
+
+    async releaseMountedISOs(token?: string): Promise<ReleaseMountedISOsResult> {
+      return await requestJSON<ReleaseMountedISOsResult>(
+        `${basePath}/iso/release-mounted`,
+        { method: 'POST' },
+        token
+      );
     },
 
     async parseBDInfo(rawText: string, token?: string): Promise<ParsedBDInfo> {

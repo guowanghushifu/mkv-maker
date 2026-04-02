@@ -47,6 +47,8 @@ type MessageSet = {
   scan: {
     title: string;
     subtitle: string;
+    releaseMountedISOsButton: string;
+    releasingMountedISOsButton: string;
     scanButton: string;
     scanningButton: string;
     nextButton: string;
@@ -60,6 +62,7 @@ type MessageSet = {
       modified: string;
     };
     typeBDMV: string;
+    typeISO: string;
     selectSource: (name: string) => string;
   };
   bdinfo: {
@@ -201,6 +204,8 @@ export const messages: Record<Locale, MessageSet> = {
     scan: {
       title: '扫描片源',
       subtitle: '仅支持已解压的 BDMV 目录作为工作流输入。',
+      releaseMountedISOsButton: '释放已挂载 ISO',
+      releasingMountedISOsButton: '正在释放 ISO...',
       scanButton: '扫描片源',
       scanningButton: '扫描中...',
       nextButton: '下一步',
@@ -214,6 +219,7 @@ export const messages: Record<Locale, MessageSet> = {
         modified: '修改时间',
       },
       typeBDMV: 'BDMV 目录',
+      typeISO: 'ISO 文件',
       selectSource: (name: string) => `选择 ${name}`,
     },
     bdinfo: {
@@ -353,6 +359,8 @@ export const messages: Record<Locale, MessageSet> = {
     scan: {
       title: 'Scan Sources',
       subtitle: 'Only extracted BDMV folders are accepted as workflow input.',
+      releaseMountedISOsButton: 'Release Mounted ISOs',
+      releasingMountedISOsButton: 'Releasing Mounted ISOs...',
       scanButton: 'Scan Sources',
       scanningButton: 'Scanning...',
       nextButton: 'Continue to BDInfo',
@@ -366,6 +374,7 @@ export const messages: Record<Locale, MessageSet> = {
         modified: 'Modified',
       },
       typeBDMV: 'BDMV Directory',
+      typeISO: 'ISO File',
       selectSource: (name: string) => `Select ${name}`,
     },
     bdinfo: {
