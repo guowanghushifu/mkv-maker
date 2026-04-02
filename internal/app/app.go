@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
+
+var runtimeGOOS = runtime.GOOS
 
 type App struct {
 	Config         config.Config
@@ -41,13 +44,18 @@ func New(cfg config.Config) (*App, error) {
 	}
 
 	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
-	isoManager := isomount.NewManager(filepath.Join(cfg.InputDir, "iso_auto_mount"), time.Hour, nil)
-	startupCleanup := isoManager.CleanupResidualMountDirs(context.Background())
-	if startupCleanup.Failed > 0 {
-		log.Printf("iso startup cleanup completed with %d failures", startupCleanup.Failed)
+	enableISOScan := cfg.EnableISOScan && runtimeGOOS == "linux"
+
+	var isoManager *isomount.Manager
+	if enableISOScan {
+		isoManager = isomount.NewManager(filepath.Join(cfg.InputDir, "iso_auto_mount"), time.Hour, nil)
+		startupCleanup := isoManager.CleanupResidualMountDirs(context.Background())
+		if startupCleanup.Failed > 0 {
+			log.Printf("iso startup cleanup completed with %d failures", startupCleanup.Failed)
+		}
+		go isoManager.RunJanitor(lifetimeCtx, time.Minute)
 	}
-	go isoManager.RunJanitor(lifetimeCtx, time.Minute)
-	scanner := media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), cfg.EnableISOScan)
+	scanner := media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), enableISOScan)
 
 	cookieAuth := auth.NewCookieAuth(cfg.AppPassword, time.Duration(cfg.SessionMaxAge)*time.Second)
 	authHandler := &handlers.AuthHandler{

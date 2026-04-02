@@ -2,11 +2,16 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/guowanghushifu/mkv-maker/internal/config"
 	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
@@ -128,5 +133,73 @@ func TestAppCloseStopsRemuxBeforeISOCleanup(t *testing.T) {
 	case <-tooEarlyCh:
 		t.Fatal("ISO cleanup ran before remux shutdown")
 	default:
+	}
+}
+
+func TestNewDisablesISOSupportOutsideLinux(t *testing.T) {
+	inputRoot := t.TempDir()
+	outputRoot := t.TempDir()
+	dataRoot := t.TempDir()
+
+	isoPath := filepath.Join(inputRoot, "Nightcrawler.iso")
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	originalGOOS := runtimeGOOS
+	runtimeGOOS = "darwin"
+	t.Cleanup(func() {
+		runtimeGOOS = originalGOOS
+	})
+
+	app, err := New(config.Config{
+		AppPassword:   "secret",
+		InputDir:      inputRoot,
+		OutputDir:     outputRoot,
+		DataDir:       dataRoot,
+		EnableISOScan: true,
+		SessionMaxAge: 3600,
+	})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = app.Close()
+	})
+
+	if app.isoManager != nil {
+		t.Fatal("expected iso manager to be disabled outside linux")
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"password":"secret"}`))
+	loginRec := httptest.NewRecorder()
+	app.Handler.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusNoContent {
+		t.Fatalf("expected login to succeed, got %d", loginRec.Code)
+	}
+	cookies := loginRec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected auth cookie from login")
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/sources", nil)
+	for _, cookie := range cookies {
+		listReq.AddCookie(cookie)
+	}
+	listRec := httptest.NewRecorder()
+	app.Handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected source list to succeed, got %d", listRec.Code)
+	}
+
+	var sources []struct {
+		Type string `json:"type"`
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &sources); err != nil {
+		t.Fatalf("failed to decode source list: %v", err)
+	}
+	if len(sources) != 0 {
+		t.Fatalf("expected no sources when ISO scan is disabled outside linux, got %+v", sources)
 	}
 }
