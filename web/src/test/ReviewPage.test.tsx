@@ -296,6 +296,54 @@ describe('ReviewPage', () => {
     expect(screen.getByText(/already running/i)).toBeInTheDocument();
   });
 
+  it('renders an emergency stop button next to start remux and disables it without a running task', () => {
+    const source = {
+      id: 'disc-1',
+      name: 'Nightcrawler Disc',
+      path: '/bd_input/Nightcrawler/BDMV',
+      type: 'bdmv',
+      size: 1,
+      modifiedAt: '2026-03-29T12:00:00Z',
+    } as const;
+    const bdinfo = {
+      playlistName: '00800.MPLS',
+      rawText: 'PLAYLIST REPORT',
+      audioLabels: [],
+      subtitleLabels: [],
+    } as const;
+    const draft = {
+      title: 'Nightcrawler',
+      outputDir: '/remux',
+      dvMergeEnabled: true,
+      video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
+      audio: [],
+      subtitles: [],
+    } as const;
+
+    render(
+      <ReviewPage
+        locale="en"
+        source={source}
+        bdinfo={bdinfo}
+        draft={draft}
+        outputFilename="Nightcrawler - 2160p.mkv"
+        outputPath="/remux/Nightcrawler - 2160p.mkv"
+        submitting={false}
+        stoppingJob={false}
+        startDisabled={false}
+        submitError={null}
+        currentJob={null}
+        currentLog=""
+        onBack={() => {}}
+        onStartNextRemux={() => {}}
+        onStopCurrentJob={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /emergency stop remux/i })).toBeDisabled();
+  });
+
   it('still shows start next remux when no current task snapshot is available', () => {
     const source = {
       id: 'disc-1',

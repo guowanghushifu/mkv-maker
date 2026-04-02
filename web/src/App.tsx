@@ -83,12 +83,14 @@ function App() {
           outputFilename={workflow.outputFilename || workflow.filenamePreview}
           outputPath={workflow.outputPath}
           submitting={workflow.submittingJob}
+          stoppingJob={workflow.stoppingJob}
           startDisabled={workflow.currentJob?.status === 'running'}
           submitError={workflow.submitError}
           currentJob={workflow.currentJob}
           currentLog={workflow.currentJobLog}
           onBack={() => workflow.goToStep('editor')}
           onStartNextRemux={workflow.handleStartNextRemux}
+          onStopCurrentJob={workflow.handleStopCurrentJob}
           onSubmit={workflow.handleSubmitJob}
         />
       ) : null}

@@ -125,6 +125,8 @@ type MessageSet = {
     backButton: string;
     startRemuxButton: string;
     startingRemuxButton: string;
+    stopRemuxButton: string;
+    stoppingRemuxButton: string;
     startNextRemuxButton: string;
     currentRemux: string;
     output: string;
@@ -142,6 +144,7 @@ type MessageSet = {
     releaseMountedISOsFailed: string;
     releaseMountedISOsPartial: (released: number, skippedInUse: number, failed: number) => string;
     submitFailed: string;
+    stopFailed: string;
   };
 };
 
@@ -284,6 +287,8 @@ export const messages: Record<Locale, MessageSet> = {
       backButton: '返回',
       startRemuxButton: '开始REMUX',
       startingRemuxButton: '正在REMUX...',
+      stopRemuxButton: '紧急停止 REMUX',
+      stoppingRemuxButton: '正在停止 REMUX...',
       startNextRemuxButton: '开始新的REMUX',
       currentRemux: '当前任务',
       output: '输出',
@@ -302,6 +307,7 @@ export const messages: Record<Locale, MessageSet> = {
       releaseMountedISOsPartial: (released: number, skippedInUse: number, failed: number) =>
         `已释放 ${released} 个挂载的 ISO，${skippedInUse} 个因正在使用而跳过，${failed} 个失败。`,
       submitFailed: '启动转封装任务失败。',
+      stopFailed: '停止转封装任务失败。',
     },
   },
   en: {
@@ -442,6 +448,8 @@ export const messages: Record<Locale, MessageSet> = {
       backButton: 'Back',
       startRemuxButton: 'Start Remux',
       startingRemuxButton: 'Starting Remux...',
+      stopRemuxButton: 'Emergency Stop Remux',
+      stoppingRemuxButton: 'Stopping Remux...',
       startNextRemuxButton: 'Start Next Remux',
       currentRemux: 'Current Remux',
       output: 'Output',
@@ -460,6 +468,7 @@ export const messages: Record<Locale, MessageSet> = {
       releaseMountedISOsPartial: (released: number, skippedInUse: number, failed: number) =>
         `Released ${released} mounted ISOs, ${skippedInUse} skipped because in use, ${failed} failed.`,
       submitFailed: 'Failed to start remux job.',
+      stopFailed: 'Failed to stop remux job.',
     },
   },
 };

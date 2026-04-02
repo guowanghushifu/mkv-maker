@@ -163,6 +163,77 @@ describe('useRemuxWorkflow', () => {
     });
   });
 
+  it('stops the running remux and refreshes the current task snapshot', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      }),
+    );
+
+    let stopped = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current/stop') && method === 'POST') {
+        stopped = true;
+        return new Response('', { status: 202 });
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-04-02T00:00:00Z',
+            status: stopped ? 'failed' : 'running',
+            message: stopped ? 'Remux canceled.' : undefined,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') {
+        return new Response(
+          stopped ? '[2026-04-02T00:00:01Z] remux canceled' : '[2026-04-02T00:00:00Z] remux started',
+          { status: 200 }
+        );
+      }
+      if (url.endsWith('/api/sources/scan') && method === 'POST') {
+        return new Response(JSON.stringify([source]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+    await waitFor(() => expect(result.current.currentJob?.status).toBe('running'));
+
+    await act(async () => {
+      await result.current.handleStopCurrentJob();
+    });
+
+    await waitFor(() => {
+      expect(result.current.currentJob?.status).toBe('failed');
+      expect(result.current.currentJob?.message).toBe('Remux canceled.');
+      expect(result.current.currentJobLog).toContain('canceled');
+    });
+  });
+
   it('clears workflow editing state and rescans sources when starting the next remux', async () => {
     window.localStorage.setItem(tokenStorageKey, 'session');
     window.localStorage.setItem(localeStorageKey, 'en');

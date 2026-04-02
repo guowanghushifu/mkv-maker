@@ -47,6 +47,7 @@ export function useRemuxWorkflow() {
   const [outputFilename, setOutputFilename] = useState(() => initialWorkflow?.outputFilename ?? '');
   const [filenameEdited, setFilenameEdited] = useState(() => initialWorkflow?.filenameEdited ?? false);
   const [submittingJob, setSubmittingJob] = useState(false);
+  const [stoppingJob, setStoppingJob] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [currentJobLog, setCurrentJobLog] = useState('');
@@ -99,6 +100,7 @@ export function useRemuxWorkflow() {
     setOutputFilename('');
     setFilenameEdited(false);
     setSubmittingJob(false);
+    setStoppingJob(false);
     setSubmitError(null);
     setCurrentJob(null);
     setCurrentJobLog('');
@@ -341,6 +343,29 @@ export function useRemuxWorkflow() {
     }
   };
 
+  const handleStopCurrentJob = async () => {
+    if (!currentJob || currentJob.status !== 'running') {
+      return;
+    }
+
+    setStoppingJob(true);
+    setSubmitError(null);
+    try {
+      await api.stopCurrentJob(token ?? undefined);
+      const { nextJob, nextLog } = await loadCurrentJobSnapshot();
+      setCurrentJob(nextJob);
+      setCurrentJobLog(nextJob ? nextLog : '');
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        handleUnauthorized();
+        return;
+      }
+      setSubmitError(error instanceof Error ? error.message : text.app.stopFailed);
+    } finally {
+      setStoppingJob(false);
+    }
+  };
+
   return {
     locale,
     step,
@@ -361,6 +386,7 @@ export function useRemuxWorkflow() {
     filenamePreview,
     outputFilename,
     submittingJob,
+    stoppingJob,
     submitError,
     currentJob,
     currentJobLog,
@@ -382,6 +408,7 @@ export function useRemuxWorkflow() {
     handleSourceSelect,
     handleParseBDInfo,
     handleSubmitJob,
+    handleStopCurrentJob,
     handleStartNextRemux,
   };
 }

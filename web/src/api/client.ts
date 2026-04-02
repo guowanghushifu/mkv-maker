@@ -208,6 +208,19 @@ export function createApiClient(basePath = '/api') {
       );
     },
 
+    async stopCurrentJob(token?: string): Promise<void> {
+      void token;
+      const response = await fetch(`${basePath}/jobs/current/stop`, {
+        method: 'POST',
+      });
+      if (response.status === 401) {
+        throw new UnauthorizedError();
+      }
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+    },
+
     async currentJob(token?: string): Promise<Job | null> {
       void token;
       const response = await fetch(`${basePath}/jobs/current`, {

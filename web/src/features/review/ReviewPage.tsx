@@ -13,12 +13,14 @@ type ReviewPageProps = {
   outputFilename: string;
   outputPath: string;
   submitting: boolean;
+  stoppingJob?: boolean;
   startDisabled: boolean;
   submitError: string | null;
   currentJob: Job | null;
   currentLog: string;
   onBack: () => void;
   onStartNextRemux: () => Promise<void> | void;
+  onStopCurrentJob?: () => Promise<void> | void;
   onSubmit: () => Promise<void> | void;
 };
 
@@ -43,12 +45,14 @@ export function ReviewPage({
   outputFilename,
   outputPath,
   submitting,
+  stoppingJob = false,
   startDisabled,
   submitError,
   currentJob,
   currentLog,
   onBack,
   onStartNextRemux,
+  onStopCurrentJob = () => {},
   onSubmit,
 }: ReviewPageProps) {
   const text = getMessages(locale);
@@ -96,8 +100,14 @@ export function ReviewPage({
           <Button variant="subtle" onClick={onBack}>
             {text.review.backButton}
           </Button>
-          <Button onClick={() => void onSubmit()} disabled={submitting || startDisabled}>
+          <Button onClick={() => void onSubmit()} disabled={submitting || startDisabled || stoppingJob}>
             {submitting ? text.review.startingRemuxButton : text.review.startRemuxButton}
+          </Button>
+          <Button
+            onClick={() => void onStopCurrentJob()}
+            disabled={stoppingJob || currentJob?.status !== 'running'}
+          >
+            {stoppingJob ? text.review.stoppingRemuxButton : text.review.stopRemuxButton}
           </Button>
         </div>
         <div className="review-actions-secondary">

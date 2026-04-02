@@ -111,6 +111,18 @@ describe('createApiClient currentJob', () => {
       commandPreview: 'mkvmerge\n  --output\n  /remux/Nightcrawler - 2160p.mkv',
     });
   });
+
+  it('posts to stop the current job', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toMatch(/\/api\/jobs\/current\/stop$/);
+      expect(init?.method).toBe('POST');
+      return new Response('', { status: 202 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(client.stopCurrentJob('session')).resolves.toBeUndefined();
+  });
 });
 
 describe('createApiClient releaseMountedISOs', () => {
