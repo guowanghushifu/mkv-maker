@@ -321,6 +321,7 @@ func parseSubtitleTableRow(line string) (subtitleRow, bool) {
 	case len(columns) == 3:
 		if looksLikeSubtitleCodec(columns[0]) {
 			row.Language = columns[1]
+			row.Description = extractTrackDescriptionFromBitrateColumn(columns[2])
 		} else {
 			row.Language = columns[0]
 			row.Description = columns[2]
@@ -459,6 +460,23 @@ func buildSubtitleLabel(row subtitleRow) string {
 		return strings.TrimSpace(row.Language)
 	}
 	return strings.TrimSpace(row.Description)
+}
+
+func extractTrackDescriptionFromBitrateColumn(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	fields := strings.Fields(value)
+	for i := 0; i < len(fields)-1; i++ {
+		if strings.EqualFold(fields[i+1], "kbps") {
+			if i+2 < len(fields) {
+				return strings.TrimSpace(strings.Join(fields[i+2:], " "))
+			}
+			return ""
+		}
+	}
+	return ""
 }
 
 func parseInlineTrackRow(body string) audioRow {

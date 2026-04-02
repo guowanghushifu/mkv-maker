@@ -135,6 +135,29 @@ Presentation Graphics           Chinese         31.415 kbps                    �
 	}
 }
 
+func TestParseExtractsSubtitleDescriptionWhenBitrateAndDescriptionUseSingleSpace(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00801.MPLS
+
+SUBTITLES:
+
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+Presentation Graphics           Chinese         126.713 kbps 简英特效
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLanguages, []string{"Chinese"}) {
+		t.Fatalf("expected subtitle language Chinese, got %+v", parsed.SubtitleLanguages)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLabels, []string{"简英特效"}) {
+		t.Fatalf("expected subtitle label 简英特效, got %+v", parsed.SubtitleLabels)
+	}
+}
+
 func TestParseReturnsErrorWhenNoRecognizedFields(t *testing.T) {
 	_, err := Parse("this is not a bdinfo log")
 	if err == nil {
