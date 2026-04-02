@@ -5,6 +5,7 @@ IMAGE_TAG="${IMAGE_TAG:-mkv-remux-web:local}"
 NO_CACHE="${NO_CACHE:-0}"
 PLATFORMS="${PLATFORMS:-}"
 PUSH="${PUSH:-0}"
+BUILD_TIME="${BUILD_TIME:-$(TZ=Asia/Shanghai date '+%Y.%m.%d %H:%M')}"
 
 if ! docker buildx version >/dev/null 2>&1; then
   echo "Docker Buildx is required for this script."
@@ -48,6 +49,7 @@ else
   exit 1
 fi
 
+build_args+=(--build-arg "BUILD_TIME=${BUILD_TIME}")
 build_args+=(-t "${IMAGE_TAG}" .)
 
 docker "${build_args[@]}"

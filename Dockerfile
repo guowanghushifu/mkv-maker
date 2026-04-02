@@ -1,4 +1,6 @@
 FROM node:24-trixie-slim AS web-build
+ARG BUILD_TIME
+ENV VITE_BUILD_TIME=${BUILD_TIME}
 WORKDIR /src/web
 
 COPY web/package*.json ./
