@@ -58,6 +58,11 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest
 
+      - name: Generate build time
+        id: build_time
+        run: |
+          echo "value=$(TZ=Asia/Shanghai date '+%Y.%m.%d %H:%M')" >>"${GITHUB_OUTPUT}"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
@@ -66,5 +71,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_TIME=${{ steps.build_time.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
