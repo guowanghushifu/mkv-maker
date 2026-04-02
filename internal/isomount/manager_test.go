@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,13 @@ func assertReadableMountDirShape(t *testing.T, name string) {
 
 func expectedMountPath(root, isoPath string) string {
 	return filepath.Join(root, buildMountDirName(root, isoPath))
+}
+
+// legacyDoubleEscapedMountDirName reproduces the old bug where an already
+// escaped stable ISO ID was escaped again before being used as the mount dir.
+func legacyDoubleEscapedMountDirName(relPath string) string {
+	onceEscaped := url.PathEscape(filepath.ToSlash(filepath.Clean(relPath)))
+	return url.PathEscape(onceEscaped)
 }
 
 func TestBuildMountDirNamePreservesChineseWithoutEscaping(t *testing.T) {
@@ -1051,7 +1059,12 @@ func TestManagerCleanupResidualMountDirsRemovesLeftoverUnmountedDirAfterRestart(
 
 func TestManagerCleanupResidualMountDirsRemovesLegacyEscapedMountDir(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "iso_auto_mount")
-	legacyDir := filepath.Join(root, "%25E9%2580%259F%25E5%25BA%25A6%252FFurious_Seven.iso")
+	legacyRel := filepath.Join("速度与激情7.Furious Seven 2015", "速度与激情7.iso")
+	legacyDirName := legacyDoubleEscapedMountDirName(legacyRel)
+	if !strings.Contains(legacyDirName, "%25") || !strings.Contains(legacyDirName, "%252F") {
+		t.Fatalf("expected legacy dir to be double-escaped, got %q", legacyDirName)
+	}
+	legacyDir := filepath.Join(root, legacyDirName)
 	if err := os.MkdirAll(filepath.Join(legacyDir, "BDMV", "PLAYLIST"), 0o755); err != nil {
 		t.Fatal(err)
 	}
