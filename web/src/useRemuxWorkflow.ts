@@ -162,9 +162,7 @@ export function useRemuxWorkflow() {
     setScanning(true);
     setScanError(null);
     try {
-      const scannedSources = (await api.scanSources(token ?? undefined)).filter(
-        (source) => source.type === 'bdmv'
-      );
+      const scannedSources = await api.scanSources(token ?? undefined);
       setSources(scannedSources);
       if (scannedSources.length === 0) {
         setSelectedSourceId(null);
@@ -191,10 +189,13 @@ export function useRemuxWorkflow() {
     setReleasingMountedISOs(true);
     try {
       await api.releaseMountedISOs(token ?? undefined);
+      setScanError(null);
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         handleUnauthorized();
+        return;
       }
+      setScanError(text.app.releaseMountedISOsFailed);
     } finally {
       setReleasingMountedISOs(false);
     }

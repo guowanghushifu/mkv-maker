@@ -190,10 +190,8 @@ describe('ScanPage', () => {
   });
 
   it('renders the release button before scan sources and shows the ISO badge', () => {
-    const ScanPageAny = ScanPage as any;
-
     render(
-      <ScanPageAny
+      <ScanPage
         locale="en"
         loading={false}
         releasingMountedISOs={false}
