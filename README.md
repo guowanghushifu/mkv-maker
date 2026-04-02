@@ -1,10 +1,10 @@
 # mkv-remux-web
 
 `mkv-remux-web` 是一个用于蓝光盘Remux视频到mkv的Web工具。
-- 支持 **BDMV 输入**，并可在 Linux 容器/主机上自动扫描 `.iso` 输入源。
-- `ENABLE_ISO_SCAN`（默认：`1`）：是否扫描 `.iso` 输入源；当容器环境无法执行 `mount -o loop,ro` / `umount` 时，建议设为 `0`
+- 支持 **BDMV 输入**，并可在 Linux 容器/主机上按需扫描 `.iso` 输入源。
+- `ENABLE_ISO_SCAN`（默认：`0`）：是否扫描 `.iso` 输入源；只有在需要容器内自动挂载 ISO 时才设为 `1`
 - `/bd_input/iso_auto_mount`：程序保留的 ISO 自动挂载目录，扫描时会被忽略，不应放置用户输入
-- ISO 支持仅限 Linux；需要容器具备挂载 loop 设备的权限。若不满足这些条件，请先手动挂载 ISO 再使用 BDMV 输入
+- ISO 支持仅限 Linux；启用自动扫描时需要容器具备挂载 loop 设备的权限。若不满足这些条件，请保持 `ENABLE_ISO_SCAN=0`，先手动挂载 ISO 再使用 BDMV 输入
 ```bash
 mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 ```
@@ -16,15 +16,30 @@ mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 
 一般来说你只需要填写 `APP_PASSWORD`
 - `APP_PASSWORD`（必填）：Web 应用登录密码
-- `APP_DATA_DIR`（默认：`/app/data`）：应用日志目录
-- `BD_INPUT_DIR`（默认：`/bd_input`）：挂载的 BDMV 源目录
-- `REMUX_OUTPUT_DIR`（默认：`/remux`）：remux 输出目录
-- `LISTEN_ADDR`（默认：`:8080`）：HTTP 监听地址
+- `ENABLE_ISO_SCAN`（默认：`0`）：是否扫描 `.iso` 输入源；仅在需要容器内自动挂载 ISO 时设为 `1`
 - `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie。通过 HTTPS 或反向代理访问时可显式设为 `1`
 
 默认配置允许明文 HTTP 访问；若部署在公网或 HTTPS 反向代理之后，建议显式启用 `SESSION_COOKIE_SECURE=1`。
 
-Docker Compose 示例：
+Docker Compose 示例：普通 BDMV 场景（默认，不扫描 ISO）：
+
+```yaml
+services:
+  mkv-remux-web:
+    image: guowanghushifu/mkv-remux-web:latest
+    container_name: mkv-remux-web
+    restart: unless-stopped
+    ports:
+      - "38080:8080"
+    environment:
+      APP_PASSWORD: "你的登录密码"
+    volumes:
+      - ./data:/app/data           # 日志目录
+      - /dld:/bd_input:ro          # 蓝光盘存放目录；如需使用 ISO，请先在宿主机手动挂载
+      - /remux:/remux              # remux输出目录
+```
+
+Docker Compose 示例：ISO 自动扫描场景（需要额外权限）：
 
 ```yaml
 services:
@@ -55,7 +70,7 @@ services:
       - /remux:/remux              # remux输出目录
 ```
 
-如果容器内无法以 `mount -o loop,ro` 和 `umount` 完成自动挂载，请将 `ENABLE_ISO_SCAN=0`，并改为在宿主机上手动挂载 ISO 后把 BDMV 目录挂入容器。
+如果容器内无法以 `mount -o loop,ro` 和 `umount` 完成自动挂载，请保持 `ENABLE_ISO_SCAN=0`，并改为在宿主机上手动挂载 ISO 后把 BDMV 目录挂入容器。
 
 ## Docker构建和运行（本地）
 
@@ -91,4 +106,3 @@ PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scr
 ```bash
 APP_PASSWORD=change-me ./scripts/docker-run.sh
 ```
-
