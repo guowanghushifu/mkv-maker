@@ -49,6 +49,25 @@ func (r *controlledRunner) Run(ctx context.Context, draft Draft, onOutput func(s
 	return r.output, r.err
 }
 
+type signalKilledRunner struct {
+	started chan struct{}
+}
+
+func (r *signalKilledRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+	_ = draft
+	_ = onOutput
+	if r.started != nil {
+		select {
+		case <-r.started:
+		default:
+			close(r.started)
+		}
+	}
+
+	<-ctx.Done()
+	return "", errors.New("signal: killed")
+}
+
 type streamingRunner struct {
 	started  chan struct{}
 	progress chan struct{}
@@ -307,6 +326,33 @@ func TestManagerCloseCancelsInFlightTask(t *testing.T) {
 	}
 }
 
+func TestManagerCloseTreatsSignalKilledAsCanceled(t *testing.T) {
+	runner := &signalKilledRunner{started: make(chan struct{})}
+	manager := NewManager(runner)
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	manager.Close()
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status after cancel, got %q", done.Status)
+	}
+	if !strings.Contains(strings.ToLower(done.Message), "canceled") {
+		t.Fatalf("expected canceled message after Close, got %q", done.Message)
+	}
+}
+
 func TestManagerStopCurrentReturnsNotFoundWithoutRunningTask(t *testing.T) {
 	manager := NewManager(&stubRunner{})
 	defer manager.Close()
@@ -354,6 +400,129 @@ func TestManagerStopCurrentCancelsRunningTask(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(logText), "canceled") {
 		t.Fatalf("expected canceled log line, got %q", logText)
+	}
+}
+
+func TestManagerStopCurrentTreatsSignalKilledAsCanceled(t *testing.T) {
+	runner := &signalKilledRunner{started: make(chan struct{})}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	if err := manager.StopCurrent(); err != nil {
+		t.Fatalf("StopCurrent returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status, got %q", done.Status)
+	}
+	if !strings.Contains(strings.ToLower(done.Message), "canceled") {
+		t.Fatalf("expected canceled message, got %q", done.Message)
+	}
+}
+
+func TestManagerStopCurrentMarksTaskCanceledWhenStopWinsBeforeSuccessfulCompletion(t *testing.T) {
+	runner := &controlledRunner{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	manager.mu.Lock()
+	originalCancel := manager.current.cancel
+	manager.current.cancel = func() {
+		close(runner.release)
+		time.Sleep(20 * time.Millisecond)
+		originalCancel()
+	}
+	manager.mu.Unlock()
+
+	if err := manager.StopCurrent(); err != nil {
+		t.Fatalf("StopCurrent returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status after stop request, got %q", done.Status)
+	}
+	if !strings.Contains(strings.ToLower(done.Message), "canceled") {
+		t.Fatalf("expected canceled message after stop request, got %q", done.Message)
+	}
+}
+
+func TestManagerStopCurrentMarksTaskCanceledWhenStopArrivesDuringSuccessFinalization(t *testing.T) {
+	runner := &controlledRunner{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	beforeFinishEntered := make(chan struct{})
+	releaseFinish := make(chan struct{})
+	manager.beforeSuccessFinalize = func() {
+		close(beforeFinishEntered)
+		<-releaseFinish
+	}
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	close(runner.release)
+	<-beforeFinishEntered
+
+	stopDone := make(chan error, 1)
+	go func() {
+		stopDone <- manager.StopCurrent()
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+	close(releaseFinish)
+
+	if err := <-stopDone; err != nil {
+		t.Fatalf("StopCurrent returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status after stop request, got %q", done.Status)
+	}
+	if !strings.Contains(strings.ToLower(done.Message), "canceled") {
+		t.Fatalf("expected canceled message after stop request, got %q", done.Message)
 	}
 }
 

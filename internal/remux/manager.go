@@ -43,6 +43,7 @@ type taskState struct {
 	log               string
 	progressRemainder string
 	cancel            context.CancelFunc
+	stopRequested     bool
 }
 
 type Manager struct {
@@ -55,6 +56,7 @@ type Manager struct {
 	wg             sync.WaitGroup
 	closed         bool
 	onTaskFinished func(StartRequest, Task)
+	beforeSuccessFinalize func()
 }
 
 func NewManager(runner CommandRunner) *Manager {
@@ -138,15 +140,18 @@ func (m *Manager) StopCurrent() error {
 		return ErrTaskNotFound
 	}
 
-	m.mu.RLock()
+	m.mu.Lock()
 	state := m.current
-	m.mu.RUnlock()
-
 	if state == nil || state.cancel == nil {
+		m.mu.Unlock()
 		return ErrTaskNotFound
 	}
 
-	state.cancel()
+	state.stopRequested = true
+	cancel := state.cancel
+	state.cancel = nil
+	m.mu.Unlock()
+	cancel()
 	return nil
 }
 
@@ -200,19 +205,52 @@ func (m *Manager) execute(ctx context.Context, state *taskState, req StartReques
 	}
 	m.flushProgressRemainder(state)
 
-	if err != nil {
-		message := normalizeRunnerError(err)
-		if errors.Is(err, context.Canceled) {
-			message = "remux canceled"
-		}
-		m.appendLog(state, logLine(message))
-		m.finish(state, req, "failed", message)
+	if err == nil && m.beforeSuccessFinalize != nil {
+		m.beforeSuccessFinalize()
+	}
+
+	m.finishExecution(state, req, ctx, err)
+}
+
+func (m *Manager) finishExecution(state *taskState, req StartRequest, ctx context.Context, err error) {
+	if m == nil || state == nil {
 		return
 	}
 
-	m.setProgress(state, 100)
-	m.appendLog(state, logLine("completed"))
-	m.finish(state, req, "succeeded", "")
+	var message string
+	var status string
+	if err != nil {
+		message = normalizeRunnerError(err)
+		status = "failed"
+	}
+
+	m.mu.Lock()
+	canceled := state.stopRequested || (ctx != nil && ctx.Err() != nil)
+	switch {
+	case canceled:
+		message = "remux canceled"
+		status = "failed"
+		state.log += logLine(message)
+	case err != nil:
+		state.log += logLine(message)
+	default:
+		status = "succeeded"
+		state.task.ProgressPercent = 100
+		state.log += logLine("completed")
+	}
+	state.task.Status = status
+	state.task.Message = strings.TrimSpace(message)
+	m.latest = state
+	if m.current == state {
+		m.current = nil
+	}
+	hook := m.onTaskFinished
+	task := state.task
+	m.mu.Unlock()
+
+	if hook != nil {
+		hook(req, task)
+	}
 }
 
 func (m *Manager) Close() {
@@ -250,23 +288,6 @@ func (m *Manager) appendLog(state *taskState, content string) {
 	state.log += content
 }
 
-func (m *Manager) finish(state *taskState, req StartRequest, status, message string) {
-	m.mu.Lock()
-	state.task.Status = status
-	state.task.Message = strings.TrimSpace(message)
-	m.latest = state
-	if m.current == state {
-		m.current = nil
-	}
-	hook := m.onTaskFinished
-	task := state.task
-	m.mu.Unlock()
-
-	if hook != nil {
-		hook(req, task)
-	}
-}
-
 func (m *Manager) updateProgressFromOutput(state *taskState, output string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -276,12 +297,6 @@ func (m *Manager) updateProgressFromOutput(state *taskState, output string) {
 	for _, progress := range percents {
 		state.task.ProgressPercent = progress
 	}
-}
-
-func (m *Manager) setProgress(state *taskState, progress int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	state.task.ProgressPercent = progress
 }
 
 func (m *Manager) flushProgressRemainder(state *taskState) {
