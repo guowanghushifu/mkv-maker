@@ -2,12 +2,15 @@ package isomount
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -27,6 +30,44 @@ func (r *fakeCommandRunner) Run(ctx context.Context, name string, args ...string
 	return nil
 }
 
+func testShortMountHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+func assertReadableMountDirShape(t *testing.T, name string) {
+	t.Helper()
+
+	if strings.Contains(name, "%") {
+		t.Fatalf("expected mount dir name without percent escapes, got %q", name)
+	}
+
+	idx := strings.LastIndex(name, "-")
+	if idx <= 0 {
+		t.Fatalf("expected readable-prefix-hash shape, got %q", name)
+	}
+
+	prefix := name[:idx]
+	hash := name[idx+1:]
+	if prefix == "" {
+		t.Fatalf("expected readable prefix, got %q", name)
+	}
+	if len(hash) != 12 {
+		t.Fatalf("expected 12 hex chars after dash, got %q", name)
+	}
+	for _, r := range prefix {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' {
+			continue
+		}
+		t.Fatalf("expected readable prefix, got %q", name)
+	}
+	for _, r := range hash {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			t.Fatalf("expected lowercase hex suffix, got %q", name)
+		}
+	}
+}
+
 func expectedMountPath(root, isoPath string) string {
 	return filepath.Join(root, buildMountDirName(root, isoPath))
 }
@@ -39,13 +80,16 @@ func TestBuildMountDirNamePreservesChineseWithoutEscaping(t *testing.T) {
 	}
 
 	got := buildMountDirName(root, isoPath)
+	rel, err := filepath.Rel(filepath.Dir(filepath.Clean(root)), isoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "速度与激情7-" + testShortMountHash(filepath.ToSlash(filepath.Clean(rel)))
 
-	if strings.Contains(got, "%") {
-		t.Fatalf("expected unescaped mount dir name, got %q", got)
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
 	}
-	if !strings.Contains(got, "速度与激情7") {
-		t.Fatalf("expected Chinese prefix to be preserved, got %q", got)
-	}
+	assertReadableMountDirShape(t, got)
 }
 
 func TestBuildMountDirNameCapsReadablePrefixAtFortyRunes(t *testing.T) {
@@ -53,11 +97,8 @@ func TestBuildMountDirNameCapsReadablePrefixAtFortyRunes(t *testing.T) {
 	isoPath := filepath.Join(filepath.Dir(root), "输入", "速度与激情7-Furious-Seven-2015-2in1-2160p-UHD-Blu-ray-HEVC.iso")
 
 	got := buildMountDirName(root, isoPath)
-	parts := strings.Split(got, "-")
-	if len(parts) < 2 {
-		t.Fatalf("expected prefix-hash format, got %q", got)
-	}
-	prefix := strings.Join(parts[:len(parts)-1], "-")
+	assertReadableMountDirShape(t, got)
+	prefix := strings.TrimSuffix(got, "-"+got[len(got)-12:])
 	if utf8.RuneCountInString(prefix) > 40 {
 		t.Fatalf("expected prefix to be <= 40 runes, got %d in %q", utf8.RuneCountInString(prefix), prefix)
 	}
@@ -67,16 +108,47 @@ func TestBuildMountDirNameDistinguishesSameFilenameInDifferentDirectories(t *tes
 	root := filepath.Join(t.TempDir(), "iso_auto_mount")
 	isoA := filepath.Join(filepath.Dir(root), "folder-a", "Movie.iso")
 	isoB := filepath.Join(filepath.Dir(root), "folder-b", "Movie.iso")
+	inputRoot := filepath.Dir(filepath.Clean(root))
+	relA, err := filepath.Rel(inputRoot, isoA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relB, err := filepath.Rel(inputRoot, isoB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantA := "Movie-" + testShortMountHash(filepath.ToSlash(filepath.Clean(relA)))
+	wantB := "Movie-" + testShortMountHash(filepath.ToSlash(filepath.Clean(relB)))
 
 	gotA := buildMountDirName(root, isoA)
 	gotB := buildMountDirName(root, isoB)
 
+	if gotA != wantA {
+		t.Fatalf("expected %q for %q, got %q", wantA, isoA, gotA)
+	}
+	if gotB != wantB {
+		t.Fatalf("expected %q for %q, got %q", wantB, isoB, gotB)
+	}
 	if gotA == gotB {
 		t.Fatalf("expected different mount dir names, got %q and %q", gotA, gotB)
 	}
-	if !strings.HasPrefix(gotA, "Movie-") || !strings.HasPrefix(gotB, "Movie-") {
-		t.Fatalf("expected readable Movie prefix, got %q and %q", gotA, gotB)
+}
+
+func TestBuildMountDirNameFallsBackToIsoPrefixWhenStemNormalizesAway(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "iso_auto_mount")
+	isoPath := filepath.Join(filepath.Dir(root), "symbols", "!!!.iso")
+
+	got := buildMountDirName(root, isoPath)
+	rel, err := filepath.Rel(filepath.Dir(filepath.Clean(root)), isoPath)
+	if err != nil {
+		t.Fatal(err)
 	}
+	want := "iso-" + testShortMountHash(filepath.ToSlash(filepath.Clean(rel)))
+
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+	assertReadableMountDirShape(t, got)
 }
 
 func TestManagerEnsureMountedUsesShortReadableMountDirName(t *testing.T) {
@@ -107,9 +179,16 @@ func TestManagerEnsureMountedUsesShortReadableMountDirName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureMounted returned error: %v", err)
 	}
-	if strings.Contains(filepath.Base(mountPath), "%25") || strings.Contains(filepath.Base(mountPath), "%2F") {
-		t.Fatalf("expected short readable mount dir, got %q", mountPath)
+	rel, err := filepath.Rel(filepath.Dir(filepath.Clean(root)), isoPath)
+	if err != nil {
+		t.Fatal(err)
 	}
+	wantMountDir := "速度与激情7-" + testShortMountHash(filepath.ToSlash(filepath.Clean(rel)))
+	wantMountPath := filepath.Join(root, wantMountDir)
+	if mountPath != wantMountPath {
+		t.Fatalf("expected %q, got %q", wantMountPath, mountPath)
+	}
+	assertReadableMountDirShape(t, filepath.Base(mountPath))
 }
 
 func TestManagerEnsureMountedMountsISOAndReturnsWorkspace(t *testing.T) {
@@ -133,12 +212,19 @@ func TestManagerEnsureMountedMountsISOAndReturnsWorkspace(t *testing.T) {
 	}
 	manager := NewManager(root, time.Hour, runner)
 
+	rel, err := filepath.Rel(filepath.Dir(filepath.Clean(root)), isoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantMountDir := "Nightcrawler-" + testShortMountHash(filepath.ToSlash(filepath.Clean(rel)))
+	wantMountPath := filepath.Join(root, wantMountDir)
+
 	mountPath, err := manager.EnsureMounted(context.Background(), "movies-nightcrawler-iso", isoPath)
 	if err != nil {
 		t.Fatalf("EnsureMounted returned error: %v", err)
 	}
-	if mountPath != expectedMountPath(root, isoPath) {
-		t.Fatalf("unexpected mount path %q", mountPath)
+	if mountPath != wantMountPath {
+		t.Fatalf("expected %q, got %q", wantMountPath, mountPath)
 	}
 	if runner.calls["mount"] != 1 {
 		t.Fatalf("expected one mount call, got %d", runner.calls["mount"])
