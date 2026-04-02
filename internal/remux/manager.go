@@ -42,6 +42,7 @@ type taskState struct {
 	task              Task
 	log               string
 	progressRemainder string
+	cancel            context.CancelFunc
 }
 
 type Manager struct {
@@ -112,9 +113,11 @@ func (m *Manager) Start(req StartRequest) (Task, error) {
 		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
 		Status:          "running",
 	}
+	taskCtx, taskCancel := context.WithCancel(m.ctx)
 	state := &taskState{
-		task: task,
-		log:  logLine("remux started"),
+		task:   task,
+		log:    logLine("remux started"),
+		cancel: taskCancel,
 	}
 	m.current = state
 	m.latest = state
@@ -123,10 +126,28 @@ func (m *Manager) Start(req StartRequest) (Task, error) {
 
 	go func() {
 		defer m.wg.Done()
-		m.execute(state, req)
+		defer taskCancel()
+		m.execute(taskCtx, state, req)
 	}()
 
 	return task, nil
+}
+
+func (m *Manager) StopCurrent() error {
+	if m == nil {
+		return ErrTaskNotFound
+	}
+
+	m.mu.RLock()
+	state := m.current
+	m.mu.RUnlock()
+
+	if state == nil || state.cancel == nil {
+		return ErrTaskNotFound
+	}
+
+	state.cancel()
+	return nil
 }
 
 func (m *Manager) Current() (Task, error) {
@@ -163,7 +184,7 @@ func (m *Manager) CurrentLog() (string, error) {
 	return "", ErrTaskNotFound
 }
 
-func (m *Manager) execute(state *taskState, req StartRequest) {
+func (m *Manager) execute(ctx context.Context, state *taskState, req StartRequest) {
 	if m == nil || state == nil || m.executor == nil {
 		return
 	}
@@ -173,7 +194,7 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 		m.updateProgressFromOutput(state, chunk)
 		m.appendLog(state, normalizeLogChunk(chunk))
 	}
-	output, streamed, err := m.executor.Execute(m.ctx, req, handleOutput)
+	output, streamed, err := m.executor.Execute(ctx, req, handleOutput)
 	if !streamed && output != "" {
 		handleOutput(output)
 	}
@@ -181,6 +202,9 @@ func (m *Manager) execute(state *taskState, req StartRequest) {
 
 	if err != nil {
 		message := normalizeRunnerError(err)
+		if errors.Is(err, context.Canceled) {
+			message = "remux canceled"
+		}
 		m.appendLog(state, logLine(message))
 		m.finish(state, req, "failed", message)
 		return

@@ -307,6 +307,56 @@ func TestManagerCloseCancelsInFlightTask(t *testing.T) {
 	}
 }
 
+func TestManagerStopCurrentReturnsNotFoundWithoutRunningTask(t *testing.T) {
+	manager := NewManager(&stubRunner{})
+	defer manager.Close()
+
+	if err := manager.StopCurrent(); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected ErrTaskNotFound, got %v", err)
+	}
+}
+
+func TestManagerStopCurrentCancelsRunningTask(t *testing.T) {
+	runner := &controlledRunner{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	if err := manager.StopCurrent(); err != nil {
+		t.Fatalf("StopCurrent returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.Status != "failed" {
+		t.Fatalf("expected failed status, got %q", done.Status)
+	}
+	if !strings.Contains(strings.ToLower(done.Message), "canceled") {
+		t.Fatalf("expected canceled message, got %q", done.Message)
+	}
+
+	logText, err := manager.CurrentLog()
+	if err != nil {
+		t.Fatalf("CurrentLog returned error: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(logText), "canceled") {
+		t.Fatalf("expected canceled log line, got %q", logText)
+	}
+}
+
 func TestManagerSuccessTransitionSetsCommandPreviewAndHundredPercent(t *testing.T) {
 	manager := NewManager(&stubRunner{output: "Progress: 42%\nProgress: 100%"})
 	defer manager.Close()
