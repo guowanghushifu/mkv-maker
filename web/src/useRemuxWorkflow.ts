@@ -188,8 +188,12 @@ export function useRemuxWorkflow() {
   const handleReleaseMountedISOs = async () => {
     setReleasingMountedISOs(true);
     try {
-      await api.releaseMountedISOs(token ?? undefined);
-      setScanError(null);
+      const result = await api.releaseMountedISOs(token ?? undefined);
+      if (result.failed > 0 || result.skippedInUse > 0) {
+        setScanError(text.app.releaseMountedISOsPartial(result.released, result.skippedInUse, result.failed));
+      } else {
+        setScanError(null);
+      }
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         handleUnauthorized();
