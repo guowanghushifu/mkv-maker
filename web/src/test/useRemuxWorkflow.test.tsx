@@ -287,4 +287,33 @@ describe('useRemuxWorkflow', () => {
 
     expect(result.current.scanError).toBe('Failed to release mounted ISOs.');
   });
+
+  it('surfaces a partial release summary when mounted ISOs fail on a 200 response', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/iso/release-mounted') && method === 'POST') {
+        return new Response(JSON.stringify({ released: 2, skippedInUse: 1, failed: 1 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await act(async () => {
+      await result.current.handleReleaseMountedISOs();
+    });
+
+    expect(result.current.scanError).toContain('1 failed');
+    expect(result.current.scanError).toContain('1 skipped');
+  });
 });

@@ -140,6 +140,7 @@ type MessageSet = {
     bdinfoParseFailed: string;
     currentJobRunning: string;
     releaseMountedISOsFailed: string;
+    releaseMountedISOsPartial: (released: number, skippedInUse: number, failed: number) => string;
     submitFailed: string;
   };
 };
@@ -204,13 +205,13 @@ export const messages: Record<Locale, MessageSet> = {
     },
     scan: {
       title: '扫描片源',
-      subtitle: '仅支持已解压的 BDMV 目录作为工作流输入。',
+      subtitle: '支持已解压的 BDMV 目录和已挂载的 ISO 镜像作为工作流输入。',
       releaseMountedISOsButton: '释放已挂载 ISO',
       releasingMountedISOsButton: '正在释放 ISO...',
       scanButton: '扫描片源',
       scanningButton: '扫描中...',
       nextButton: '下一步',
-      empty: '暂无片源，请先扫描。',
+      empty: '暂无片源，请先扫描 BDMV 目录或 ISO 镜像。',
       columns: {
         select: '选择',
         name: '名称',
@@ -298,6 +299,8 @@ export const messages: Record<Locale, MessageSet> = {
       bdinfoParseFailed: 'BDInfo 解析失败。',
       currentJobRunning: '已有转封装任务在运行，请等待其完成。',
       releaseMountedISOsFailed: '释放已挂载 ISO 失败。',
+      releaseMountedISOsPartial: (released: number, skippedInUse: number, failed: number) =>
+        `已释放 ${released} 个挂载的 ISO，${skippedInUse} 个因正在使用而跳过，${failed} 个失败。`,
       submitFailed: '启动转封装任务失败。',
     },
   },
@@ -360,13 +363,13 @@ export const messages: Record<Locale, MessageSet> = {
     },
     scan: {
       title: 'Scan Sources',
-      subtitle: 'Only extracted BDMV folders are accepted as workflow input.',
+      subtitle: 'Extracted BDMV folders and mounted ISO images are accepted as workflow input.',
       releaseMountedISOsButton: 'Release Mounted ISOs',
       releasingMountedISOsButton: 'Releasing Mounted ISOs...',
       scanButton: 'Scan Sources',
       scanningButton: 'Scanning...',
       nextButton: 'Continue to BDInfo',
-      empty: 'No sources yet. Run scan to discover BDMV directories.',
+      empty: 'No sources yet. Run scan to discover BDMV folders or ISO images.',
       columns: {
         select: 'Select',
         name: 'Name',
@@ -454,6 +457,8 @@ export const messages: Record<Locale, MessageSet> = {
       bdinfoParseFailed: 'BDInfo parse failed.',
       currentJobRunning: 'A remux is already running. Please wait for it to finish.',
       releaseMountedISOsFailed: 'Failed to release mounted ISOs.',
+      releaseMountedISOsPartial: (released: number, skippedInUse: number, failed: number) =>
+        `Released ${released} mounted ISOs, ${skippedInUse} skipped because in use, ${failed} failed.`,
       submitFailed: 'Failed to start remux job.',
     },
   },

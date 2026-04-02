@@ -212,4 +212,38 @@ describe('ScanPage', () => {
     ]);
     expect(screen.getByText(/ISO File/i)).toBeInTheDocument();
   });
+
+  it('updates the scan copy to mention ISO input support', () => {
+    const { rerender } = render(
+      <ScanPage
+        locale="en"
+        loading={false}
+        error={null}
+        sources={[]}
+        selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/BDMV folders and mounted ISO images/i)).toBeInTheDocument();
+
+    rerender(
+      <ScanPage
+        locale="zh"
+        loading={false}
+        error={null}
+        sources={[]}
+        selectedSourceId={null}
+        onReleaseMountedISOs={vi.fn()}
+        onScan={vi.fn()}
+        onSelectSource={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/BDMV 目录和已挂载的 ISO 镜像/i)).toBeInTheDocument();
+  });
 });
