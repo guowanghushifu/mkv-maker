@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import type { Draft, DraftTrack } from '../../api/types';
 import { Button } from '../../components/Button';
+import { Switch } from '../../components/Switch';
 import { getMessages, type Locale } from '../../i18n';
 import { moveTrackRow, setExclusiveDefault, toggleTrackSelected } from './trackTable';
 
@@ -215,9 +216,8 @@ export function TrackEditorPage({
                     />
                   </td>
                   {isAudioTable ? <td className="track-audio-format-cell">{track.codecLabel || ''}</td> : null}
-                  <td>
-                    <input
-                      type="checkbox"
+                  <td className="track-toggle-cell">
+                    <Switch
                       aria-label={text.editor.include(track.name)}
                       checked={track.selected}
                       onChange={() => {
@@ -229,9 +229,8 @@ export function TrackEditorPage({
                       }}
                     />
                   </td>
-                  <td>
-                    <input
-                      type="checkbox"
+                  <td className="track-toggle-cell">
+                    <Switch
                       aria-label={text.editor.default(track.name)}
                       checked={track.default}
                       disabled={!track.selected}

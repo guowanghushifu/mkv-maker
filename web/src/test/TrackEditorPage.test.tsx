@@ -94,11 +94,19 @@ describe('TrackEditorPage', () => {
     ).not.toBeNull();
   });
 
-  it('clears the previous default audio track when a new default is checked', () => {
+  it('renders include and default controls as switches', () => {
+    render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('switch', { name: /include english atmos/i })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /default commentary/i })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /include english atmos/i })).not.toBeInTheDocument();
+  });
+
+  it('clears the previous default audio track when a new default switch is turned on', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /default commentary/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /default commentary/i }));
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -114,7 +122,7 @@ describe('TrackEditorPage', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage locale="en" draft={createDraft()} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /include english pgs/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /include english pgs/i }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenLastCalledWith(
@@ -125,6 +133,29 @@ describe('TrackEditorPage', () => {
         ],
       }),
     );
+  });
+
+  it('keeps a default switch disabled when the track is not included', () => {
+    const onChange = vi.fn();
+    render(
+      <TrackEditorPage
+        locale="en"
+        draft={{
+          ...createDraft(),
+          subtitles: [
+            { id: 's1', name: 'English PGS', language: 'eng', selected: false, default: false },
+            { id: 's2', name: 'Signs', language: 'eng', selected: true, default: true },
+          ],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    const disabledDefault = screen.getByRole('switch', { name: /default english pgs/i });
+    expect(disabledDefault).toBeDisabled();
+
+    fireEvent.click(disabledDefault);
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('reorders audio tracks via drag and drop', () => {
