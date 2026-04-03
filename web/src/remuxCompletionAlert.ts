@@ -51,7 +51,11 @@ export async function prepareRemuxCompletionAlerts(): Promise<void> {
     if (audioContext) {
       await resumeAudioContextIfSuspended(audioContext);
     }
+  } catch {
+    // Audio warm-up is best-effort only.
+  }
 
+  try {
     const NotificationApi = globalThis.Notification;
     if (!NotificationApi || NotificationApi.permission !== 'default') {
       return;
@@ -85,8 +89,6 @@ export async function playRemuxCompletionChime(): Promise<void> {
     secondOscillator.type = 'sine';
     firstOscillator.frequency.value = 880;
     secondOscillator.frequency.value = 1174.66;
-    firstGain.gain.value = 0.05;
-    secondGain.gain.value = 0.05;
 
     firstOscillator.connect(firstGain);
     secondOscillator.connect(secondGain);
@@ -94,10 +96,16 @@ export async function playRemuxCompletionChime(): Promise<void> {
     secondGain.connect(audioContext.destination);
 
     const startTime = audioContext.currentTime;
+    firstGain.gain.setValueAtTime(0, startTime);
+    firstGain.gain.linearRampToValueAtTime(0.05, startTime + 0.02);
+    firstGain.gain.linearRampToValueAtTime(0, startTime + 0.18);
+    secondGain.gain.setValueAtTime(0, startTime + 0.08);
+    secondGain.gain.linearRampToValueAtTime(0.05, startTime + 0.1);
+    secondGain.gain.linearRampToValueAtTime(0, startTime + 0.26);
     firstOscillator.start(startTime);
     secondOscillator.start(startTime + 0.08);
-    firstOscillator.stop(startTime + 0.18);
-    secondOscillator.stop(startTime + 0.28);
+    firstOscillator.stop(startTime + 0.22);
+    secondOscillator.stop(startTime + 0.3);
   } catch {
     // Playback should never block the remux flow.
   }

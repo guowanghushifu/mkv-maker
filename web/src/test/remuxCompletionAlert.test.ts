@@ -33,6 +33,28 @@ describe('prepareRemuxCompletionAlerts', () => {
     expect(resume).toHaveBeenCalledTimes(1);
     expect(requestPermission).toHaveBeenCalledTimes(1);
   });
+
+  it('still requests notification permission when audio resume fails', async () => {
+    const resume = vi.fn().mockRejectedValue(new Error('resume failed'));
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    const AudioContextMock = vi.fn(function () {
+      return {
+        state: 'suspended',
+        resume,
+      };
+    });
+
+    vi.stubGlobal('AudioContext', AudioContextMock);
+    vi.stubGlobal('Notification', {
+      permission: 'default',
+      requestPermission,
+    });
+
+    await prepareRemuxCompletionAlerts();
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('playRemuxCompletionChime', () => {
@@ -51,11 +73,17 @@ describe('playRemuxCompletionChime', () => {
       stop: vi.fn(),
     };
     const gainOne = {
-      gain: { value: 0 },
+      gain: {
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
       connect: vi.fn(),
     };
     const gainTwo = {
-      gain: { value: 0 },
+      gain: {
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
       connect: vi.fn(),
     };
     const destination = {};
@@ -76,10 +104,22 @@ describe('playRemuxCompletionChime', () => {
 
     expect(AudioContextMock).toHaveBeenCalledTimes(1);
     expect(resume).toHaveBeenCalledTimes(1);
+    expect(oscillatorOne.frequency.value).toBe(880);
+    expect(oscillatorTwo.frequency.value).toBe(1174.66);
     expect(oscillatorOne.connect).toHaveBeenCalledTimes(1);
     expect(oscillatorTwo.connect).toHaveBeenCalledTimes(1);
     expect(gainOne.connect).toHaveBeenCalledTimes(1);
     expect(gainTwo.connect).toHaveBeenCalledTimes(1);
+    expect(gainOne.gain.setValueAtTime).toHaveBeenCalledWith(0, 0);
+    expect(gainOne.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.05, 0.02);
+    expect(gainOne.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 0.18);
+    expect(gainTwo.gain.setValueAtTime).toHaveBeenCalledWith(0, 0.08);
+    expect(gainTwo.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.05, 0.1);
+    expect(gainTwo.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 0.26);
+    expect(oscillatorOne.start).toHaveBeenCalledWith(0);
+    expect(oscillatorTwo.start).toHaveBeenCalledWith(0.08);
+    expect(oscillatorOne.stop).toHaveBeenCalledWith(0.22);
+    expect(oscillatorTwo.stop).toHaveBeenCalledWith(0.3);
     expect(oscillatorOne.stop).toHaveBeenCalledTimes(1);
     expect(oscillatorTwo.stop).toHaveBeenCalledTimes(1);
     expect(oscillatorOne.start).toHaveBeenCalledTimes(1);
