@@ -124,43 +124,32 @@ describe('prepareRemuxCompletionAlerts', () => {
 });
 
 describe('playRemuxCompletionChime', () => {
-  it('creates two oscillator tones for the completion chime when audio is available', async () => {
+  it('creates a louder five-repeat completion chime when audio is available', async () => {
     const resume = vi.fn().mockResolvedValue(undefined);
-    const oscillatorOne = {
+    const oscillators = Array.from({ length: 10 }, () => ({
       frequency: { value: 0 },
       connect: vi.fn(),
       start: vi.fn(),
       stop: vi.fn(),
-    };
-    const oscillatorTwo = {
-      frequency: { value: 0 },
-      connect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    };
-    const gainOne = {
+    }));
+    const gains = Array.from({ length: 10 }, () => ({
       gain: {
         setValueAtTime: vi.fn(),
         linearRampToValueAtTime: vi.fn(),
       },
       connect: vi.fn(),
-    };
-    const gainTwo = {
-      gain: {
-        setValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
-      },
-      connect: vi.fn(),
-    };
+    }));
     const destination = {};
+    let oscillatorIndex = 0;
+    let gainIndex = 0;
     const AudioContextMock = vi.fn(function () {
       return {
         state: 'suspended',
         resume,
         currentTime: 0,
         destination,
-        createOscillator: vi.fn().mockReturnValueOnce(oscillatorOne).mockReturnValueOnce(oscillatorTwo),
-        createGain: vi.fn().mockReturnValueOnce(gainOne).mockReturnValueOnce(gainTwo),
+        createOscillator: vi.fn(() => oscillators[oscillatorIndex++]),
+        createGain: vi.fn(() => gains[gainIndex++]),
       };
     });
 
@@ -170,26 +159,36 @@ describe('playRemuxCompletionChime', () => {
 
     expect(AudioContextMock).toHaveBeenCalledTimes(1);
     expect(resume).toHaveBeenCalledTimes(1);
-    expect(oscillatorOne.frequency.value).toBe(880);
-    expect(oscillatorTwo.frequency.value).toBe(1174.66);
-    expect(oscillatorOne.connect).toHaveBeenCalledTimes(1);
-    expect(oscillatorTwo.connect).toHaveBeenCalledTimes(1);
-    expect(gainOne.connect).toHaveBeenCalledTimes(1);
-    expect(gainTwo.connect).toHaveBeenCalledTimes(1);
-    expect(gainOne.gain.setValueAtTime).toHaveBeenCalledWith(0, 0);
-    expect(gainOne.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.05, 0.02);
-    expect(gainOne.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 0.18);
-    expect(gainTwo.gain.setValueAtTime).toHaveBeenCalledWith(0, 0.08);
-    expect(gainTwo.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.05, 0.1);
-    expect(gainTwo.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 0.26);
-    expect(oscillatorOne.start).toHaveBeenCalledWith(0);
-    expect(oscillatorTwo.start).toHaveBeenCalledWith(0.08);
-    expect(oscillatorOne.stop).toHaveBeenCalledWith(0.22);
-    expect(oscillatorTwo.stop).toHaveBeenCalledWith(0.3);
-    expect(oscillatorOne.stop).toHaveBeenCalledTimes(1);
-    expect(oscillatorTwo.stop).toHaveBeenCalledTimes(1);
-    expect(oscillatorOne.start).toHaveBeenCalledTimes(1);
-    expect(oscillatorTwo.start).toHaveBeenCalledTimes(1);
+    expect(oscillators).toHaveLength(10);
+    expect(gains).toHaveLength(10);
+
+    const expectedStarts = [0, 0.08, 0.55, 0.63, 1.1, 1.18, 1.65, 1.73, 2.2, 2.28];
+    const expectedStops = [0.22, 0.3, 0.77, 0.85, 1.32, 1.4, 1.87, 1.95, 2.42, 2.5];
+    const expectedFadeOuts = [0.18, 0.26, 0.73, 0.81, 1.28, 1.36, 1.83, 1.91, 2.38, 2.46];
+
+    oscillators.forEach((oscillator, index) => {
+      expect(oscillator.frequency.value).toBe(index % 2 === 0 ? 880 : 1174.66);
+      expect(oscillator.connect).toHaveBeenCalledTimes(1);
+      expect(oscillator.start).toHaveBeenCalledTimes(1);
+      expect(oscillator.stop).toHaveBeenCalledTimes(1);
+      expect(oscillator.start.mock.calls[0]?.[0]).toBeCloseTo(expectedStarts[index], 6);
+      expect(oscillator.stop.mock.calls[0]?.[0]).toBeCloseTo(expectedStops[index], 6);
+    });
+
+    gains.forEach((gainNode, index) => {
+      expect(gainNode.connect).toHaveBeenCalledTimes(1);
+      expect(gainNode.gain.setValueAtTime).toHaveBeenCalledTimes(1);
+      expect(gainNode.gain.linearRampToValueAtTime).toHaveBeenCalledTimes(2);
+      expect(gainNode.gain.setValueAtTime.mock.calls[0]?.[0]).toBe(0);
+      expect(gainNode.gain.setValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(expectedStarts[index], 6);
+      expect(gainNode.gain.linearRampToValueAtTime.mock.calls[0]?.[0]).toBe(0.12);
+      expect(gainNode.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(
+        expectedStarts[index] + 0.02,
+        6,
+      );
+      expect(gainNode.gain.linearRampToValueAtTime.mock.calls[1]?.[0]).toBe(0);
+      expect(gainNode.gain.linearRampToValueAtTime.mock.calls[1]?.[1]).toBeCloseTo(expectedFadeOuts[index], 6);
+    });
   });
 });
 

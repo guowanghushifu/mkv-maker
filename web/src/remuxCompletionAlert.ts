@@ -4,6 +4,31 @@ export type RemuxCompletionNotification = {
 };
 
 type AudioContextConstructor = new () => AudioContext;
+type ChimeTone = {
+  frequency: number;
+  startOffsetSeconds: number;
+  fadeOutSeconds: number;
+  stopSeconds: number;
+};
+
+const REMUX_CHIME_ATTACK_SECONDS = 0.02;
+const REMUX_CHIME_PEAK_GAIN = 0.12;
+const REMUX_CHIME_REPEAT_COUNT = 5;
+const REMUX_CHIME_REPEAT_INTERVAL_SECONDS = 0.55;
+const REMUX_CHIME_TONES: readonly ChimeTone[] = [
+  {
+    frequency: 880,
+    startOffsetSeconds: 0,
+    fadeOutSeconds: 0.18,
+    stopSeconds: 0.22,
+  },
+  {
+    frequency: 1174.66,
+    startOffsetSeconds: 0.08,
+    fadeOutSeconds: 0.26,
+    stopSeconds: 0.3,
+  },
+];
 
 let sharedAudioContext: AudioContext | null = null;
 let sharedAudioContextConstructor: AudioContextConstructor | null = null;
@@ -43,6 +68,28 @@ async function resumeAudioContextIfSuspended(audioContext: AudioContext): Promis
   }
 
   await audioContext.resume();
+}
+
+function scheduleChimeTone(
+  audioContext: AudioContext,
+  startTime: number,
+  tone: ChimeTone,
+): void {
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const toneStartTime = startTime + tone.startOffsetSeconds;
+
+  oscillator.type = 'sine';
+  oscillator.frequency.value = tone.frequency;
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+
+  gain.gain.setValueAtTime(0, toneStartTime);
+  gain.gain.linearRampToValueAtTime(REMUX_CHIME_PEAK_GAIN, toneStartTime + REMUX_CHIME_ATTACK_SECONDS);
+  gain.gain.linearRampToValueAtTime(0, startTime + tone.fadeOutSeconds);
+
+  oscillator.start(toneStartTime);
+  oscillator.stop(startTime + tone.stopSeconds);
 }
 
 export async function prepareRemuxCompletionAlerts(): Promise<void> {
@@ -85,32 +132,13 @@ export async function playRemuxCompletionChime(): Promise<void> {
 
     await resumeAudioContextIfSuspended(audioContext);
 
-    const firstOscillator = audioContext.createOscillator();
-    const secondOscillator = audioContext.createOscillator();
-    const firstGain = audioContext.createGain();
-    const secondGain = audioContext.createGain();
-
-    firstOscillator.type = 'sine';
-    secondOscillator.type = 'sine';
-    firstOscillator.frequency.value = 880;
-    secondOscillator.frequency.value = 1174.66;
-
-    firstOscillator.connect(firstGain);
-    secondOscillator.connect(secondGain);
-    firstGain.connect(audioContext.destination);
-    secondGain.connect(audioContext.destination);
-
     const startTime = audioContext.currentTime;
-    firstGain.gain.setValueAtTime(0, startTime);
-    firstGain.gain.linearRampToValueAtTime(0.05, startTime + 0.02);
-    firstGain.gain.linearRampToValueAtTime(0, startTime + 0.18);
-    secondGain.gain.setValueAtTime(0, startTime + 0.08);
-    secondGain.gain.linearRampToValueAtTime(0.05, startTime + 0.1);
-    secondGain.gain.linearRampToValueAtTime(0, startTime + 0.26);
-    firstOscillator.start(startTime);
-    secondOscillator.start(startTime + 0.08);
-    firstOscillator.stop(startTime + 0.22);
-    secondOscillator.stop(startTime + 0.3);
+    for (let iteration = 0; iteration < REMUX_CHIME_REPEAT_COUNT; iteration += 1) {
+      const repetitionStartTime = startTime + iteration * REMUX_CHIME_REPEAT_INTERVAL_SECONDS;
+      for (const tone of REMUX_CHIME_TONES) {
+        scheduleChimeTone(audioContext, repetitionStartTime, tone);
+      }
+    }
   } catch {
     // Playback should never block the remux flow.
   }
