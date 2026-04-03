@@ -63,6 +63,8 @@ export function useRemuxWorkflow() {
   const previousSeenJobStatusRef = useRef<Job['status'] | null>(null);
 
   const text = getMessages(locale);
+  const latestMessagesRef = useRef(text);
+  latestMessagesRef.current = text;
   const selectedSource = sources.find((source) => source.id === selectedSourceId) ?? null;
   const currentStep = token ? step : 'login';
   const fallbackTitle = draft?.title || parsedBDInfo?.discTitle || selectedSource?.name || 'Untitled';
@@ -108,6 +110,7 @@ export function useRemuxWorkflow() {
   }, [token, step, sources, selectedSourceId, bdinfoText, parsedBDInfo, draft, filenamePreview, outputFilename, filenameEdited]);
 
   const resetWorkflowState = () => {
+    invalidateCurrentJobSnapshots();
     resetCompletionAlertState();
     setSelectedSourceId(null);
     setBdinfoText('');
@@ -316,9 +319,10 @@ export function useRemuxWorkflow() {
     ) {
       alertedCompletionJobIdRef.current = nextJob.id;
       void playRemuxCompletionChime().finally(() => {
+        const latestMessages = latestMessagesRef.current;
         showRemuxCompletionNotification({
-          title: text.review.remuxCompletedNotificationTitle,
-          body: text.review.remuxCompletedNotificationBody(nextJob.outputName),
+          title: latestMessages.review.remuxCompletedNotificationTitle,
+          body: latestMessages.review.remuxCompletedNotificationBody(nextJob.outputName),
         });
       });
     }
