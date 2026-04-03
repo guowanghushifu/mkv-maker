@@ -23,6 +23,13 @@ export class UnauthorizedError extends Error {
   }
 }
 
+type APIErrorBody = {
+  message?: string;
+  error?: {
+    message?: string;
+  } | string;
+};
+
 function normalizeCodecLabel(value: string): string {
   return value
     .replace(/[\[\]]/g, ' ')
@@ -96,7 +103,7 @@ async function requestJSON<T>(url: string, init?: RequestInit, token?: string): 
     throw new UnauthorizedError();
   }
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
 
   if (response.status === 204) {
@@ -104,6 +111,48 @@ async function requestJSON<T>(url: string, init?: RequestInit, token?: string): 
   }
 
   return (await response.json()) as T;
+}
+
+function messageFromErrorBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  const candidate = body as APIErrorBody;
+  if (typeof candidate.message === 'string' && candidate.message.trim()) {
+    return candidate.message.trim();
+  }
+  if (typeof candidate.error === 'string' && candidate.error.trim()) {
+    return candidate.error.trim();
+  }
+  if (
+    candidate.error &&
+    typeof candidate.error === 'object' &&
+    typeof candidate.error.message === 'string' &&
+    candidate.error.message.trim()
+  ) {
+    return candidate.error.message.trim();
+  }
+  return null;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const raw = (await response.text()).trim();
+  if (!raw) {
+    return `Request failed with status ${response.status}`;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const message = messageFromErrorBody(parsed);
+    if (message) {
+      return message;
+    }
+  } catch {
+    // Fall through to the plain-text response body.
+  }
+
+  return raw;
 }
 
 function normalizeJob(partial: Partial<Job>): Job {
@@ -217,7 +266,7 @@ export function createApiClient(basePath = '/api') {
         throw new UnauthorizedError();
       }
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        throw new Error(await readErrorMessage(response));
       }
     },
 
@@ -233,7 +282,7 @@ export function createApiClient(basePath = '/api') {
         return null;
       }
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        throw new Error(await readErrorMessage(response));
       }
       return normalizeJob((await response.json()) as Partial<Job>);
     },
@@ -250,7 +299,7 @@ export function createApiClient(basePath = '/api') {
         return '';
       }
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        throw new Error(await readErrorMessage(response));
       }
       return await response.text();
     },

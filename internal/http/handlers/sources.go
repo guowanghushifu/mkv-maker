@@ -148,6 +148,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 
 	pathSourceID := chi.URLParam(r, "id")
 	if strings.TrimSpace(pathSourceID) == "" {
+		log.Printf("resolve: missing source id in route")
 		http.Error(w, "missing source id", http.StatusBadRequest)
 		return
 	}
@@ -157,21 +158,25 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(req.SourceID) != "" && req.SourceID != pathSourceID {
+		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "source id mismatch bodySourceID=%s", req.SourceID)
 		http.Error(w, "source id mismatch", http.StatusBadRequest)
 		return
 	}
 
 	sources, err := h.Scanner.Scan(h.InputDir)
 	if err != nil {
+		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "scan failed: %v", err)
 		h.writeScanError(w, err)
 		return
 	}
 	source, ok := findSourceByID(sources, pathSourceID)
 	if !ok {
+		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "source not found")
 		http.Error(w, "source not found", http.StatusNotFound)
 		return
 	}
 	if source.Type != media.SourceISO && !isPathWithinRoot(h.InputDir, source.Path) {
+		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "source path is outside input root path=%s inputRoot=%s", source.Path, h.InputDir)
 		http.Error(w, "source path is outside input root", http.StatusBadRequest)
 		return
 	}
@@ -179,11 +184,13 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	switch source.Type {
 	case media.SourceISO:
 		if h.ISOManager == nil {
+			logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "iso manager is not configured")
 			http.Error(w, "iso manager is not configured", http.StatusInternalServerError)
 			return
 		}
 		mountedRoot, err := h.ISOManager.EnsureMounted(r.Context(), source.ID, source.Path)
 		if err != nil {
+			logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "failed to mount iso source path=%s: %v", source.Path, err)
 			http.Error(w, "failed to mount iso source", http.StatusBadRequest)
 			return
 		}
@@ -192,23 +199,27 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	case media.SourceBDMV:
 		// already rooted at the BDMV source directory
 	default:
+		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "unsupported source type=%s", source.Type)
 		http.Error(w, "only bdmv sources are supported", http.StatusBadRequest)
 		return
 	}
 
 	parsed, err := mediabdinfo.Parse(req.BDInfo.RawText)
 	if err != nil {
-		http.Error(w, "invalid bdinfo payload", http.StatusBadRequest)
+		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "bdinfo parse failed: %v", err)
+		http.Error(w, "invalid bdinfo payload: "+bdinfoParseErrorMessage(err), http.StatusBadRequest)
 		return
 	}
 
 	playlistName := strings.ToUpper(strings.TrimSpace(parsed.PlaylistName))
 	if requested := strings.ToUpper(strings.TrimSpace(req.BDInfo.PlaylistName)); requested != "" && requested != playlistName {
+		logResolveFailure(pathSourceID, playlistName, "bdinfo playlist mismatch requested=%s parsed=%s", requested, playlistName)
 		http.Error(w, "bdinfo playlist mismatch", http.StatusBadRequest)
 		return
 	}
 	playlistName = strings.ToUpper(filepath.Base(playlistName))
 	if !playlistNamePattern.MatchString(playlistName) {
+		logResolveFailure(pathSourceID, playlistName, "invalid playlist name")
 		http.Error(w, "invalid playlist name", http.StatusBadRequest)
 		return
 	}
@@ -257,10 +268,12 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		subtitleLabels = compactLabels(parsed.SubtitleLabels)
 	}
 	if err := validateResolvedTrackIDs(audioLabels, inspection.AudioTrackIDs, "audio"); err != nil {
+		logResolveFailure(pathSourceID, playlistName, "audio track validation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := validateResolvedTrackIDs(subtitleLabels, inspection.SubtitleTrackIDs, "subtitle"); err != nil {
+		logResolveFailure(pathSourceID, playlistName, "subtitle track validation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -288,8 +301,14 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logResolveFailure(pathSourceID, playlistName, "failed to encode response: %v", err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+func logResolveFailure(sourceID, playlistName, format string, args ...any) {
+	logArgs := append([]any{sourceID, strings.ToUpper(strings.TrimSpace(playlistName))}, args...)
+	log.Printf("resolve sourceID=%s playlist=%s: "+format, logArgs...)
 }
 
 func (h *SourcesHandler) writeScannedSources(w http.ResponseWriter) {

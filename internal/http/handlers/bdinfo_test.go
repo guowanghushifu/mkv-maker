@@ -1,11 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 )
 
 func TestBDInfoHandlerParseSupportsRawTextPayloadAndFrontendShape(t *testing.T) {
@@ -60,6 +65,34 @@ func TestBDInfoHandlerParseReturnsBadRequestOnUnparseableLogText(t *testing.T) {
 	}
 }
 
+func TestBDInfoHandlerParseReturnsDetailedErrorAndLogsCause(t *testing.T) {
+	var logBuffer bytes.Buffer
+	restoreLogs := captureStandardLogger(&logBuffer)
+	defer restoreLogs()
+
+	h := &BDInfoHandler{
+		Parser: func(input string) (mediabdinfo.Parsed, error) {
+			return mediabdinfo.Parsed{}, errors.New("missing playlist name")
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/bdinfo/parse", strings.NewReader(`{"rawText":"bad payload"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Parse(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "missing playlist name") {
+		t.Fatalf("expected response body to include parse detail, got %q", body)
+	}
+	if logs := logBuffer.String(); !strings.Contains(logs, "missing playlist name") {
+		t.Fatalf("expected logs to include parse detail, got %q", logs)
+	}
+}
+
 func TestBDInfoHandlerParseRejectsOversizedPayload(t *testing.T) {
 	h := NewBDInfoHandler()
 	oversized := `{"rawText":"` + strings.Repeat("A", 3<<20) + `"}`
@@ -96,4 +129,18 @@ func escapeJSON(input string) string {
 		"\r", ``,
 	)
 	return replacer.Replace(input)
+}
+
+func captureStandardLogger(buf *bytes.Buffer) func() {
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	log.SetOutput(buf)
+	log.SetFlags(0)
+	log.SetPrefix("")
+	return func() {
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+	}
 }

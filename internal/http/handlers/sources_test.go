@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -707,6 +708,48 @@ func TestSourcesHandlerResolveRejectsUnknownSource(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusNotFound, w.Code, w.Body.String())
+	}
+}
+
+func TestSourcesHandlerResolveReturnsDetailedBDInfoErrorAndLogsCause(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "BrokenDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "PLAYLIST"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	var logBuffer bytes.Buffer
+	restoreLogs := captureStandardLogger(&logBuffer)
+	defer restoreLogs()
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{
+			{
+				ID:   sourceID,
+				Name: sourceID,
+				Path: sourcePath,
+				Type: media.SourceBDMV,
+			},
+		},
+	}, stubPlaylistInspector{})
+
+	reqBody := `{"sourceId":"BrokenDisc","bdinfo":{"rawText":"not bdinfo"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/BrokenDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); !strings.Contains(body, "no recognized bdinfo fields") {
+		t.Fatalf("expected response body to include parse detail, got %q", body)
+	}
+	if logs := logBuffer.String(); !strings.Contains(logs, "no recognized bdinfo fields") || !strings.Contains(logs, "BrokenDisc") {
+		t.Fatalf("expected logs to include source id and parse detail, got %q", logs)
 	}
 }
 

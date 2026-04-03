@@ -233,6 +233,90 @@ describe('App', () => {
     expect(await screen.findByText(/ISO 文件/i)).toBeInTheDocument();
   });
 
+  it('shows the backend parse error on the bdinfo page', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/login') && method === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/sources/scan') && method === 'POST') {
+        return new Response(JSON.stringify([source]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/bdinfo/parse') && method === 'POST') {
+        return new Response('missing playlist name\n', {
+          status: 400,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    await goToBDInfoStep();
+    fireEvent.change(screen.getByPlaceholderText(/paste full bdinfo text here/i), {
+      target: { value: 'not bdinfo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /parse bdinfo and continue/i }));
+
+    expect(await screen.findByText('missing playlist name')).toBeInTheDocument();
+  });
+
+  it('shows the backend resolve error on the bdinfo page', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/login') && method === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/sources/scan') && method === 'POST') {
+        return new Response(JSON.stringify([source]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/jobs/current') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') return new Response('', { status: 404 });
+      if (url.endsWith('/api/bdinfo/parse') && method === 'POST') {
+        return new Response(JSON.stringify(parsedBDInfo), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/sources/disc-1/resolve') && method === 'POST') {
+        return new Response('playlist does not exist in selected source\n', {
+          status: 400,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    await goToBDInfoStep();
+    fireEvent.change(screen.getByPlaceholderText(/paste full bdinfo text here/i), {
+      target: { value: 'PLAYLIST REPORT' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /parse bdinfo and continue/i }));
+
+    expect(await screen.findByText('playlist does not exist in selected source')).toBeInTheDocument();
+  });
+
   it('wires the scan-page release button through the app shell', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

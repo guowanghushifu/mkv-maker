@@ -125,6 +125,56 @@ describe('createApiClient currentJob', () => {
   });
 });
 
+describe('createApiClient bdinfo error handling', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('surfaces plain-text parse errors returned by the backend', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response('missing playlist name\n', {
+        status: 400,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(client.parseBDInfo('bad payload', 'session')).rejects.toThrow('missing playlist name');
+  });
+
+  it('surfaces plain-text resolve errors returned by the backend', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response('playlist does not exist in selected source\n', {
+        status: 400,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(
+      client.createDraft(
+        {
+          id: 'disc-1',
+          name: 'Nightcrawler Disc',
+          path: '/bd_input/Nightcrawler/BDMV',
+          type: 'bdmv',
+          size: 1,
+          modifiedAt: '2026-03-29T12:00:00Z',
+        },
+        {
+          playlistName: '00800.MPLS',
+          rawText: 'PLAYLIST REPORT',
+          audioLabels: [],
+          subtitleLabels: [],
+        },
+        'session'
+      )
+    ).rejects.toThrow('playlist does not exist in selected source');
+  });
+});
+
 describe('createApiClient releaseMountedISOs', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
