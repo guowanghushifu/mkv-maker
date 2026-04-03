@@ -722,6 +722,89 @@ describe('useRemuxWorkflow', () => {
     });
   });
 
+  it('starts alert preparation before the submit request begins', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      }),
+    );
+
+    const callOrder: string[] = [];
+    remuxCompletionAlertMock.prepareRemuxCompletionAlerts.mockImplementationOnce(() => {
+      callOrder.push('prepare');
+      return Promise.resolve();
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs') && method === 'POST') {
+        callOrder.push('submit');
+        expect(callOrder).toEqual(['prepare', 'submit']);
+        return new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-04-03T00:00:00Z',
+            status: 'running',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.endsWith('/api/jobs/current') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-04-03T00:00:00Z',
+            status: 'running',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') {
+        return new Response('[2026-04-03T00:00:00Z] remux started', { status: 200 });
+      }
+
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await act(async () => {
+      await result.current.handleSubmitJob();
+    });
+
+    expect(callOrder[0]).toBe('prepare');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/jobs',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+  });
+
   it('clears armed alert state and ignores stale success snapshots after unauthorized reset', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(tokenStorageKey, 'session');

@@ -87,6 +87,40 @@ describe('prepareRemuxCompletionAlerts', () => {
     expect(resume).toHaveBeenCalledTimes(1);
     expect(requestPermission).toHaveBeenCalledTimes(1);
   });
+
+  it('does not leak an unhandled rejection when audio warm-up fails after notification early return', async () => {
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event.reason);
+      event.preventDefault();
+    };
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    const resume = vi.fn().mockRejectedValue(new Error('resume failed'));
+    const AudioContextMock = vi.fn(function () {
+      return {
+        state: 'suspended',
+        resume,
+      };
+    });
+
+    vi.stubGlobal('AudioContext', AudioContextMock);
+    vi.stubGlobal('Notification', {
+      permission: 'granted',
+      requestPermission: vi.fn(),
+    });
+
+    try {
+      await prepareRemuxCompletionAlerts();
+      await Promise.resolve();
+      await Promise.resolve();
+    } finally {
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    }
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(unhandledRejections).toEqual([]);
+  });
 });
 
 describe('playRemuxCompletionChime', () => {

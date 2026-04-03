@@ -50,7 +50,7 @@ export async function prepareRemuxCompletionAlerts(): Promise<void> {
   try {
     const audioContext = getAudioContext();
     if (audioContext) {
-      audioWarmupPromise = resumeAudioContextIfSuspended(audioContext);
+      audioWarmupPromise = resumeAudioContextIfSuspended(audioContext).catch(() => undefined);
     }
   } catch {
     // Audio warm-up is best-effort only.
@@ -72,11 +72,7 @@ export async function prepareRemuxCompletionAlerts(): Promise<void> {
   }
 
   if (audioWarmupPromise) {
-    try {
-      await audioWarmupPromise;
-    } catch {
-      // Audio warm-up is best-effort only.
-    }
+    await audioWarmupPromise;
   }
 }
 
