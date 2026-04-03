@@ -39,6 +39,25 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		return "", false, err
 	}
 
+	executionDraft := withTemporaryOutputPath(draft)
+	tempPath := executionDraft.OutputPath
+	if err := removeTemporaryOutput(tempPath); err != nil {
+		return "", false, err
+	}
+
+	output, streamed, runErr := r.runCommand(ctx, executionDraft, onOutput)
+	if runErr != nil {
+		_ = removeTemporaryOutput(tempPath)
+		return output, streamed, runErr
+	}
+	if err := finalizeTemporaryOutput(tempPath, draft.OutputPath); err != nil {
+		_ = removeTemporaryOutput(tempPath)
+		return output, streamed, err
+	}
+	return output, streamed, nil
+}
+
+func (r *JobRunner) runCommand(ctx context.Context, draft Draft, onOutput func(string)) (string, bool, error) {
 	var streamed atomic.Bool
 	wrappedOutput := func(chunk string) {
 		if strings.TrimSpace(chunk) == "" {
@@ -64,8 +83,33 @@ func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
 		return "", err
 	}
 
-	args := BuildMKVMergeArgs(draft)
+	args := BuildMKVMergeArgs(withTemporaryOutputPath(draft))
 	return FormatCommandPreview("mkvmerge", args), nil
+}
+
+func withTemporaryOutputPath(draft Draft) Draft {
+	draft.OutputPath = temporaryOutputPath(draft.OutputPath)
+	return draft
+}
+
+func temporaryOutputPath(finalPath string) string {
+	return strings.TrimSpace(finalPath) + ".tmp"
+}
+
+func finalizeTemporaryOutput(tempPath, finalPath string) error {
+	return os.Rename(tempPath, finalPath)
+}
+
+func removeTemporaryOutput(path string) error {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return nil
+	}
+	err := os.Remove(trimmed)
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 type MKVMergeRunner struct {
