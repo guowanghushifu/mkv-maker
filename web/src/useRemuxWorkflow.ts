@@ -321,18 +321,17 @@ export function useRemuxWorkflow() {
     ) {
       alertedCompletionJobIdRef.current = nextJob.id;
       const completionAlertGeneration = completionAlertGenerationRef.current;
-      void playRemuxCompletionChime().finally(() => {
-        if (
-          completionAlertGenerationRef.current !== completionAlertGeneration ||
-          alertedCompletionJobIdRef.current !== nextJob.id
-        ) {
-          return;
-        }
-        const latestMessages = latestMessagesRef.current;
-        showRemuxCompletionNotification({
-          title: latestMessages.review.remuxCompletedNotificationTitle,
-          body: latestMessages.review.remuxCompletedNotificationBody(nextJob.outputName),
-        });
+      void playRemuxCompletionChime().catch(() => undefined);
+      if (
+        completionAlertGenerationRef.current !== completionAlertGeneration ||
+        alertedCompletionJobIdRef.current !== nextJob.id
+      ) {
+        return false;
+      }
+      const latestMessages = latestMessagesRef.current;
+      showRemuxCompletionNotification({
+        title: latestMessages.review.remuxCompletedNotificationTitle,
+        body: latestMessages.review.remuxCompletedNotificationBody(nextJob.outputName),
       });
     }
 

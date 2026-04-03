@@ -34,6 +34,38 @@ describe('prepareRemuxCompletionAlerts', () => {
     expect(requestPermission).toHaveBeenCalledTimes(1);
   });
 
+  it('requests notification permission without waiting for a slow audio resume', async () => {
+    let resolveResume: (() => void) | null = null;
+    const resume = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveResume = resolve;
+        }),
+    );
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    const AudioContextMock = vi.fn(function () {
+      return {
+        state: 'suspended',
+        resume,
+      };
+    });
+
+    vi.stubGlobal('AudioContext', AudioContextMock);
+    vi.stubGlobal('Notification', {
+      permission: 'default',
+      requestPermission,
+    });
+
+    const preparePromise = prepareRemuxCompletionAlerts();
+    await Promise.resolve();
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+
+    resolveResume?.();
+    await preparePromise;
+  });
+
   it('still requests notification permission when audio resume fails', async () => {
     const resume = vi.fn().mockRejectedValue(new Error('resume failed'));
     const requestPermission = vi.fn().mockResolvedValue('granted');
@@ -128,6 +160,31 @@ describe('playRemuxCompletionChime', () => {
 });
 
 describe('showRemuxCompletionNotification', () => {
+  it('does nothing when notifications are unsupported', () => {
+    vi.stubGlobal('Notification', undefined);
+
+    expect(() =>
+      showRemuxCompletionNotification({
+        title: 'Remux complete',
+        body: 'Your MKV is ready.',
+      }),
+    ).not.toThrow();
+  });
+
+  it('does nothing when notification permission is denied', () => {
+    const NotificationMock = vi.fn();
+    NotificationMock.permission = 'denied';
+
+    vi.stubGlobal('Notification', NotificationMock);
+
+    showRemuxCompletionNotification({
+      title: 'Remux complete',
+      body: 'Your MKV is ready.',
+    });
+
+    expect(NotificationMock).not.toHaveBeenCalled();
+  });
+
   it('shows a notification and focuses the window when the notification is clicked', () => {
     const close = vi.fn();
     let notificationInstance: { onclick: null | (() => void); close: () => void } | null = null;

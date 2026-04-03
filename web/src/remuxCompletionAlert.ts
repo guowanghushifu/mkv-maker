@@ -46,10 +46,11 @@ async function resumeAudioContextIfSuspended(audioContext: AudioContext): Promis
 }
 
 export async function prepareRemuxCompletionAlerts(): Promise<void> {
+  let audioWarmupPromise: Promise<void> | null = null;
   try {
     const audioContext = getAudioContext();
     if (audioContext) {
-      await resumeAudioContextIfSuspended(audioContext);
+      audioWarmupPromise = resumeAudioContextIfSuspended(audioContext);
     }
   } catch {
     // Audio warm-up is best-effort only.
@@ -68,6 +69,14 @@ export async function prepareRemuxCompletionAlerts(): Promise<void> {
     await Promise.resolve(NotificationApi.requestPermission());
   } catch {
     // Keep remux submission moving even if browser alert setup fails.
+  }
+
+  if (audioWarmupPromise) {
+    try {
+      await audioWarmupPromise;
+    } catch {
+      // Audio warm-up is best-effort only.
+    }
   }
 }
 
