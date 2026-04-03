@@ -110,7 +110,7 @@ type stubRunner struct {
 	wait   time.Duration
 }
 
-func (r *stubRunner) Run(ctx context.Context, _ remux.Draft, emit func(string)) (string, error) {
+func (r *stubRunner) Run(ctx context.Context, draft remux.Draft, emit func(string)) (string, error) {
 	wait := r.wait
 	if wait <= 0 {
 		wait = 50 * time.Millisecond
@@ -121,6 +121,11 @@ func (r *stubRunner) Run(ctx context.Context, _ remux.Draft, emit func(string)) 
 	case <-timer.C:
 		if emit != nil && r.output != "" {
 			emit(r.output)
+		}
+		if r.err == nil {
+			if err := writeSuccessfulTempOutput(draft.OutputPath); err != nil {
+				return r.output, err
+			}
 		}
 		return r.output, r.err
 	case <-ctx.Done():
@@ -133,7 +138,7 @@ type controlledRunner struct {
 	release chan struct{}
 }
 
-func (r *controlledRunner) Run(ctx context.Context, _ remux.Draft, emit func(string)) (string, error) {
+func (r *controlledRunner) Run(ctx context.Context, draft remux.Draft, emit func(string)) (string, error) {
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -151,7 +156,17 @@ func (r *controlledRunner) Run(ctx context.Context, _ remux.Draft, emit func(str
 	if emit != nil {
 		emit("ok")
 	}
+	if err := writeSuccessfulTempOutput(draft.OutputPath); err != nil {
+		return "", err
+	}
 	return "ok", nil
+}
+
+func writeSuccessfulTempOutput(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte("muxed"), 0o644)
 }
 
 func TestJobsHandlerCreateReturnsAcceptedTask(t *testing.T) {

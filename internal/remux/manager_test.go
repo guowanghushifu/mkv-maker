@@ -3,6 +3,8 @@ package remux
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,12 +14,27 @@ type stubRunner struct {
 	lastDraft Draft
 	output    string
 	err       error
+	wait      time.Duration
 }
 
-func (r *stubRunner) Run(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r *stubRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
 	r.lastDraft = draft
+	if r.wait > 0 {
+		timer := time.NewTimer(r.wait)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
 	if onOutput != nil && r.output != "" {
 		onOutput(r.output)
+	}
+	if r.err == nil {
+		if err := writeSuccessfulTempOutput(draft.OutputPath); err != nil {
+			return r.output, err
+		}
 	}
 	return r.output, r.err
 }
@@ -46,6 +63,11 @@ func (r *controlledRunner) Run(ctx context.Context, draft Draft, onOutput func(s
 		}
 	}
 
+	if r.err == nil {
+		if err := writeSuccessfulTempOutput(draft.OutputPath); err != nil {
+			return r.output, err
+		}
+	}
 	return r.output, r.err
 }
 
@@ -74,8 +96,34 @@ type streamingRunner struct {
 	release  chan struct{}
 }
 
+type controlledFileRunner struct {
+	started chan struct{}
+	release chan struct{}
+	run     func(ctx context.Context, draft Draft, onOutput func(string)) (string, error)
+}
+
+func (r *controlledFileRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+	if r.started != nil {
+		select {
+		case <-r.started:
+		default:
+			close(r.started)
+		}
+	}
+	if r.run != nil {
+		return r.run(ctx, draft, onOutput)
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	return "", nil
+}
+
 func (r *streamingRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
-	_ = draft
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -101,10 +149,20 @@ func (r *streamingRunner) Run(ctx context.Context, draft Draft, onOutput func(st
 			return "", ctx.Err()
 		}
 	}
+	if err := writeSuccessfulTempOutput(draft.OutputPath); err != nil {
+		return "", err
+	}
 	if onOutput != nil {
 		onOutput("Progress: 100%\r")
 	}
 	return "", nil
+}
+
+func writeSuccessfulTempOutput(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte("muxed"), 0o644)
 }
 
 func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
@@ -142,19 +200,20 @@ func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
 }
 
 func TestManagerCurrentReturnsRunningAndLatestLog(t *testing.T) {
-	manager := NewManager(&stubRunner{output: "mkvmerge progress"})
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
+	manager := NewManager(&stubRunner{output: "mkvmerge progress", wait: 100 * time.Millisecond})
 	defer manager.Close()
 
 	task, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
 		PayloadJSON: `{
 			"source":{"name":"Nightcrawler Disc","path":"/bd_input/Nightcrawler","type":"bdmv"},
 			"bdinfo":{"playlistName":"00800.MPLS"},
 			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
-			"outputPath":"/remux/Nightcrawler.mkv"
+			"outputPath":"` + outputPath + `"
 		}`,
 	})
 	if err != nil {
@@ -174,15 +233,16 @@ func TestManagerCurrentReturnsRunningAndLatestLog(t *testing.T) {
 }
 
 func TestManagerSuccessTransitionKeepsLatestAndCompletionLog(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	manager := NewManager(&stubRunner{output: "mkvmerge progress"})
 	defer manager.Close()
 
 	task, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -253,6 +313,7 @@ func TestManagerFailureTransitionKeepsLatestAndFailureLog(t *testing.T) {
 }
 
 func TestManagerCallsOnTaskFinishedHook(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	runner := &stubRunner{output: "ok"}
 	manager := NewManager(runner)
 	defer manager.Close()
@@ -268,9 +329,9 @@ func TestManagerCallsOnTaskFinishedHook(t *testing.T) {
 		SourceType:   "iso",
 		SourceName:   "Nightcrawler",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -403,6 +464,101 @@ func TestManagerStopCurrentCancelsRunningTask(t *testing.T) {
 	}
 }
 
+func TestManagerStopCurrentRemovesTemporaryOutputAndKeepsFinalOutputPath(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Nightcrawler.mkv")
+	tempPath := finalPath + ".tmp"
+
+	runner := &controlledFileRunner{
+		started: make(chan struct{}),
+		run: func(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+			if draft.OutputPath != tempPath {
+				t.Fatalf("expected runner output path %q, got %q", tempPath, draft.OutputPath)
+			}
+			if err := os.WriteFile(draft.OutputPath, []byte("partial"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			<-ctx.Done()
+			return "", ctx.Err()
+		},
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	task, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", finalPath),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	if task.OutputPath != finalPath {
+		t.Fatalf("expected task output path %q, got %q", finalPath, task.OutputPath)
+	}
+	if err := manager.StopCurrent(); err != nil {
+		t.Fatalf("StopCurrent returned error: %v", err)
+	}
+
+	done := waitForTerminalTask(t, manager)
+	if done.OutputPath != finalPath {
+		t.Fatalf("expected terminal task output path %q, got %q", finalPath, done.OutputPath)
+	}
+	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected temporary output to be removed, got %v", err)
+	}
+}
+
+func TestManagerCloseRemovesTemporaryOutputAndKeepsFinalOutputPath(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Nightcrawler.mkv")
+	tempPath := finalPath + ".tmp"
+
+	runner := &controlledFileRunner{
+		started: make(chan struct{}),
+		run: func(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+			if draft.OutputPath != tempPath {
+				t.Fatalf("expected runner output path %q, got %q", tempPath, draft.OutputPath)
+			}
+			if err := os.WriteFile(draft.OutputPath, []byte("partial"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			<-ctx.Done()
+			return "", ctx.Err()
+		},
+	}
+	manager := NewManager(runner)
+
+	task, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00800.MPLS",
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", finalPath),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+
+	if task.OutputPath != finalPath {
+		t.Fatalf("expected task output path %q, got %q", finalPath, task.OutputPath)
+	}
+	manager.Close()
+
+	done := waitForTerminalTask(t, manager)
+	if done.OutputPath != finalPath {
+		t.Fatalf("expected terminal task output path %q, got %q", finalPath, done.OutputPath)
+	}
+	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected temporary output to be removed, got %v", err)
+	}
+}
+
 func TestManagerStopCurrentTreatsSignalKilledAsCanceled(t *testing.T) {
 	runner := &signalKilledRunner{started: make(chan struct{})}
 	manager := NewManager(runner)
@@ -434,6 +590,7 @@ func TestManagerStopCurrentTreatsSignalKilledAsCanceled(t *testing.T) {
 }
 
 func TestManagerStopCurrentMarksTaskCanceledWhenStopWinsBeforeSuccessfulCompletion(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	runner := &controlledRunner{
 		started: make(chan struct{}),
 		release: make(chan struct{}),
@@ -444,9 +601,9 @@ func TestManagerStopCurrentMarksTaskCanceledWhenStopWinsBeforeSuccessfulCompleti
 	_, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -476,6 +633,7 @@ func TestManagerStopCurrentMarksTaskCanceledWhenStopWinsBeforeSuccessfulCompleti
 }
 
 func TestManagerStopCurrentMarksTaskCanceledWhenStopArrivesDuringSuccessFinalization(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	runner := &controlledRunner{
 		started: make(chan struct{}),
 		release: make(chan struct{}),
@@ -493,9 +651,9 @@ func TestManagerStopCurrentMarksTaskCanceledWhenStopArrivesDuringSuccessFinaliza
 	_, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -527,15 +685,16 @@ func TestManagerStopCurrentMarksTaskCanceledWhenStopArrivesDuringSuccessFinaliza
 }
 
 func TestManagerSuccessTransitionSetsCommandPreviewAndHundredPercent(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	manager := NewManager(&stubRunner{output: "Progress: 42%\nProgress: 100%"})
 	defer manager.Close()
 
 	task, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -581,6 +740,7 @@ func TestManagerFailureKeepsLastKnownProgressPercent(t *testing.T) {
 }
 
 func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	runner := &streamingRunner{
 		started:  make(chan struct{}),
 		progress: make(chan struct{}),
@@ -592,9 +752,9 @@ func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
 	_, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -621,6 +781,7 @@ func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
 }
 
 func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
 	runner := &streamingRunner{
 		started:  make(chan struct{}),
 		progress: make(chan struct{}),
@@ -632,9 +793,9 @@ func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
 	_, err := manager.Start(StartRequest{
 		SourceName:   "Nightcrawler Disc",
 		OutputName:   "Nightcrawler.mkv",
-		OutputPath:   "/remux/Nightcrawler.mkv",
+		OutputPath:   outputPath,
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)

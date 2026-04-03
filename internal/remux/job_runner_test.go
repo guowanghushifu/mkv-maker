@@ -115,3 +115,114 @@ func TestJobRunnerExecuteRenamesTemporaryOutputAfterSuccessfulRun(t *testing.T) 
 		t.Fatalf("expected temporary output to be removed, got %v", err)
 	}
 }
+
+func TestJobRunnerExecuteRemovesTemporaryOutputAfterFailure(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	tempPath := finalPath + ".tmp"
+
+	runner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+			if err := os.WriteFile(draft.OutputPath, []byte("partial"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			return "", errors.New("runner exploded")
+		},
+	})
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+	}
+
+	_, _, err := runner.Execute(context.Background(), req, nil)
+	if err == nil || !strings.Contains(err.Error(), "runner exploded") {
+		t.Fatalf("expected runner error, got %v", err)
+	}
+	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected temporary output to be removed, got %v", err)
+	}
+	if _, err := os.Stat(finalPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected final output not to exist, got %v", err)
+	}
+}
+
+func TestJobRunnerExecuteRemovesStaleTemporaryOutputBeforeRun(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	tempPath := finalPath + ".tmp"
+
+	if err := os.WriteFile(tempPath, []byte("stale"), 0o644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	runner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+			content, err := os.ReadFile(draft.OutputPath)
+			if err == nil && string(content) == "stale" {
+				t.Fatalf("expected stale temporary output to be removed before run")
+			}
+			if err := os.WriteFile(draft.OutputPath, []byte("fresh"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			return "", nil
+		},
+	})
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+	}
+
+	_, _, err := runner.Execute(context.Background(), req, nil)
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	content, err := os.ReadFile(finalPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	if string(content) != "fresh" {
+		t.Fatalf("expected final output to contain fresh data, got %q", string(content))
+	}
+}
+
+func TestJobRunnerExecuteRemovesTemporaryOutputWhenFinalizeRenameFails(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	tempPath := finalPath + ".tmp"
+
+	runner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+			if err := os.WriteFile(draft.OutputPath, []byte("muxed"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			return "", nil
+		},
+	})
+	runner.renameOutput = func(_, _ string) error {
+		return errors.New("rename failed")
+	}
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+	}
+
+	_, _, err := runner.Execute(context.Background(), req, nil)
+	if err == nil || !strings.Contains(err.Error(), "rename failed") {
+		t.Fatalf("expected rename failure, got %v", err)
+	}
+	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected temporary output to be removed, got %v", err)
+	}
+}

@@ -19,14 +19,18 @@ type CommandRunner interface {
 }
 
 type JobRunner struct {
-	runner CommandRunner
+	runner       CommandRunner
+	renameOutput func(tempPath, finalPath string) error
 }
 
 func NewJobRunner(runner CommandRunner) *JobRunner {
 	if runner == nil {
 		runner = MKVMergeRunner{}
 	}
-	return &JobRunner{runner: runner}
+	return &JobRunner{
+		runner:       runner,
+		renameOutput: os.Rename,
+	}
 }
 
 func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func(string)) (string, bool, error) {
@@ -50,7 +54,7 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		_ = removeTemporaryOutput(tempPath)
 		return output, streamed, runErr
 	}
-	if err := finalizeTemporaryOutput(tempPath, draft.OutputPath); err != nil {
+	if err := r.finalizeOutput(tempPath, draft.OutputPath); err != nil {
 		_ = removeTemporaryOutput(tempPath)
 		return output, streamed, err
 	}
@@ -96,7 +100,10 @@ func temporaryOutputPath(finalPath string) string {
 	return strings.TrimSpace(finalPath) + ".tmp"
 }
 
-func finalizeTemporaryOutput(tempPath, finalPath string) error {
+func (r *JobRunner) finalizeOutput(tempPath, finalPath string) error {
+	if r != nil && r.renameOutput != nil {
+		return r.renameOutput(tempPath, finalPath)
+	}
 	return os.Rename(tempPath, finalPath)
 }
 
