@@ -2,6 +2,16 @@ name: 🐳 Build and Push Docker Image
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - '**/*.rst'
+      - '**/*.adoc'
+      - 'LICENSE'
+      - 'LICENSE.*'
   release:
     types: [published]
 
