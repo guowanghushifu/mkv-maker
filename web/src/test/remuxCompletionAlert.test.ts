@@ -1,0 +1,123 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  prepareRemuxCompletionAlerts,
+  playRemuxCompletionChime,
+  showRemuxCompletionNotification,
+} from '../remuxCompletionAlert';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+  vi.restoreAllMocks();
+});
+
+describe('prepareRemuxCompletionAlerts', () => {
+  it('requests notification permission during preparation when permission is still default', async () => {
+    const resume = vi.fn().mockResolvedValue(undefined);
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    const AudioContextMock = vi.fn(function () {
+      return {
+        state: 'suspended',
+        resume,
+      };
+    });
+
+    vi.stubGlobal('AudioContext', AudioContextMock);
+    vi.stubGlobal('Notification', {
+      permission: 'default',
+      requestPermission,
+    });
+
+    await prepareRemuxCompletionAlerts();
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('playRemuxCompletionChime', () => {
+  it('creates two oscillator tones for the completion chime when audio is available', async () => {
+    const resume = vi.fn().mockResolvedValue(undefined);
+    const oscillatorOne = {
+      frequency: { value: 0 },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+    const oscillatorTwo = {
+      frequency: { value: 0 },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+    const gainOne = {
+      gain: { value: 0 },
+      connect: vi.fn(),
+    };
+    const gainTwo = {
+      gain: { value: 0 },
+      connect: vi.fn(),
+    };
+    const destination = {};
+    const AudioContextMock = vi.fn(function () {
+      return {
+        state: 'suspended',
+        resume,
+        currentTime: 0,
+        destination,
+        createOscillator: vi.fn().mockReturnValueOnce(oscillatorOne).mockReturnValueOnce(oscillatorTwo),
+        createGain: vi.fn().mockReturnValueOnce(gainOne).mockReturnValueOnce(gainTwo),
+      };
+    });
+
+    vi.stubGlobal('AudioContext', AudioContextMock);
+
+    await playRemuxCompletionChime();
+
+    expect(AudioContextMock).toHaveBeenCalledTimes(1);
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(oscillatorOne.connect).toHaveBeenCalledTimes(1);
+    expect(oscillatorTwo.connect).toHaveBeenCalledTimes(1);
+    expect(gainOne.connect).toHaveBeenCalledTimes(1);
+    expect(gainTwo.connect).toHaveBeenCalledTimes(1);
+    expect(oscillatorOne.stop).toHaveBeenCalledTimes(1);
+    expect(oscillatorTwo.stop).toHaveBeenCalledTimes(1);
+    expect(oscillatorOne.start).toHaveBeenCalledTimes(1);
+    expect(oscillatorTwo.start).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('showRemuxCompletionNotification', () => {
+  it('shows a notification and focuses the window when the notification is clicked', () => {
+    const close = vi.fn();
+    let notificationInstance: { onclick: null | (() => void); close: () => void } | null = null;
+    const NotificationMock = vi.fn(function () {
+      notificationInstance = {
+        onclick: null,
+        close,
+      };
+      return notificationInstance;
+    });
+    NotificationMock.permission = 'granted';
+    const focus = vi.spyOn(window, 'focus').mockImplementation(() => undefined);
+
+    vi.stubGlobal('Notification', NotificationMock);
+
+    showRemuxCompletionNotification({
+      title: 'Remux complete',
+      body: 'Your MKV is ready.',
+    });
+
+    expect(NotificationMock).toHaveBeenCalledTimes(1);
+    expect(NotificationMock).toHaveBeenCalledWith('Remux complete', {
+      body: 'Your MKV is ready.',
+      tag: 'mkv-maker-remux-complete',
+    });
+    expect(notificationInstance).not.toBeNull();
+
+    notificationInstance?.onclick?.();
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+});
