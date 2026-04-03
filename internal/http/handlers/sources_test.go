@@ -135,6 +135,23 @@ func TestSourcesHandlerListReturnsStructuredUnreadableError(t *testing.T) {
 	}
 }
 
+func TestSourcesHandlerScanReturnsEmptyJSONArrayWhenNoSourcesFound(t *testing.T) {
+	h := NewSourcesHandler("/input", "/remux", stubSourceScanner{
+		items: nil,
+	}, stubPlaylistInspector{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/scan", nil)
+	w := httptest.NewRecorder()
+	h.Scan(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+	if body := strings.TrimSpace(w.Body.String()); body != "[]" {
+		t.Fatalf("expected empty JSON array, got %q", body)
+	}
+}
+
 func TestSourcesHandlerResolveMountsISOSourceBeforeInspection(t *testing.T) {
 	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {

@@ -317,6 +317,9 @@ func (h *SourcesHandler) writeScannedSources(w http.ResponseWriter) {
 		h.writeScanError(w, err)
 		return
 	}
+	if items == nil {
+		items = []media.SourceEntry{}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(items); err != nil {
