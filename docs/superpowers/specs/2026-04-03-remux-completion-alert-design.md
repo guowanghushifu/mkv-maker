@@ -29,12 +29,9 @@ Each remux job should alert at most once per browser tab.
 
 The frontend should track whether the current tab is eligible to alert for a given job. A job becomes eligible when the user starts that remux from the current page. This avoids false positives for historical jobs restored from backend state.
 
-The alert should fire when either of these conditions is met:
+The alert should fire when the same eligible job transitions from `running` to `succeeded`.
 
-- the same eligible job transitions from `running` to `succeeded`
-- the user started the job in this tab and the first post-submit snapshot already reports `succeeded`
-
-This handles both the normal long-running case and the edge case where a remux completes before the next poll.
+The frontend does not need extra logic for the extreme case where a newly started remux is already `succeeded` in the first post-submit snapshot. This feature is only required for the normal path where the review page observes the task running before it later succeeds.
 
 ### Best-Effort Browser Notification
 
@@ -131,7 +128,6 @@ Frontend tests should cover:
 
 - no alert for a historical `succeeded` job loaded on initial render
 - one alert when an armed job changes from `running` to `succeeded`
-- one alert when an armed submitted job is immediately returned as `succeeded`
 - no repeated alert when polling returns the same `succeeded` job multiple times
 - no alert for `failed`
 - permission preparation is attempted from the submit path without blocking remux submission
