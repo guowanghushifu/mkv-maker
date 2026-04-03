@@ -61,6 +61,7 @@ export function useRemuxWorkflow() {
   const alertedCompletionJobIdRef = useRef<string | null>(null);
   const previousSeenJobIdRef = useRef<string | null>(null);
   const previousSeenJobStatusRef = useRef<Job['status'] | null>(null);
+  const completionAlertGenerationRef = useRef(0);
 
   const text = getMessages(locale);
   const latestMessagesRef = useRef(text);
@@ -85,6 +86,7 @@ export function useRemuxWorkflow() {
   }, [token]);
 
   const resetCompletionAlertState = () => {
+    completionAlertGenerationRef.current += 1;
     armedCompletionJobIdRef.current = null;
     alertedCompletionJobIdRef.current = null;
     previousSeenJobIdRef.current = null;
@@ -318,7 +320,14 @@ export function useRemuxWorkflow() {
       nextJob.status === 'succeeded'
     ) {
       alertedCompletionJobIdRef.current = nextJob.id;
+      const completionAlertGeneration = completionAlertGenerationRef.current;
       void playRemuxCompletionChime().finally(() => {
+        if (
+          completionAlertGenerationRef.current !== completionAlertGeneration ||
+          alertedCompletionJobIdRef.current !== nextJob.id
+        ) {
+          return;
+        }
         const latestMessages = latestMessagesRef.current;
         showRemuxCompletionNotification({
           title: latestMessages.review.remuxCompletedNotificationTitle,
