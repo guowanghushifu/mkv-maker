@@ -699,18 +699,50 @@ func inferLanguage(label string) string {
 
 func normalizeLanguageCode(value string) string {
 	upper := strings.ToUpper(value)
+	tokens := languageTokens(upper)
 	switch {
-	case strings.Contains(value, "中"), strings.Contains(upper, "CHINESE"), strings.Contains(upper, "MANDARIN"), strings.Contains(upper, "CANTONESE"), strings.Contains(upper, "CHI"), strings.Contains(upper, "ZHO"):
+	case strings.Contains(value, "中"), hasLanguageToken(tokens, "CHINESE", "MANDARIN", "CANTONESE", "CHI", "ZHO"):
 		return "chi"
-	case strings.Contains(value, "日"), strings.Contains(upper, "JAPANESE"), strings.Contains(upper, "JPN"):
+	case strings.Contains(value, "日"), hasLanguageToken(tokens, "JAPANESE", "JPN"):
 		return "jpn"
-	case strings.Contains(value, "英"), strings.Contains(upper, "ENGLISH"), strings.Contains(upper, "ENG"):
+	case strings.Contains(value, "韩"), strings.Contains(value, "韓"), hasLanguageToken(tokens, "KOREAN", "KOR"):
+		return "kor"
+	case strings.Contains(value, "英"), hasLanguageToken(tokens, "ENGLISH", "ENG"):
 		return "eng"
-	case strings.Contains(upper, "FRENCH"), strings.Contains(upper, "FRE"), strings.Contains(upper, "FRA"), strings.Contains(upper, "FRANCAIS"):
+	case hasLanguageToken(tokens, "FRENCH", "FRE", "FRA", "FRANCAIS"):
 		return "fre"
-	case strings.Contains(upper, "SPANISH"), strings.Contains(upper, "SPA"), strings.Contains(upper, "ESPANOL"):
+	case hasLanguageToken(tokens, "GERMAN", "DEUTSCH", "GER", "DEU"):
+		return "ger"
+	case hasLanguageToken(tokens, "ITALIAN", "ITALIANO", "ITA"):
+		return "ita"
+	case hasLanguageToken(tokens, "DUTCH", "NEDERLANDS", "DUT", "NLD"):
+		return "dut"
+	case hasLanguageToken(tokens, "SPANISH", "SPA", "ESPANOL"):
 		return "spa"
 	default:
 		return ""
 	}
+}
+
+func languageTokens(value string) map[string]struct{} {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	tokens := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		tokens[part] = struct{}{}
+	}
+	return tokens
+}
+
+func hasLanguageToken(tokens map[string]struct{}, candidates ...string) bool {
+	for _, candidate := range candidates {
+		if _, ok := tokens[candidate]; ok {
+			return true
+		}
+	}
+	return false
 }

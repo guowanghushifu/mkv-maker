@@ -593,6 +593,75 @@ func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAre
 	}
 }
 
+func TestSourcesHandlerResolveRecognizesAdditionalNamedLanguages(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "EuropeanDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:     []string{"12", "14", "15"},
+			AudioLanguages:    []string{"ger", "ita", "kor"},
+			SubtitleTrackIDs:  []string{"23", "24", "26", "27"},
+			SubtitleLanguages: []string{"ger", "ita", "dut", "kor"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"EuropeanDisc",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\n\nAUDIO:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby Digital Audio             German          640 kbps        5.1 / 48 kHz / 640 kbps\nDolby Digital Audio             Italian         640 kbps        5.1 / 48 kHz / 640 kbps\nDolby Digital Audio             Korean          640 kbps        5.1 / 48 kHz / 640 kbps\n\nSUBTITLES:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           German          34.497 kbps\nPresentation Graphics           Italian         35.187 kbps\nPresentation Graphics           Dutch           24.865 kbps\nPresentation Graphics           Korean          24.865 kbps\n"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/EuropeanDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Language string `json:"language"`
+		} `json:"audio"`
+		Subtitles []struct {
+			Language string `json:"language"`
+		} `json:"subtitles"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	gotAudioLanguages := []string{body.Audio[0].Language, body.Audio[1].Language, body.Audio[2].Language}
+	if !equalStringSlices(gotAudioLanguages, []string{"ger", "ita", "kor"}) {
+		t.Fatalf("expected audio languages [ger ita kor], got %+v", gotAudioLanguages)
+	}
+
+	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language, body.Subtitles[2].Language, body.Subtitles[3].Language}
+	if !equalStringSlices(gotSubtitleLanguages, []string{"ger", "ita", "dut", "kor"}) {
+		t.Fatalf("expected subtitle languages [ger ita dut kor], got %+v", gotSubtitleLanguages)
+	}
+}
+
 func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "NoPlaylistDisc"
