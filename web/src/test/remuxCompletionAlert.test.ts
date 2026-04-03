@@ -181,7 +181,7 @@ describe('playRemuxCompletionChime', () => {
       expect(gainNode.gain.linearRampToValueAtTime).toHaveBeenCalledTimes(2);
       expect(gainNode.gain.setValueAtTime.mock.calls[0]?.[0]).toBe(0);
       expect(gainNode.gain.setValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(expectedStarts[index], 6);
-      expect(gainNode.gain.linearRampToValueAtTime.mock.calls[0]?.[0]).toBe(0.12);
+      expect(gainNode.gain.linearRampToValueAtTime.mock.calls[0]?.[0]).toBe(0.18);
       expect(gainNode.gain.linearRampToValueAtTime.mock.calls[0]?.[1]).toBeCloseTo(
         expectedStarts[index] + 0.02,
         6,

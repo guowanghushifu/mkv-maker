@@ -12,7 +12,7 @@ type ChimeTone = {
 };
 
 const REMUX_CHIME_ATTACK_SECONDS = 0.02;
-const REMUX_CHIME_PEAK_GAIN = 0.12;
+const REMUX_CHIME_PEAK_GAIN = 0.18;
 const REMUX_CHIME_REPEAT_COUNT = 5;
 const REMUX_CHIME_REPEAT_INTERVAL_SECONDS = 0.55;
 const REMUX_CHIME_TONES: readonly ChimeTone[] = [
