@@ -662,6 +662,75 @@ func TestSourcesHandlerResolveRecognizesAdditionalNamedLanguages(t *testing.T) {
 	}
 }
 
+func TestSourcesHandlerResolveRecognizesPortugueseAndRussianLanguages(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "LanguageDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:     []string{"16", "17"},
+			AudioLanguages:    []string{"por", "rus"},
+			SubtitleTrackIDs:  []string{"28", "29"},
+			SubtitleLanguages: []string{"por", "rus"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"LanguageDisc",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\n\nAUDIO:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby Digital Audio             Portuguese      640 kbps        5.1 / 48 kHz / 640 kbps\nDolby Digital Audio             Russian         640 kbps        5.1 / 48 kHz / 640 kbps\n\nSUBTITLES:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           Portuguese      24.865 kbps\nPresentation Graphics           Russian         24.865 kbps\n"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/LanguageDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Language string `json:"language"`
+		} `json:"audio"`
+		Subtitles []struct {
+			Language string `json:"language"`
+		} `json:"subtitles"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	gotAudioLanguages := []string{body.Audio[0].Language, body.Audio[1].Language}
+	if !equalStringSlices(gotAudioLanguages, []string{"por", "rus"}) {
+		t.Fatalf("expected audio languages [por rus], got %+v", gotAudioLanguages)
+	}
+
+	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language}
+	if !equalStringSlices(gotSubtitleLanguages, []string{"por", "rus"}) {
+		t.Fatalf("expected subtitle languages [por rus], got %+v", gotSubtitleLanguages)
+	}
+}
+
 func TestSourcesHandlerResolveRejectsMissingPlaylist(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "NoPlaylistDisc"

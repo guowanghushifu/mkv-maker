@@ -707,6 +707,10 @@ func normalizeLanguageCode(value string) string {
 		return "jpn"
 	case strings.Contains(value, "韩"), strings.Contains(value, "韓"), hasLanguageToken(tokens, "KOREAN", "KOR"):
 		return "kor"
+	case strings.Contains(value, "葡"), hasLanguageToken(tokens, "PORTUGUESE", "PORTUGUES", "PORTUGUESA", "POR"):
+		return "por"
+	case strings.Contains(value, "俄"), hasLanguageToken(tokens, "RUSSIAN", "RUS", "РУССКИЙ"):
+		return "rus"
 	case strings.Contains(value, "英"), hasLanguageToken(tokens, "ENGLISH", "ENG"):
 		return "eng"
 	case hasLanguageToken(tokens, "FRENCH", "FRE", "FRA", "FRANCAIS"):
