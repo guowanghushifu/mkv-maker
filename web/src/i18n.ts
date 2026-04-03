@@ -135,6 +135,8 @@ type MessageSet = {
     commandPreview: string;
     logOutput: string;
     waitingForLogOutput: string;
+    remuxCompletedNotificationTitle: string;
+    remuxCompletedNotificationBody: (outputName: string) => string;
   };
   app: {
     loginFailed: string;
@@ -297,6 +299,8 @@ export const messages: Record<Locale, MessageSet> = {
       commandPreview: '命令预览',
       logOutput: '任务日志',
       waitingForLogOutput: '等待日志输出...',
+      remuxCompletedNotificationTitle: 'Remux 已完成',
+      remuxCompletedNotificationBody: (outputName: string) => `输出已就绪：${outputName}`,
     },
     app: {
       loginFailed: '登录失败。',
@@ -458,6 +462,8 @@ export const messages: Record<Locale, MessageSet> = {
       commandPreview: 'Command Preview',
       logOutput: 'Task Log',
       waitingForLogOutput: 'Waiting for log output...',
+      remuxCompletedNotificationTitle: 'Remux completed',
+      remuxCompletedNotificationBody: (outputName: string) => `Output ready: ${outputName}`,
     },
     app: {
       loginFailed: 'Login failed.',
