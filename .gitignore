@@ -8,3 +8,4 @@ app.db
 .worktrees/
 .data/
 server
+reference/
