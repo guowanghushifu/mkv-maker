@@ -16,6 +16,8 @@ mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 - `APP_PASSWORD`（必填）：Web 应用登录密码
 - `ENABLE_ISO_SCAN`（默认：`0`）：是否扫描 `.iso` 输入源；仅在需要容器内自动挂载 ISO 时设为 `1`
 - `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie；通过 HTTPS 或反向代理访问时可显式设为 `1`
+- MakeMKV 配置文件保存在 `/config/settings.conf`；建议把宿主机目录挂载到 `/config` 以便持久化和手工修改
+- `app_Key` 由容器在启动时自动刷新，并且每天凌晨 1 点通过 cron 自动更新；如需长期自定义 key，请留意该行为会覆盖不同的现有 `app_Key`
 
 Docker Compose 示例：BDMV 场景（不扫描 ISO）：
 
@@ -31,6 +33,7 @@ services:
       APP_PASSWORD: "你的登录密码"
     volumes:
       - ./data:/app/data           # 日志目录
+      - ./config:/config           # MakeMKV 配置目录，包含 /config/settings.conf
       - /dld:/bd_input:rshared     # 蓝光盘存放目录；如需使用 ISO，请先在宿主机手动挂载
       - /remux:/remux              # remux输出目录
 ```
@@ -64,7 +67,8 @@ services:
       - /dev/loop5:/dev/loop5
     volumes:
       - ./data:/app/data           # 日志目录
-      - /dld:/bd_input:rshared     # 蓝光盘存放目录；ISO 文件也可放在此目录下
+      - ./config:/config           # MakeMKV 配置目录，包含 /config/settings.conf
+      - /dld:/bd_input:rshared     # 蓝光盘与 ISO 文件目录；容器会自动扫描并挂载 ISO
       - /remux:/remux              # remux输出目录
 ```
 
@@ -102,3 +106,13 @@ PLATFORMS=linux/amd64,linux/arm64 PUSH=1 IMAGE_TAG=<registry>/<image>:test ./scr
 ```bash
 APP_PASSWORD=change-me ./scripts/docker-run.sh
 ```
+
+默认情况下，`scripts/docker-run.sh` 会把 `CONFIG_HOST_DIR` 设为 `$PWD/.config`；上面的 Compose 示例则使用 `./config` 挂载到 `/config`。
+
+可选：自定义宿主机配置目录：
+
+```bash
+APP_PASSWORD=change-me CONFIG_HOST_DIR=$PWD/my-config ./scripts/docker-run.sh
+```
+
+容器首次启动时，如果挂载目录中没有 `settings.conf`，会自动用镜像内默认模板初始化 `/config/settings.conf`。

@@ -1,0 +1,4 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 1 * * * root /opt/makemkv/bin/makemkv-update-beta-key /config/settings.conf >> /var/log/makemkv-beta-key.log 2>&1
