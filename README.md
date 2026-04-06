@@ -16,7 +16,8 @@ mount -o loop your_bluray_file.iso /your/mount/path/your_bluray_name
 - `APP_PASSWORD`（必填）：Web 应用登录密码
 - `ENABLE_ISO_SCAN`（默认：`0`）：是否扫描 `.iso` 输入源；仅在需要容器内自动挂载 ISO 时设为 `1`
 - `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie；通过 HTTPS 或反向代理访问时可显式设为 `1`
-- MakeMKV 配置文件保存在 `/config/settings.conf`；建议把宿主机目录挂载到 `/config` 以便持久化和手工修改
+- MakeMKV 配置文件真实位置保存在 `/config/settings.conf`；建议把宿主机目录挂载到 `/config` 以便持久化和手工修改
+- 容器启动时会自动创建并自愈 `/config/.MakeMKV -> /config`；当运行环境使用 `HOME=/config` 时，`makemkvcon` 就能通过 `$HOME/.MakeMKV/settings.conf` 读取到 `/config/settings.conf`
 - `app_Key` 由容器在启动时自动刷新，并且每天凌晨 1 点通过 cron 自动更新；如需长期自定义 key，请留意该行为会覆盖不同的现有 `app_Key`
 
 Docker Compose 示例：BDMV 场景（不扫描 ISO）：
@@ -115,4 +116,4 @@ APP_PASSWORD=change-me ./scripts/docker-run.sh
 APP_PASSWORD=change-me CONFIG_HOST_DIR=$PWD/my-config ./scripts/docker-run.sh
 ```
 
-容器首次启动时，如果挂载目录中没有 `settings.conf`，会自动用镜像内默认模板初始化 `/config/settings.conf`。
+容器首次启动时，如果挂载目录中没有 `settings.conf`，会自动用镜像内默认模板初始化 `/config/settings.conf`，并自动修复 `/config/.MakeMKV -> /config`。
