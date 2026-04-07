@@ -158,6 +158,61 @@ Presentation Graphics           Chinese         126.713 kbps 简英特效
 	}
 }
 
+func TestParseSkipsHiddenAudioAndSubtitleRowsButKeepsHiddenDVVideo(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00802.MPLS
+
+VIDEO:
+Codec                   Bitrate             Description
+-----                   -------             -----------
+MPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020
+* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer
+
+AUDIO:
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+Dolby TrueHD/Atmos Audio        English         3984 kbps       7.1 / 48 kHz / 3984 kbps / 24-bit
+* Dolby Digital Audio           Chinese         640 kbps        5.1 / 48 kHz / 640 kbps / 普通话
+DTS-HD Master Audio             Japanese        2123 kbps       5.1 / 48 kHz / 2123 kbps / 日语评论音轨
+
+SUBTITLES:
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+Presentation Graphics           English         54.085 kbps
+* Presentation Graphics         Chinese         31.415 kbps                    简体中文特效
+Presentation Graphics           Japanese        30.071 kbps                    日文注释
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !reflect.DeepEqual(parsed.AudioLabels, []string{"English Dolby TrueHD/Atmos Audio", "日语评论音轨"}) {
+		t.Fatalf("expected hidden audio row to be skipped, got %+v", parsed.AudioLabels)
+	}
+	if !reflect.DeepEqual(parsed.AudioLanguages, []string{"English", "Japanese"}) {
+		t.Fatalf("expected visible audio languages only, got %+v", parsed.AudioLanguages)
+	}
+	if !reflect.DeepEqual(parsed.AudioSourceIndexes, []int{0, 2}) {
+		t.Fatalf("expected visible audio source indexes [0 2], got %+v", parsed.AudioSourceIndexes)
+	}
+	if !reflect.DeepEqual(parsed.AudioCodecInfo, []string{"TrueHD.7.1.Atmos", "DTS-HD.MA.5.1"}) {
+		t.Fatalf("expected visible audio codec info only, got %+v", parsed.AudioCodecInfo)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLabels, []string{"English", "日文注释"}) {
+		t.Fatalf("expected hidden subtitle row to be skipped, got %+v", parsed.SubtitleLabels)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleLanguages, []string{"English", "Japanese"}) {
+		t.Fatalf("expected visible subtitle languages only, got %+v", parsed.SubtitleLanguages)
+	}
+	if !reflect.DeepEqual(parsed.SubtitleSourceIndexes, []int{0, 2}) {
+		t.Fatalf("expected visible subtitle source indexes [0 2], got %+v", parsed.SubtitleSourceIndexes)
+	}
+	if parsed.Video.HDRType != "DV.HDR" || !parsed.DVMergeEnabled {
+		t.Fatalf("expected hidden DV video row to remain effective, got video=%+v merge=%v", parsed.Video, parsed.DVMergeEnabled)
+	}
+}
+
 func TestParseReturnsErrorWhenNoRecognizedFields(t *testing.T) {
 	_, err := Parse("this is not a bdinfo log")
 	if err == nil {

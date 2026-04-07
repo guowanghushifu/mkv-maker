@@ -77,7 +77,7 @@ func New(cfg config.Config) (*App, error) {
 	)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
-	remuxManager := remux.NewManager(nil)
+	remuxManager := remux.NewManagerWithTempDir(nil, cfg.RemuxTempDir)
 	remuxManager.SetOnTaskFinished(func(req remux.StartRequest, _ remux.Task) {
 		if isoManager == nil {
 			return

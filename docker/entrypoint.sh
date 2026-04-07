@@ -5,12 +5,19 @@ CONFIG_DIR=/config
 CONFIG_FILE=/config/settings.conf
 CONFIG_LINK=/config/.MakeMKV
 DEFAULTS_FILE=/defaults/settings.conf
+NOCORE_PROFILE=/config/nocore.mmcp.xml
+DEFAULT_NOCORE_PROFILE=/defaults/nocore.mmcp.xml
 CRON_LOG=/var/log/makemkv-beta-key.log
+REMUX_TMP_DIR=${REMUX_TMP_DIR:-/remux_tmp}
 
-mkdir -p "$CONFIG_DIR" /config/data
+mkdir -p "$CONFIG_DIR" /config/data "$REMUX_TMP_DIR"
 
 if [ ! -s "$CONFIG_FILE" ]; then
     cp "$DEFAULTS_FILE" "$CONFIG_FILE"
+fi
+
+if [ ! -s "$NOCORE_PROFILE" ]; then
+    cp "$DEFAULT_NOCORE_PROFILE" "$NOCORE_PROFILE"
 fi
 
 if [ -L "$CONFIG_LINK" ]; then

@@ -59,6 +59,7 @@ RUN mkdir -p /etc/apt/keyrings && \
 ENV APP_DATA_DIR=/app/data \
     BD_INPUT_DIR=/bd_input \
     REMUX_OUTPUT_DIR=/remux \
+    REMUX_TMP_DIR=/remux_tmp \
     LISTEN_ADDR=:8080 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -70,6 +71,7 @@ COPY --from=makemkv-build /opt/makemkv /opt/makemkv
 COPY docker/makemkv/bin/makemkv-update-beta-key /opt/makemkv/bin/makemkv-update-beta-key
 COPY docker/makemkv/bin/makemkv-set-key /opt/makemkv/bin/makemkv-set-key
 COPY docker/makemkv/defaults/settings.conf /defaults/settings.conf
+COPY docker/makemkv/defaults/nocore.mmcp.xml /defaults/nocore.mmcp.xml
 COPY docker/cron.d/makemkv-beta-key /etc/cron.d/makemkv-beta-key
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
@@ -78,7 +80,7 @@ RUN chmod 755 \
       /opt/makemkv/bin/makemkv-update-beta-key \
       /opt/makemkv/bin/makemkv-set-key && \
     chmod 644 /etc/cron.d/makemkv-beta-key && \
-    mkdir -p /app/data /bd_input /remux /config /config/data /defaults && \
+    mkdir -p /app/data /bd_input /remux /remux_tmp /config /config/data /defaults && \
     touch /var/log/makemkv-beta-key.log
 
 VOLUME ["/config"]

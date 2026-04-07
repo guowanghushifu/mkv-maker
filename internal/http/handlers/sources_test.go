@@ -287,16 +287,18 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			HDRType    string `json:"hdrType"`
 		} `json:"video"`
 		Audio []struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			Selected bool   `json:"selected"`
-			Default  bool   `json:"default"`
+			ID          string `json:"id"`
+			SourceIndex int    `json:"sourceIndex"`
+			Name        string `json:"name"`
+			Selected    bool   `json:"selected"`
+			Default     bool   `json:"default"`
 		} `json:"audio"`
 		Subtitles []struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			Selected bool   `json:"selected"`
-			Default  bool   `json:"default"`
+			ID          string `json:"id"`
+			SourceIndex int    `json:"sourceIndex"`
+			Name        string `json:"name"`
+			Selected    bool   `json:"selected"`
+			Default     bool   `json:"default"`
 		} `json:"subtitles"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
@@ -332,14 +334,116 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if !body.Audio[0].Default || !body.Audio[0].Selected {
 		t.Fatalf("expected first audio to be default+selected: %+v", body.Audio[0])
 	}
-	if body.Audio[0].ID != "2" || body.Audio[1].ID != "5" || body.Audio[2].ID != "7" {
-		t.Fatalf("expected real audio track ids from inspector, got %+v", body.Audio)
+	if body.Audio[0].ID != "audio-0" || body.Audio[1].ID != "audio-1" || body.Audio[2].ID != "audio-2" {
+		t.Fatalf("expected synthetic audio ids, got %+v", body.Audio)
+	}
+	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 || body.Audio[2].SourceIndex != 2 {
+		t.Fatalf("expected audio source indexes 0..2, got %+v", body.Audio)
 	}
 	if !body.Subtitles[0].Default || !body.Subtitles[0].Selected {
 		t.Fatalf("expected first subtitle to be default+selected: %+v", body.Subtitles[0])
 	}
-	if body.Subtitles[0].ID != "9" || body.Subtitles[1].ID != "10" {
-		t.Fatalf("expected real subtitle track ids from inspector, got %+v", body.Subtitles)
+	if body.Subtitles[0].ID != "subtitle-0" || body.Subtitles[1].ID != "subtitle-1" {
+		t.Fatalf("expected synthetic subtitle ids, got %+v", body.Subtitles)
+	}
+	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
+		t.Fatalf("expected subtitle source indexes 0..1, got %+v", body.Subtitles)
+	}
+}
+
+func TestSourcesHandlerResolveFiltersHiddenRowsAndKeepsVisibleSourceIndexes(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "HiddenRowsDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00802.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	streamPath := filepath.Join(sourcePath, "BDMV", "STREAM", "00005.m2ts")
+	if err := os.MkdirAll(filepath.Dir(streamPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:     []string{"2", "5", "7"},
+			AudioLanguages:    []string{"eng", "chi", "jpn"},
+			SubtitleTrackIDs:  []string{"9", "10", "11"},
+			SubtitleLanguages: []string{"eng", "chi", "jpn"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"HiddenRowsDisc",
+		"bdinfo":{
+			"playlistName":"00802.MPLS",
+			"rawText":"PLAYLIST REPORT:\nName: 00802.MPLS\nVIDEO:\nCodec                   Bitrate             Description\n-----                   -------             -----------\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer\nAUDIO:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby TrueHD/Atmos Audio        English         3984 kbps       7.1 / 48 kHz / 3984 kbps / 24-bit\n* Dolby Digital Audio           Chinese         640 kbps        5.1 / 48 kHz / 640 kbps / 普通话\nDTS-HD Master Audio             Japanese        2123 kbps       5.1 / 48 kHz / 2123 kbps / 日语评论音轨\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           English         54.085 kbps\n* Presentation Graphics         Chinese         31.415 kbps                    简体中文特效\nPresentation Graphics           Japanese        30.071 kbps                    日文注释"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/HiddenRowsDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Language    string `json:"language"`
+			SourceIndex int    `json:"sourceIndex"`
+		} `json:"audio"`
+		Subtitles []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Language    string `json:"language"`
+			SourceIndex int    `json:"sourceIndex"`
+		} `json:"subtitles"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(body.Audio) != 2 {
+		t.Fatalf("expected 2 visible audio tracks, got %+v", body.Audio)
+	}
+	if body.Audio[0].ID != "audio-0" || body.Audio[1].ID != "audio-1" {
+		t.Fatalf("expected visible audio ids to be renumbered, got %+v", body.Audio)
+	}
+	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 {
+		t.Fatalf("expected visible audio source indexes 0 and 1, got %+v", body.Audio)
+	}
+	if body.Audio[0].Language != "eng" || body.Audio[1].Language != "jpn" {
+		t.Fatalf("expected hidden audio language to be skipped, got %+v", body.Audio)
+	}
+	if len(body.Subtitles) != 2 {
+		t.Fatalf("expected 2 visible subtitle tracks, got %+v", body.Subtitles)
+	}
+	if body.Subtitles[0].ID != "subtitle-0" || body.Subtitles[1].ID != "subtitle-1" {
+		t.Fatalf("expected visible subtitle ids to be renumbered, got %+v", body.Subtitles)
+	}
+	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
+		t.Fatalf("expected visible subtitle source indexes 0 and 1, got %+v", body.Subtitles)
+	}
+	if body.Subtitles[0].Language != "eng" || body.Subtitles[1].Language != "jpn" {
+		t.Fatalf("expected hidden subtitle language to be skipped, got %+v", body.Subtitles)
 	}
 }
 
@@ -587,11 +691,15 @@ func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAre
 
 	var body struct {
 		Audio []struct {
-			Language string `json:"language"`
+			ID          string `json:"id"`
+			SourceIndex int    `json:"sourceIndex"`
+			Language    string `json:"language"`
 		} `json:"audio"`
 		Subtitles []struct {
-			Name     string `json:"name"`
-			Language string `json:"language"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			SourceIndex int    `json:"sourceIndex"`
+			Language    string `json:"language"`
 		} `json:"subtitles"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
@@ -601,12 +709,93 @@ func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAre
 	if !equalStringSlices(gotAudioLanguages, []string{"eng", "fre"}) {
 		t.Fatalf("expected audio language fallback [eng fre], got %+v", gotAudioLanguages)
 	}
+	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 {
+		t.Fatalf("expected audio source indexes [0 1], got %+v", body.Audio)
+	}
 	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language}
 	if !equalStringSlices(gotSubtitleLanguages, []string{"spa", "chi"}) {
 		t.Fatalf("expected subtitle language fallback [spa chi], got %+v", gotSubtitleLanguages)
 	}
+	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
+		t.Fatalf("expected subtitle source indexes [0 1], got %+v", body.Subtitles)
+	}
 	if body.Subtitles[0].Name != "Signs & Songs" || body.Subtitles[1].Name != "简体中文特效" {
 		t.Fatalf("expected subtitle labels to remain unchanged, got %+v", body.Subtitles)
+	}
+}
+
+func TestSourcesHandlerResolveAlignsFallbackLanguagesWithVisibleRows(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "FallbackHiddenDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00803.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
+		items: []media.SourceEntry{{
+			ID:   sourceID,
+			Name: sourceID,
+			Path: sourcePath,
+			Type: media.SourceBDMV,
+		}},
+	}, stubPlaylistInspector{
+		result: PlaylistInspection{
+			AudioTrackIDs:     []string{"2", "5", "7"},
+			AudioLanguages:    []string{"eng", "chi", "jpn"},
+			SubtitleTrackIDs:  []string{"9", "10", "11"},
+			SubtitleLanguages: []string{"eng", "chi", "jpn"},
+		},
+	})
+
+	reqBody := `{
+		"sourceId":"FallbackHiddenDisc",
+		"bdinfo":{
+			"playlistName":"00803.MPLS",
+			"audioLabels":["English Dolby TrueHD/Atmos Audio","日语评论音轨"],
+			"subtitleLabels":["English","日文注释"],
+			"rawText":"PLAYLIST REPORT:\nName: 00803.MPLS\nAUDIO:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby TrueHD/Atmos Audio                                3984 kbps       7.1 / 48 kHz / 3984 kbps / 24-bit\n* Dolby Digital Audio                                   640 kbps        5.1 / 48 kHz / 640 kbps / 普通话\nDTS-HD Master Audio                                     2123 kbps       5.1 / 48 kHz / 2123 kbps / 日语评论音轨\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics                                   54.085 kbps\n* Presentation Graphics                                 31.415 kbps                    简体中文特效\nPresentation Graphics                                   30.071 kbps                    日文注释"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/FallbackHiddenDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Language    string `json:"language"`
+			SourceIndex int    `json:"sourceIndex"`
+		} `json:"audio"`
+		Subtitles []struct {
+			Language    string `json:"language"`
+			SourceIndex int    `json:"sourceIndex"`
+		} `json:"subtitles"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if !equalStringSlices([]string{body.Audio[0].Language, body.Audio[1].Language}, []string{"eng", "jpn"}) {
+		t.Fatalf("expected aligned audio fallback languages [eng jpn], got %+v", body.Audio)
+	}
+	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 {
+		t.Fatalf("expected visible audio source indexes [0 1], got %+v", body.Audio)
+	}
+	if !equalStringSlices([]string{body.Subtitles[0].Language, body.Subtitles[1].Language}, []string{"eng", "jpn"}) {
+		t.Fatalf("expected aligned subtitle fallback languages [eng jpn], got %+v", body.Subtitles)
+	}
+	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
+		t.Fatalf("expected visible subtitle source indexes [0 1], got %+v", body.Subtitles)
 	}
 }
 

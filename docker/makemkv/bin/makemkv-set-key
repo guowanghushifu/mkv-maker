@@ -31,10 +31,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Get the current  key.
 CUR_KEY="$(sed -n 's|^[ \t]*app_Key[ \t]*=[ \t]*"\(.*\)"[ \t]*$|\1|gp' "$CONFIG_FILE")"
 
-# If not the same, update it.
 if [ "$CUR_KEY" != "$KEY" ]; then
     echo "updating registration key..."
     if grep -q '^app_Key ' "$CONFIG_FILE"; then
@@ -45,5 +43,3 @@ if [ "$CUR_KEY" != "$KEY" ]; then
 else
     echo "registration key already up-to-date."
 fi
-
-# vim:ft=sh:ts=4:sw=4:et:sts=4

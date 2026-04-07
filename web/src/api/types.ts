@@ -33,6 +33,7 @@ export type DraftVideo = {
 
 export type DraftTrack = {
   id: string;
+  sourceIndex: number;
   name: string;
   language: string;
   codecLabel?: string;

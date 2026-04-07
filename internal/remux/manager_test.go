@@ -165,6 +165,18 @@ func writeSuccessfulTempOutput(path string) error {
 	return os.WriteFile(path, []byte("muxed"), 0o644)
 }
 
+func TestNewManagerWithTempDirOverridesExecutorTempDir(t *testing.T) {
+	manager := NewManagerWithTempDir(&stubRunner{}, "/custom/remux-tmp")
+	defer manager.Close()
+
+	if manager.executor == nil || manager.executor.tempDir == nil {
+		t.Fatal("expected manager executor tempDir override to be configured")
+	}
+	if got := manager.executor.tempDir(); got != "/custom/remux-tmp" {
+		t.Fatalf("expected custom remux temp dir, got %q", got)
+	}
+}
+
 func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
 	runner := &controlledRunner{
 		started: make(chan struct{}),
@@ -178,7 +190,7 @@ func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("first Start returned error: %v", err)
@@ -190,7 +202,7 @@ func TestManagerStartRejectsWhenJobAlreadyRunning(t *testing.T) {
 		OutputName:   "Second.mkv",
 		OutputPath:   "/remux/Second.mkv",
 		PlaylistName: "00002.MPLS",
-		PayloadJSON:  validPayloadJSON("Second Disc", "/bd_input/Second", "00002.MPLS", "/remux/Second.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Second Disc", "/tmp/Second.mkv", "00002.MPLS", "/remux/Second.mkv"),
 	})
 	if !errors.Is(err, ErrTaskAlreadyRunning) {
 		t.Fatalf("expected ErrTaskAlreadyRunning, got %v", err)
@@ -242,7 +254,7 @@ func TestManagerSuccessTransitionKeepsLatestAndCompletionLog(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -283,7 +295,7 @@ func TestManagerFailureTransitionKeepsLatestAndFailureLog(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -331,7 +343,7 @@ func TestManagerCallsOnTaskFinishedHook(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler", "/tmp/Nightcrawler.mkv", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -359,7 +371,7 @@ func TestManagerCloseCancelsInFlightTask(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -396,7 +408,7 @@ func TestManagerCloseTreatsSignalKilledAsCanceled(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -436,7 +448,7 @@ func TestManagerStopCurrentCancelsRunningTask(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -490,7 +502,7 @@ func TestManagerStopCurrentRemovesTemporaryOutputAndKeepsFinalOutputPath(t *test
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   finalPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", finalPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", finalPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -538,7 +550,7 @@ func TestManagerCloseRemovesTemporaryOutputAndKeepsFinalOutputPath(t *testing.T)
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   finalPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", finalPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", finalPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -569,7 +581,7 @@ func TestManagerStopCurrentTreatsSignalKilledAsCanceled(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -603,7 +615,7 @@ func TestManagerStopCurrentMarksTaskCanceledWhenStopWinsBeforeSuccessfulCompleti
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -653,7 +665,7 @@ func TestManagerStopCurrentMarksTaskCanceledWhenStopArrivesDuringSuccessFinaliza
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -694,7 +706,7 @@ func TestManagerSuccessTransitionSetsCommandPreviewAndHundredPercent(t *testing.
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00003.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -724,7 +736,7 @@ func TestManagerFailureKeepsLastKnownProgressPercent(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   "/remux/Nightcrawler.mkv",
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", "/remux/Nightcrawler.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00003.MPLS", "/remux/Nightcrawler.mkv"),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -734,8 +746,8 @@ func TestManagerFailureKeepsLastKnownProgressPercent(t *testing.T) {
 	if done.Status != "failed" {
 		t.Fatalf("expected failed status, got %q", done.Status)
 	}
-	if done.ProgressPercent != 63 {
-		t.Fatalf("expected last known progress 63, got %d", done.ProgressPercent)
+	if done.ProgressPercent != 85 {
+		t.Fatalf("expected last known progress 85, got %d", done.ProgressPercent)
 	}
 }
 
@@ -754,7 +766,7 @@ func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00003.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -769,8 +781,8 @@ func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
 	if current.Status != "running" {
 		t.Fatalf("expected running status before release, got %q", current.Status)
 	}
-	if current.ProgressPercent != 42 {
-		t.Fatalf("expected running progress 42 before release, got %d", current.ProgressPercent)
+	if current.ProgressPercent != 76 {
+		t.Fatalf("expected running progress 76 before release, got %d", current.ProgressPercent)
 	}
 
 	close(runner.release)
@@ -795,7 +807,7 @@ func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00003.MPLS",
-		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00003.MPLS", outputPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00003.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -807,8 +819,8 @@ func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Current returned error: %v", err)
 	}
-	if current.ProgressPercent != 42 {
-		t.Fatalf("expected carriage-return progress 42 while running, got %d", current.ProgressPercent)
+	if current.ProgressPercent != 76 {
+		t.Fatalf("expected carriage-return progress 76 while running, got %d", current.ProgressPercent)
 	}
 
 	close(runner.release)
@@ -836,6 +848,15 @@ func waitForTerminalTask(t *testing.T, manager *Manager) Task {
 func validPayloadJSON(sourceName, sourcePath, playlistName, outputPath string) string {
 	return `{
 		"source":{"name":"` + sourceName + `","path":"` + sourcePath + `","type":"bdmv"},
+		"bdinfo":{"playlistName":"` + playlistName + `"},
+		"draft":{"playlistName":"` + playlistName + `","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
+		"outputPath":"` + outputPath + `"
+	}`
+}
+
+func validIntermediatePayloadJSON(sourceName, sourcePath, playlistName, outputPath string) string {
+	return `{
+		"source":{"name":"` + sourceName + `","path":"` + sourcePath + `"},
 		"bdinfo":{"playlistName":"` + playlistName + `"},
 		"draft":{"playlistName":"` + playlistName + `","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
 		"outputPath":"` + outputPath + `"

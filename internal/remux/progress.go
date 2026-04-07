@@ -7,6 +7,10 @@ import (
 )
 
 var progressPercentPattern = regexp.MustCompile(`(?i)(?:^|\s)(?:progress:|#GUI#progress)\s*([0-9]{1,3})%`)
+var makeMKVTotalProgressPattern = regexp.MustCompile(`(?i)^total progress\s*-\s*([0-9]{1,3})%$`)
+
+const makeMKVProgressWeight = 60
+const mkvmergeProgressWeight = 40
 
 func FormatCommandPreview(binary string, args []string) string {
 	_ = binary
@@ -33,18 +37,7 @@ func ExtractProgressPercent(line string) (int, bool) {
 	if len(matches) < 2 {
 		return 0, false
 	}
-
-	value, err := strconv.Atoi(matches[1])
-	if err != nil {
-		return 0, false
-	}
-	if value < 0 {
-		value = 0
-	}
-	if value > 100 {
-		value = 100
-	}
-	return value, true
+	return clampPercentMatch(matches[1])
 }
 
 func extractProgressPercentsFromChunk(remainder, chunk string) ([]int, string) {
@@ -65,10 +58,60 @@ func extractProgressPercentsFromChunk(remainder, chunk string) ([]int, string) {
 	})
 
 	percents := make([]int, 0, len(parts))
+	makeMKVSaving := false
 	for _, part := range parts {
-		if progress, ok := ExtractProgressPercent(part); ok {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		if strings.EqualFold(trimmed, "Current action: Saving to MKV file") {
+			makeMKVSaving = true
+			continue
+		}
+		if progress, ok := extractMakeMKVProgressPercent(trimmed, makeMKVSaving); ok {
 			percents = append(percents, progress)
+			continue
+		}
+		if progress, ok := ExtractProgressPercent(trimmed); ok {
+			percents = append(percents, scaleMkvmergeProgress(progress))
 		}
 	}
 	return percents, nextRemainder
+}
+
+func extractMakeMKVProgressPercent(line string, saving bool) (int, bool) {
+	if !saving {
+		return 0, false
+	}
+	matches := makeMKVTotalProgressPattern.FindStringSubmatch(strings.TrimSpace(line))
+	if len(matches) < 2 {
+		return 0, false
+	}
+	value, ok := clampPercentMatch(matches[1])
+	if !ok {
+		return 0, false
+	}
+	return scaleMakeMKVProgress(value), true
+}
+
+func clampPercentMatch(value string) (int, bool) {
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, false
+	}
+	if parsed < 0 {
+		parsed = 0
+	}
+	if parsed > 100 {
+		parsed = 100
+	}
+	return parsed, true
+}
+
+func scaleMakeMKVProgress(progress int) int {
+	return (progress * makeMKVProgressWeight) / 100
+}
+
+func scaleMkvmergeProgress(progress int) int {
+	return makeMKVProgressWeight + (progress*mkvmergeProgressWeight)/100
 }

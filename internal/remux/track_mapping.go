@@ -1,0 +1,177 @@
+package remux
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+type makeMKVRobotField struct {
+	titleID int
+	code    int
+	value   string
+}
+
+type mkvmergeTrackJSON struct {
+	ID         int                      `json:"id"`
+	Type       string                   `json:"type"`
+	Properties mkvmergeTrackJSONDetails `json:"properties"`
+}
+
+type mkvmergeTrackJSONDetails struct {
+	Number int `json:"number"`
+}
+
+type mkvmergeIdentifyOutput struct {
+	Tracks []mkvmergeTrackJSON `json:"tracks"`
+}
+
+func LookupMakeMKVTitleIDByPlaylist(robotOutput []byte, playlistName string) (int, error) {
+	targetPlaylist := normalizePlaylistValue(playlistName)
+	if targetPlaylist == "" {
+		return 0, errors.New("playlist name is required")
+	}
+
+	for _, line := range strings.Split(string(robotOutput), "\n") {
+		field, ok := parseMakeMKVRobotField(line)
+		if !ok || field.code != 16 {
+			continue
+		}
+		if normalizePlaylistValue(field.value) == targetPlaylist {
+			return field.titleID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("playlist %s not found in makemkv robot output", targetPlaylist)
+}
+
+func parseMakeMKVRobotField(line string) (makeMKVRobotField, bool) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "TINFO:") {
+		return makeMKVRobotField{}, false
+	}
+
+	parts := strings.SplitN(strings.TrimPrefix(trimmed, "TINFO:"), ",", 4)
+	if len(parts) != 4 {
+		return makeMKVRobotField{}, false
+	}
+
+	titleID, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return makeMKVRobotField{}, false
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return makeMKVRobotField{}, false
+	}
+
+	return makeMKVRobotField{
+		titleID: titleID,
+		code:    code,
+		value:   strings.Trim(strings.TrimSpace(parts[3]), `"`),
+	}, true
+}
+
+func normalizePlaylistValue(value string) string {
+	trimmed := strings.TrimSpace(strings.Trim(value, `"`))
+	if trimmed == "" {
+		return ""
+	}
+	if filepath.Ext(trimmed) == "" {
+		trimmed += ".MPLS"
+	}
+	return strings.ToUpper(trimmed)
+}
+
+func RemapDraftTrackIDsBySourceIndex(draft Draft, identifyJSON []byte) (Draft, error) {
+	var output mkvmergeIdentifyOutput
+	if err := json.Unmarshal(identifyJSON, &output); err != nil {
+		return Draft{}, err
+	}
+
+	audioTrackIDs := collectTrackIDsByType(output.Tracks, "audio")
+	subtitleTrackIDs := collectTrackIDsByType(output.Tracks, "subtitles")
+	if len(subtitleTrackIDs) == 0 {
+		subtitleTrackIDs = collectTrackIDsByType(output.Tracks, "subtitles")
+	}
+
+	remapped := draft
+	for i, track := range remapped.Audio {
+		if !usesSyntheticTrackID(track.ID) {
+			continue
+		}
+		mappedID, err := trackIDForSourceIndex(audioTrackIDs, track.SourceIndex, "audio")
+		if err != nil {
+			return Draft{}, err
+		}
+		remapped.Audio[i].ID = mappedID
+	}
+	for i, track := range remapped.Subtitles {
+		if !usesSyntheticTrackID(track.ID) {
+			continue
+		}
+		mappedID, err := trackIDForSourceIndex(subtitleTrackIDs, track.SourceIndex, "subtitle")
+		if err != nil {
+			return Draft{}, err
+		}
+		remapped.Subtitles[i].ID = mappedID
+	}
+	return remapped, nil
+}
+
+func collectTrackIDsByType(tracks []mkvmergeTrackJSON, kind string) []string {
+	typedTracks := make([]mkvmergeTrackJSON, 0, len(tracks))
+	for _, track := range tracks {
+		if !strings.EqualFold(track.Type, kind) {
+			continue
+		}
+		typedTracks = append(typedTracks, track)
+	}
+
+	slices.SortStableFunc(typedTracks, func(a, b mkvmergeTrackJSON) int {
+		aOrdinal, aHasOrdinal := explicitTrackOrdinal(a)
+		bOrdinal, bHasOrdinal := explicitTrackOrdinal(b)
+		switch {
+		case aHasOrdinal && bHasOrdinal && aOrdinal != bOrdinal:
+			return aOrdinal - bOrdinal
+		case aHasOrdinal != bHasOrdinal:
+			if aHasOrdinal {
+				return -1
+			}
+			return 1
+		case a.ID != b.ID:
+			return a.ID - b.ID
+		default:
+			return 0
+		}
+	})
+
+	ids := make([]string, 0, len(typedTracks))
+	for _, track := range typedTracks {
+		ids = append(ids, strconv.Itoa(track.ID))
+	}
+	return ids
+}
+
+func explicitTrackOrdinal(track mkvmergeTrackJSON) (int, bool) {
+	if track.Properties.Number > 0 {
+		return track.Properties.Number, true
+	}
+	return 0, false
+}
+
+func usesSyntheticTrackID(id string) bool {
+	trimmed := strings.TrimSpace(id)
+	return strings.HasPrefix(trimmed, "audio-") || strings.HasPrefix(trimmed, "subtitle-")
+}
+
+func trackIDForSourceIndex(trackIDs []string, sourceIndex int, kind string) (string, error) {
+	if sourceIndex < 0 || sourceIndex >= len(trackIDs) {
+		return "", fmt.Errorf("%s sourceIndex %d is out of range", kind, sourceIndex)
+	}
+	return trackIDs[sourceIndex], nil
+}

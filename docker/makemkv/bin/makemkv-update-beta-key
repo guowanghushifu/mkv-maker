@@ -24,7 +24,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Download the web page.
 TMPFILE="$(mktemp)"
 wget --timeout 10 -qO "$TMPFILE" 'https://forum.makemkv.com/forum/viewtopic.php?f=5&t=1053'
 if [ "$?" -ne 0 ]; then
@@ -32,7 +31,6 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 
-# Extract the beta key.
 BETA_KEY="$(sed -n 's|.*<code>\(.*\)</code>.*|\1|gp' $TMPFILE)"
 if [ -z "$BETA_KEY" ]; then
     echo "ERROR: Failed to extract the beta key."
@@ -40,9 +38,6 @@ if [ -z "$BETA_KEY" ]; then
 fi
 rm "$TMPFILE"
 
-# Set the beta key.
 /opt/makemkv/bin/makemkv-set-key "$BETA_KEY" "$CONFIG_FILE"
 
 exit $?
-
-# vim:ft=sh:ts=4:sw=4:et:sts=4
