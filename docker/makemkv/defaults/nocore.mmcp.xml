@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<profile>
+    <name lang="eng">Keep All But No Core</name>
+
+    <mkvSettings ignoreForcedSubtitlesFlag="true" useISO639Type2T="false" setFirstAudioTrackAsDefault="true" setFirstSubtitleTrackAsDefault="true" setFirstForcedSubtitleTrackAsDefault="true" insertFirstChapter00IfMissing="true" />
+
+    <profileSettings app_DefaultSelectionString="+sel:all,-sel:core" />
+
+    <outputSettings name="copy" outputFormat="directCopy">
+        <description lang="eng">Copy track as is</description>
+    </outputSettings>
+
+    <trackSettings input="default">
+        <output outputSettingsName="copy" defaultSelection="$app_DefaultSelectionString" />
+    </trackSettings>
+</profile>

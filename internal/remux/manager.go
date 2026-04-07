@@ -60,9 +60,19 @@ type Manager struct {
 }
 
 func NewManager(runner CommandRunner) *Manager {
+	return NewManagerWithTempDir(runner, "")
+}
+
+func NewManagerWithTempDir(runner CommandRunner, tempDir string) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
+	executor := NewJobRunner(runner)
+	if strings.TrimSpace(tempDir) != "" {
+		executor.tempDir = func() string {
+			return tempDir
+		}
+	}
 	return &Manager{
-		executor: NewJobRunner(runner),
+		executor: executor,
 		ctx:      ctx,
 		cancel:   cancel,
 	}

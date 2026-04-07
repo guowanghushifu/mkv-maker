@@ -12,18 +12,20 @@ var ErrNoRecognizedFields = errors.New("no recognized bdinfo fields")
 var ErrMissingPlaylist = errors.New("missing playlist name")
 
 type Parsed struct {
-	PlaylistName   string   `json:"playlistName"`
-	DiscTitle      string   `json:"discTitle,omitempty"`
-	Duration       string   `json:"duration,omitempty"`
-	AudioLabels    []string `json:"audioLabels"`
-	AudioLanguages []string `json:"-"`
-	AudioCodecInfo []string `json:"-"`
-	SubtitleLabels []string `json:"subtitleLabels"`
-	SubtitleLanguages []string `json:"-"`
-	RawText        string   `json:"rawText"`
-	StreamFiles    []string `json:"-"`
-	Video          Video    `json:"-"`
-	DVMergeEnabled bool     `json:"-"`
+	PlaylistName          string   `json:"playlistName"`
+	DiscTitle             string   `json:"discTitle,omitempty"`
+	Duration              string   `json:"duration,omitempty"`
+	AudioLabels           []string `json:"audioLabels"`
+	AudioLanguages        []string `json:"-"`
+	AudioCodecInfo        []string `json:"-"`
+	AudioSourceIndexes    []int    `json:"-"`
+	SubtitleLabels        []string `json:"subtitleLabels"`
+	SubtitleLanguages     []string `json:"-"`
+	SubtitleSourceIndexes []int    `json:"-"`
+	RawText               string   `json:"rawText"`
+	StreamFiles           []string `json:"-"`
+	Video                 Video    `json:"-"`
+	DVMergeEnabled        bool     `json:"-"`
 }
 
 type Video struct {
@@ -48,11 +50,13 @@ type audioRow struct {
 	Codec       string
 	Language    string
 	Description string
+	Hidden      bool
 }
 
 type subtitleRow struct {
 	Language    string
 	Description string
+	Hidden      bool
 }
 
 type videoRow struct {
@@ -70,12 +74,14 @@ var (
 func Parse(rawText string) (Parsed, error) {
 	normalizedText := normalizeBDInfoText(rawText)
 	parsed := Parsed{
-		RawText:        rawText,
-		AudioLabels:    []string{},
-		AudioLanguages: []string{},
-		AudioCodecInfo: []string{},
-		SubtitleLabels: []string{},
-		SubtitleLanguages: []string{},
+		RawText:               rawText,
+		AudioLabels:           []string{},
+		AudioLanguages:        []string{},
+		AudioCodecInfo:        []string{},
+		AudioSourceIndexes:    []int{},
+		SubtitleLabels:        []string{},
+		SubtitleLanguages:     []string{},
+		SubtitleSourceIndexes: []int{},
 		Video: Video{
 			Name: "Main Video",
 		},
@@ -193,20 +199,28 @@ func Parse(rawText string) (Parsed, error) {
 		return Parsed{}, ErrMissingPlaylist
 	}
 
-	for _, row := range audioRows {
+	for i, row := range audioRows {
+		if row.Hidden {
+			continue
+		}
 		label := buildAudioLabel(row)
 		if label != "" {
 			parsed.AudioLabels = append(parsed.AudioLabels, label)
 		}
 		parsed.AudioLanguages = append(parsed.AudioLanguages, row.Language)
 		parsed.AudioCodecInfo = append(parsed.AudioCodecInfo, buildAudioCodecLabel(row))
+		parsed.AudioSourceIndexes = append(parsed.AudioSourceIndexes, i)
 	}
-	for _, row := range subtitleRows {
+	for i, row := range subtitleRows {
+		if row.Hidden {
+			continue
+		}
 		label := buildSubtitleLabel(row)
 		if label != "" {
 			parsed.SubtitleLabels = append(parsed.SubtitleLabels, label)
 		}
 		parsed.SubtitleLanguages = append(parsed.SubtitleLanguages, row.Language)
+		parsed.SubtitleSourceIndexes = append(parsed.SubtitleSourceIndexes, i)
 	}
 	if len(videoRows) > 0 {
 		parsed.Video, parsed.DVMergeEnabled = buildVideo(videoRows, normalizedText)
@@ -281,7 +295,12 @@ func parseAudioTableRow(line string) (audioRow, bool) {
 	if shouldIgnoreTableLine(line) {
 		return audioRow{}, false
 	}
-	columns := splitColumns(line)
+	normalized := strings.TrimSpace(line)
+	hidden := strings.HasPrefix(normalized, "*")
+	if hidden {
+		normalized = strings.TrimSpace(strings.TrimPrefix(normalized, "*"))
+	}
+	columns := splitColumns(normalized)
 	if len(columns) < 2 {
 		return audioRow{}, false
 	}
@@ -292,6 +311,7 @@ func parseAudioTableRow(line string) (audioRow, bool) {
 	row := audioRow{
 		Codec:    columns[0],
 		Language: columns[1],
+		Hidden:   hidden,
 	}
 	if len(columns) > 3 {
 		row.Description = strings.Join(columns[3:], " ")
@@ -305,7 +325,12 @@ func parseSubtitleTableRow(line string) (subtitleRow, bool) {
 	if shouldIgnoreTableLine(line) {
 		return subtitleRow{}, false
 	}
-	columns := splitColumns(line)
+	normalized := strings.TrimSpace(line)
+	hidden := strings.HasPrefix(normalized, "*")
+	if hidden {
+		normalized = strings.TrimSpace(strings.TrimPrefix(normalized, "*"))
+	}
+	columns := splitColumns(normalized)
 	if len(columns) == 0 {
 		return subtitleRow{}, false
 	}
@@ -313,7 +338,7 @@ func parseSubtitleTableRow(line string) (subtitleRow, bool) {
 		return subtitleRow{}, false
 	}
 
-	row := subtitleRow{}
+	row := subtitleRow{Hidden: hidden}
 	switch {
 	case len(columns) >= 4:
 		row.Language = columns[1]

@@ -70,13 +70,13 @@ func TestBuildMKVMergeArgsUsesPlaylistInputEvenWhenSegmentPathsArePresent(t *tes
 	}
 }
 
-func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T) {
+func TestBuildMKVMergeArgsUsesNumericAudioIDAndSourceIndexFallback(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
-			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true},
+			{ID: "7", Name: "English", Language: "eng", Selected: true, SourceIndex: 4},
+			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true, SourceIndex: 1},
 		},
 	}
 
@@ -86,8 +86,26 @@ func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T)
 	if !strings.Contains(joined, "--language 7:eng") || !strings.Contains(joined, "--track-name 7:English") {
 		t.Fatalf("expected numeric audio ID selector for first track, got %q", joined)
 	}
-	if !strings.Contains(joined, "--language 12:jpn") || !strings.Contains(joined, "--track-name 12:Japanese") {
-		t.Fatalf("expected selector parsed from second track id, got %q", joined)
+	if !strings.Contains(joined, "--language 2:jpn") || !strings.Contains(joined, "--track-name 2:Japanese") {
+		t.Fatalf("expected selector derived from sourceIndex for synthetic id, got %q", joined)
+	}
+}
+
+func TestBuildMKVMergeArgsUsesIntermediateMKVInputPath(t *testing.T) {
+	draft := Draft{
+		OutputPath: "/remux/out.mkv",
+		SourcePath: "/tmp/intermediate.mkv",
+		Playlist:   "00800.MPLS",
+	}
+
+	args := BuildMKVMergeArgs(draft)
+	if len(args) == 0 {
+		t.Fatalf("expected args to be non-empty")
+	}
+
+	gotInput := args[len(args)-1]
+	if gotInput != "/tmp/intermediate.mkv" {
+		t.Fatalf("expected intermediate mkv input path, got %q", gotInput)
 	}
 }
 
@@ -96,9 +114,9 @@ func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSelectors(t *testing.T)
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
-			{ID: "8", Name: "French", Language: "fra", Selected: false},
-			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true},
+			{ID: "7", Name: "English", Language: "eng", Selected: true, SourceIndex: 4},
+			{ID: "8", Name: "French", Language: "fra", Selected: false, SourceIndex: 3},
+			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true, SourceIndex: 1},
 		},
 	}
 
@@ -107,8 +125,11 @@ func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSelectors(t *testing.T)
 	if !ok {
 		t.Fatalf("expected --audio-tracks option in args: %q", strings.Join(args, " "))
 	}
-	if value != "7,12" {
-		t.Fatalf("expected selected selectors \"7,12\", got %q", value)
+	if value != "7,2" {
+		t.Fatalf("expected selected selectors \"7,2\", got %q", value)
+	}
+	if strings.Contains(value, "12") {
+		t.Fatalf("expected synthetic public id digits to be ignored, got %q", value)
 	}
 }
 
@@ -117,9 +138,9 @@ func TestBuildMKVMergeArgsTrackOrderIsVideoThenSelectedAudiosInInputOrder(t *tes
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "9", Name: "Commentary", Language: "eng", Selected: false},
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
-			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true},
+			{ID: "9", Name: "Commentary", Language: "eng", Selected: false, SourceIndex: 4},
+			{ID: "7", Name: "English", Language: "eng", Selected: true, SourceIndex: 0},
+			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true, SourceIndex: 1},
 		},
 	}
 
@@ -128,8 +149,8 @@ func TestBuildMKVMergeArgsTrackOrderIsVideoThenSelectedAudiosInInputOrder(t *tes
 	if !ok {
 		t.Fatalf("expected --track-order option in args: %q", strings.Join(args, " "))
 	}
-	if value != "0:0,0:7,0:12" {
-		t.Fatalf("expected track order \"0:0,0:7,0:12\", got %q", value)
+	if value != "0:0,0:7,0:2" {
+		t.Fatalf("expected track order \"0:0,0:7,0:2\", got %q", value)
 	}
 }
 
@@ -138,12 +159,12 @@ func TestBuildMKVMergeArgsIncludesSelectedSubtitlesAndTrackOrder(t *testing.T) {
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
+			{ID: "7", Name: "English", Language: "eng", Selected: true, SourceIndex: 0},
 		},
 		Subtitles: []SubtitleTrack{
-			{ID: "12", Name: "English PGS", Language: "eng", Selected: true, Forced: true},
-			{ID: "13", Name: "Chinese PGS", Language: "chi", Selected: true, Default: true},
-			{ID: "14", Name: "French PGS", Language: "fra", Selected: false},
+			{ID: "12", Name: "English PGS", Language: "eng", Selected: true, Forced: true, SourceIndex: 0},
+			{ID: "subtitle-1", Name: "Chinese PGS", Language: "chi", Selected: true, Default: true, SourceIndex: 1},
+			{ID: "14", Name: "French PGS", Language: "fra", Selected: false, SourceIndex: 5},
 		},
 	}
 
@@ -154,8 +175,8 @@ func TestBuildMKVMergeArgsIncludesSelectedSubtitlesAndTrackOrder(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected --subtitle-tracks option in args: %q", joined)
 	}
-	if subtitleTracks != "12,13" {
-		t.Fatalf("expected selected subtitle selectors \"12,13\", got %q", subtitleTracks)
+	if subtitleTracks != "12,2" {
+		t.Fatalf("expected selected subtitle selectors \"12,2\", got %q", subtitleTracks)
 	}
 	if !strings.Contains(joined, "--language 12:eng") || !strings.Contains(joined, "--track-name 12:English PGS") {
 		t.Fatalf("expected subtitle language/name for selector 12, got %q", joined)
@@ -166,16 +187,16 @@ func TestBuildMKVMergeArgsIncludesSelectedSubtitlesAndTrackOrder(t *testing.T) {
 	if !strings.Contains(joined, "--default-track-flag 12:no") {
 		t.Fatalf("expected non-default subtitle selector 12 to be set to no, got %q", joined)
 	}
-	if !strings.Contains(joined, "--default-track-flag 13:yes") {
-		t.Fatalf("expected default track flag for subtitle selector 13, got %q", joined)
+	if !strings.Contains(joined, "--default-track-flag 2:yes") {
+		t.Fatalf("expected default track flag for subtitle selector 2, got %q", joined)
 	}
 
 	trackOrder, ok := optionValue(args, "--track-order")
 	if !ok {
 		t.Fatalf("expected --track-order option in args: %q", joined)
 	}
-	if trackOrder != "0:0,0:7,0:12,0:13" {
-		t.Fatalf("expected track order \"0:0,0:7,0:12,0:13\", got %q", trackOrder)
+	if trackOrder != "0:0,0:7,0:12,0:2" {
+		t.Fatalf("expected track order \"0:0,0:7,0:12,0:2\", got %q", trackOrder)
 	}
 }
 
@@ -184,8 +205,8 @@ func TestBuildMKVMergeArgsMarksNonDefaultAudioTracksAsNo(t *testing.T) {
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true, Default: true},
-			{ID: "8", Name: "Commentary", Language: "eng", Selected: true, Default: false},
+			{ID: "7", Name: "English", Language: "eng", Selected: true, Default: true, SourceIndex: 0},
+			{ID: "8", Name: "Commentary", Language: "eng", Selected: true, Default: false, SourceIndex: 1},
 		},
 	}
 

@@ -80,13 +80,14 @@ type resolveVideo struct {
 }
 
 type resolveTrack struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Language   string `json:"language"`
-	CodecLabel string `json:"codecLabel,omitempty"`
-	Selected   bool   `json:"selected"`
-	Default    bool   `json:"default"`
-	Forced     bool   `json:"forced,omitempty"`
+	ID          string `json:"id"`
+	SourceIndex int    `json:"sourceIndex"`
+	Name        string `json:"name"`
+	Language    string `json:"language"`
+	CodecLabel  string `json:"codecLabel,omitempty"`
+	Selected    bool   `json:"selected"`
+	Default     bool   `json:"default"`
+	Forced      bool   `json:"forced,omitempty"`
 }
 
 type PlaylistInspector interface {
@@ -277,7 +278,6 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	video := resolveVideo{
 		Name:       "Main Video",
 		Codec:      fallbackString(parsed.Video.Codec, "HEVC"),
@@ -295,8 +295,24 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		DVMergeEnabled: dvMergeEnabled,
 		SegmentPaths:   segmentPaths,
 		Video:          video,
-		Audio:          buildResolveTracks(audioLabels, parsed.AudioLanguages, inspection.AudioLanguages, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
-		Subtitles:      buildResolveTracks(subtitleLabels, parsed.SubtitleLanguages, inspection.SubtitleLanguages, nil, inspection.SubtitleTrackIDs, true),
+		Audio: buildResolveTracks(
+			audioLabels,
+			parsed.AudioLanguages,
+			parsed.AudioSourceIndexes,
+			inspection.AudioLanguages,
+			parsed.AudioCodecInfo,
+			"audio",
+			false,
+		),
+		Subtitles: buildResolveTracks(
+			subtitleLabels,
+			parsed.SubtitleLanguages,
+			parsed.SubtitleSourceIndexes,
+			inspection.SubtitleLanguages,
+			nil,
+			"subtitle",
+			true,
+		),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -446,13 +462,9 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func buildResolveTracks(labels []string, languages []string, fallbackLanguages []string, codecLabels []string, trackIDs []string, subtitles bool) []resolveTrack {
+func buildResolveTracks(labels []string, languages []string, originalRowIndexes []int, fallbackLanguages []string, codecLabels []string, idPrefix string, subtitles bool) []resolveTrack {
 	tracks := make([]resolveTrack, 0, len(labels))
 	for i, label := range labels {
-		trackID := strconv.Itoa(i + 1)
-		if i < len(trackIDs) && strings.TrimSpace(trackIDs[i]) != "" {
-			trackID = strings.TrimSpace(trackIDs[i])
-		}
 		codecLabel := ""
 		if i < len(codecLabels) {
 			codecLabel = strings.TrimSpace(codecLabels[i])
@@ -464,19 +476,26 @@ func buildResolveTracks(labels []string, languages []string, fallbackLanguages [
 		if i < len(languages) {
 			language = normalizeLanguageCode(languages[i])
 		}
-		if language == "" && i < len(fallbackLanguages) {
-			language = normalizeLanguageCode(fallbackLanguages[i])
+		if language == "" {
+			fallbackIndex := i
+			if i < len(originalRowIndexes) {
+				fallbackIndex = originalRowIndexes[i]
+			}
+			if fallbackIndex >= 0 && fallbackIndex < len(fallbackLanguages) {
+				language = normalizeLanguageCode(fallbackLanguages[fallbackIndex])
+			}
 		}
 		if language == "" {
 			language = inferLanguage(label)
 		}
 		track := resolveTrack{
-			ID:         trackID,
-			Name:       label,
-			Language:   language,
-			CodecLabel: codecLabel,
-			Selected:   true,
-			Default:    i == 0,
+			ID:          idPrefix + "-" + strconv.Itoa(i),
+			SourceIndex: i,
+			Name:        label,
+			Language:    language,
+			CodecLabel:  codecLabel,
+			Selected:    true,
+			Default:     i == 0,
 		}
 		if subtitles {
 			track.Forced = strings.Contains(strings.ToLower(label), "forced")

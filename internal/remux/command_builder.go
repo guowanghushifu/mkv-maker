@@ -17,12 +17,12 @@ func BuildMKVMergeArgs(d Draft) []string {
 		args = append(args, "--track-name", "0:"+d.Video.Name)
 	}
 
-	for index, track := range d.Audio {
+	for _, track := range d.Audio {
 		if !track.Selected {
 			continue
 		}
 
-		audioSelector := resolveTrackSelector(track.ID, index)
+		audioSelector := resolveTrackSelector(track.ID, track.SourceIndex)
 		audioSelectors = append(audioSelectors, audioSelector)
 		trackOrder = append(trackOrder, "0:"+audioSelector)
 
@@ -35,12 +35,12 @@ func BuildMKVMergeArgs(d Draft) []string {
 		args = append(args, "--default-track-flag", audioSelector+":"+defaultValue)
 	}
 
-	for index, track := range d.Subtitles {
+	for _, track := range d.Subtitles {
 		if !track.Selected {
 			continue
 		}
 
-		subtitleSelector := resolveTrackSelector(track.ID, index)
+		subtitleSelector := resolveTrackSelector(track.ID, track.SourceIndex)
 		subtitleSelectors = append(subtitleSelectors, subtitleSelector)
 		trackOrder = append(trackOrder, "0:"+subtitleSelector)
 
@@ -70,11 +70,15 @@ func BuildMKVMergeArgs(d Draft) []string {
 	return args
 }
 
-func resolveTrackSelector(trackID string, index int) string {
+func resolveTrackSelector(trackID string, sourceIndex int) string {
 	trimmed := strings.TrimSpace(trackID)
 	if trimmed != "" {
 		if _, err := strconv.Atoi(trimmed); err == nil {
 			return trimmed
+		}
+
+		if sourceIndex >= 0 {
+			return strconv.Itoa(sourceIndex + 1)
 		}
 
 		digits := strings.Builder{}
@@ -87,7 +91,7 @@ func resolveTrackSelector(trackID string, index int) string {
 			return digits.String()
 		}
 	}
-	return strconv.Itoa(index + 1)
+	return strconv.Itoa(sourceIndex + 1)
 }
 
 func resolveInputPath(d Draft) string {
@@ -95,7 +99,8 @@ func resolveInputPath(d Draft) string {
 	if sourcePath == "" {
 		return ""
 	}
-	if strings.EqualFold(filepath.Ext(sourcePath), ".MPLS") {
+	ext := filepath.Ext(sourcePath)
+	if strings.EqualFold(ext, ".MPLS") || strings.EqualFold(ext, ".MKV") {
 		return sourcePath
 	}
 	if d.Playlist == "" {

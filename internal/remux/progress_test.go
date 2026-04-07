@@ -67,8 +67,8 @@ func TestExtractProgressPercentsFromChunkParsesCarriageReturnAndSplitTokens(t *t
 	}
 
 	percents, remainder = extractProgressPercentsFromChunk(remainder, "2%\r#GUI#progress 77%\r")
-	if len(percents) != 2 || percents[0] != 42 || percents[1] != 77 {
-		t.Fatalf("expected parsed percents [42 77], got %v", percents)
+	if len(percents) != 2 || percents[0] != 76 || percents[1] != 90 {
+		t.Fatalf("expected parsed percents [76 90], got %v", percents)
 	}
 	if remainder != "" {
 		t.Fatalf("expected empty remainder, got %q", remainder)
@@ -101,5 +101,35 @@ func TestStreamOutputEmitsCarriageReturnChunkWithoutNewline(t *testing.T) {
 
 	if !strings.Contains(combined, "Progress: 42%\r") {
 		t.Fatalf("expected carriage-return progress chunk, got %q", combined)
+	}
+}
+
+func TestExtractProgressPercentsFromChunkIgnoresMakeMKVProgressBeforeSavingPhase(t *testing.T) {
+	percents, remainder := extractProgressPercentsFromChunk("", "Total progress - 12%\n")
+	if len(percents) != 0 {
+		t.Fatalf("expected no progress before MakeMKV saving phase, got %v", percents)
+	}
+	if remainder != "" {
+		t.Fatalf("expected empty remainder, got %q", remainder)
+	}
+}
+
+func TestExtractProgressPercentsFromChunkMapsMakeMKVSavingPhaseToFirstSixtyPercent(t *testing.T) {
+	percents, remainder := extractProgressPercentsFromChunk("", "Current action: Saving to MKV file\nTotal progress - 50%\n")
+	if len(percents) != 1 || percents[0] != 30 {
+		t.Fatalf("expected mapped MakeMKV progress [30], got %v", percents)
+	}
+	if remainder != "" {
+		t.Fatalf("expected empty remainder, got %q", remainder)
+	}
+}
+
+func TestExtractProgressPercentsFromChunkMapsMkvmergeToLastFortyPercent(t *testing.T) {
+	percents, remainder := extractProgressPercentsFromChunk("", "Progress: 50%\n")
+	if len(percents) != 1 || percents[0] != 80 {
+		t.Fatalf("expected mapped mkvmerge progress [80], got %v", percents)
+	}
+	if remainder != "" {
+		t.Fatalf("expected empty remainder, got %q", remainder)
 	}
 }

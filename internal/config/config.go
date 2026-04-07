@@ -12,6 +12,7 @@ type Config struct {
 	OutputDir           string
 	DataDir             string
 	ListenAddr          string
+	RemuxTempDir        string
 	SessionMaxAge       int
 	SessionCookieSecure bool
 	EnableISOScan       bool
@@ -24,6 +25,7 @@ func Load() (Config, error) {
 		OutputDir:           getenvDefault("REMUX_OUTPUT_DIR", "/remux"),
 		DataDir:             getenvDefault("APP_DATA_DIR", "/app/data"),
 		ListenAddr:          getenvDefault("LISTEN_ADDR", ":8080"),
+		RemuxTempDir:        getenvDefault("REMUX_TMP_DIR", "/remux_tmp"),
 		SessionMaxAge:       86400,
 		SessionCookieSecure: getenvBoolDefault("SESSION_COOKIE_SECURE", false),
 		EnableISOScan:       getenvBoolDefault("ENABLE_ISO_SCAN", false),

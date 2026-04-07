@@ -668,7 +668,7 @@ func TestJobsHandlerCreateReturnsConflictWhenTaskRunning(t *testing.T) {
 		OutputPath:   filepath.Join(outputRoot, "Nightcrawler.mkv"),
 		PlaylistName: "00800.MPLS",
 		PayloadJSON: `{
-			"source":{"name":"Nightcrawler Disc","path":"` + sourcePath + `","type":"bdmv"},
+			"source":{"name":"Nightcrawler Disc","path":"/tmp/Nightcrawler.mkv"},
 			"bdinfo":{"playlistName":"00800.MPLS"},
 			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
 			"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler.mkv") + `"
