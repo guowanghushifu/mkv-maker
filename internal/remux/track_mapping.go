@@ -23,7 +23,8 @@ type mkvmergeTrackJSON struct {
 }
 
 type mkvmergeTrackJSONDetails struct {
-	Number int `json:"number"`
+	Number      int    `json:"number"`
+	TagSourceID string `json:"tag_source_id"`
 }
 
 type mkvmergeIdentifyOutput struct {
@@ -162,13 +163,21 @@ func RemapDraftTrackIDsBySourceIndex(draft Draft, identifyJSON []byte) (Draft, e
 	return remapped, nil
 }
 
-func collectTrackIDsByType(tracks []mkvmergeTrackJSON, kind string) []string {
+func collectTracksByType(tracks []mkvmergeTrackJSON, kind string) []mkvmergeTrackJSON {
 	typedTracks := make([]mkvmergeTrackJSON, 0, len(tracks))
 	for _, track := range tracks {
 		if !strings.EqualFold(track.Type, kind) {
 			continue
 		}
 		typedTracks = append(typedTracks, track)
+	}
+	return typedTracks
+}
+
+func collectTrackIDsByType(tracks []mkvmergeTrackJSON, kind string) []string {
+	typedTracks := collectTracksByType(tracks, kind)
+	if strings.EqualFold(kind, "subtitles") {
+		typedTracks = filterAdjacentDuplicateSubtitleTracks(typedTracks)
 	}
 
 	slices.SortStableFunc(typedTracks, func(a, b mkvmergeTrackJSON) int {
@@ -194,6 +203,42 @@ func collectTrackIDsByType(tracks []mkvmergeTrackJSON, kind string) []string {
 		ids = append(ids, strconv.Itoa(track.ID))
 	}
 	return ids
+}
+
+func filterAdjacentDuplicateSubtitleTracks(tracks []mkvmergeTrackJSON) []mkvmergeTrackJSON {
+	if len(tracks) < 2 {
+		return tracks
+	}
+
+	byID := append([]mkvmergeTrackJSON(nil), tracks...)
+	slices.SortStableFunc(byID, func(a, b mkvmergeTrackJSON) int {
+		return a.ID - b.ID
+	})
+
+	duplicateIDs := make(map[int]struct{})
+	for i := 1; i < len(byID); i++ {
+		previous := byID[i-1]
+		current := byID[i]
+		if current.ID != previous.ID+1 {
+			continue
+		}
+		if previous.Properties.TagSourceID == "" || current.Properties.TagSourceID == "" {
+			continue
+		}
+		if previous.Properties.TagSourceID != current.Properties.TagSourceID {
+			continue
+		}
+		duplicateIDs[current.ID] = struct{}{}
+	}
+
+	filtered := make([]mkvmergeTrackJSON, 0, len(tracks))
+	for _, track := range tracks {
+		if _, duplicate := duplicateIDs[track.ID]; duplicate {
+			continue
+		}
+		filtered = append(filtered, track)
+	}
+	return filtered
 }
 
 func explicitTrackOrdinal(track mkvmergeTrackJSON) (int, bool) {
