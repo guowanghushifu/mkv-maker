@@ -7,16 +7,19 @@ import (
 )
 
 var progressPercentPattern = regexp.MustCompile(`(?i)(?:^|\s)(?:progress:|#GUI#progress)\s*([0-9]{1,3})%`)
-var makeMKVTotalProgressPattern = regexp.MustCompile(`(?i)^total progress\s*-\s*([0-9]{1,3})%$`)
+var makeMKVTotalProgressPattern = regexp.MustCompile(`(?i)(?:^|,\s*)total progress\s*-\s*([0-9]{1,3})%`)
 
 const makeMKVProgressWeight = 60
 const mkvmergeProgressWeight = 40
 
 func FormatCommandPreview(binary string, args []string) string {
-	_ = binary
+	trimmedBinary := strings.TrimSpace(binary)
+	if trimmedBinary == "" {
+		trimmedBinary = "mkvmerge"
+	}
 
 	lines := make([]string, 1, len(args)+1)
-	lines[0] = "mkvmerge"
+	lines[0] = trimmedBinary
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if strings.HasPrefix(arg, "--") && i+1 < len(args) {

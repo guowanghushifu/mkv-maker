@@ -87,38 +87,77 @@ func normalizePlaylistValue(value string) string {
 	return strings.ToUpper(trimmed)
 }
 
-func RemapDraftTrackIDsBySourceIndex(draft Draft, identifyJSON []byte) (Draft, error) {
+type ResolvedTrackSelector struct {
+	SourceIndex int
+	TrackID     string
+}
+
+func BuildResolvedTrackSelectorsBySourceIndex(draft Draft, identifyJSON []byte) ([]ResolvedTrackSelector, []ResolvedTrackSelector, error) {
 	var output mkvmergeIdentifyOutput
 	if err := json.Unmarshal(identifyJSON, &output); err != nil {
-		return Draft{}, err
+		return nil, nil, err
 	}
 
 	audioTrackIDs := collectTrackIDsByType(output.Tracks, "audio")
 	subtitleTrackIDs := collectTrackIDsByType(output.Tracks, "subtitles")
-	if len(subtitleTrackIDs) == 0 {
-		subtitleTrackIDs = collectTrackIDsByType(output.Tracks, "subtitles")
-	}
 
-	remapped := draft
-	for i, track := range remapped.Audio {
-		if !usesSyntheticTrackID(track.ID) {
+	audioSelectors := make([]ResolvedTrackSelector, 0, len(draft.Audio))
+	for _, track := range draft.Audio {
+		if !track.Selected {
 			continue
 		}
 		mappedID, err := trackIDForSourceIndex(audioTrackIDs, track.SourceIndex, "audio")
 		if err != nil {
-			return Draft{}, err
+			return nil, nil, err
 		}
-		remapped.Audio[i].ID = mappedID
+		audioSelectors = append(audioSelectors, ResolvedTrackSelector{SourceIndex: track.SourceIndex, TrackID: mappedID})
+	}
+
+	subtitleSelectors := make([]ResolvedTrackSelector, 0, len(draft.Subtitles))
+	for _, track := range draft.Subtitles {
+		if !track.Selected {
+			continue
+		}
+		mappedID, err := trackIDForSourceIndex(subtitleTrackIDs, track.SourceIndex, "subtitle")
+		if err != nil {
+			return nil, nil, err
+		}
+		subtitleSelectors = append(subtitleSelectors, ResolvedTrackSelector{SourceIndex: track.SourceIndex, TrackID: mappedID})
+	}
+
+	return audioSelectors, subtitleSelectors, nil
+}
+
+func RemapDraftTrackIDsBySourceIndex(draft Draft, identifyJSON []byte) (Draft, error) {
+	audioSelectors, subtitleSelectors, err := BuildResolvedTrackSelectorsBySourceIndex(draft, identifyJSON)
+	if err != nil {
+		return Draft{}, err
+	}
+
+	remapped := draft
+	resolvedAudio := make(map[int]string, len(audioSelectors))
+	for _, selector := range audioSelectors {
+		resolvedAudio[selector.SourceIndex] = selector.TrackID
+	}
+	resolvedSubtitles := make(map[int]string, len(subtitleSelectors))
+	for _, selector := range subtitleSelectors {
+		resolvedSubtitles[selector.SourceIndex] = selector.TrackID
+	}
+	for i, track := range remapped.Audio {
+		if !usesSyntheticTrackID(track.ID) {
+			continue
+		}
+		if mappedID, ok := resolvedAudio[track.SourceIndex]; ok {
+			remapped.Audio[i].ID = mappedID
+		}
 	}
 	for i, track := range remapped.Subtitles {
 		if !usesSyntheticTrackID(track.ID) {
 			continue
 		}
-		mappedID, err := trackIDForSourceIndex(subtitleTrackIDs, track.SourceIndex, "subtitle")
-		if err != nil {
-			return Draft{}, err
+		if mappedID, ok := resolvedSubtitles[track.SourceIndex]; ok {
+			remapped.Subtitles[i].ID = mappedID
 		}
-		remapped.Subtitles[i].ID = mappedID
 	}
 	return remapped, nil
 }

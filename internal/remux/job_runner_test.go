@@ -5,17 +5,18 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 )
 
 type fileWritingRunner struct {
-	run func(ctx context.Context, draft Draft, onOutput func(string)) (string, error)
+	run func(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error)
 }
 
-func (r fileWritingRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
-	return r.run(ctx, draft, onOutput)
+func (r fileWritingRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+	return r.run(ctx, draft, args, onOutput)
 }
 
 func TestBuildExecutionDraftUsesExistingPlaylistPathCaseInsensitive(t *testing.T) {
@@ -35,7 +36,7 @@ func TestBuildExecutionDraftUsesExistingPlaylistPathCaseInsensitive(t *testing.T
 		OutputName:   "Disc.mkv",
 		OutputPath:   "/remux/Disc.mkv",
 		PlaylistName: "00801.MPLS",
-		PayloadJSON:  validPayloadJSON("Disc", sourcePath, "00801.MPLS", "/remux/Disc.mkv"),
+		PayloadJSON:  strings.Replace(validPayloadJSON("Disc", sourcePath, "00801.MPLS", "/remux/Disc.mkv"), `"titleId":0`, `"titleId":4`, 1),
 	}
 
 	draft, err := runner.BuildExecutionDraft(req)
@@ -50,8 +51,11 @@ func TestBuildExecutionDraftUsesExistingPlaylistPathCaseInsensitive(t *testing.T
 	if err != nil {
 		t.Fatalf("CommandPreview returned error: %v", err)
 	}
-	if !strings.Contains(preview, playlistPath) {
-		t.Fatalf("expected preview to contain %q, got %q", playlistPath, preview)
+	if !strings.HasPrefix(preview, "makemkvcon\n") {
+		t.Fatalf("expected stage-one MakeMKV preview, got %q", preview)
+	}
+	if !strings.Contains(preview, "file:"+filepath.Dir(sourcePath)) {
+		t.Fatalf("expected preview to contain MakeMKV source %q, got %q", filepath.Dir(sourcePath), preview)
 	}
 }
 
@@ -136,7 +140,7 @@ func TestJobRunnerCommandPreviewUsesTemporaryOutputPath(t *testing.T) {
 		OutputName:   "Disc.mkv",
 		OutputPath:   "/remux/Disc.mkv",
 		PlaylistName: "00801.MPLS",
-		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", "/remux/Disc.mkv"),
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", "/remux/Disc.mkv"),
 	}
 
 	preview, err := runner.CommandPreview(req)
@@ -157,7 +161,8 @@ func TestJobRunnerExecuteRenamesTemporaryOutputAfterSuccessfulRun(t *testing.T) 
 	tempPath := finalPath + ".tmp"
 
 	runner := NewJobRunner(fileWritingRunner{
-		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
 			if draft.OutputPath != tempPath {
 				t.Fatalf("expected runner output path %q, got %q", tempPath, draft.OutputPath)
 			}
@@ -197,7 +202,8 @@ func TestJobRunnerExecuteRemovesTemporaryOutputAfterFailure(t *testing.T) {
 	tempPath := finalPath + ".tmp"
 
 	runner := NewJobRunner(fileWritingRunner{
-		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
 			if err := os.WriteFile(draft.OutputPath, []byte("partial"), 0o644); err != nil {
 				t.Fatalf("WriteFile failed: %v", err)
 			}
@@ -235,7 +241,8 @@ func TestJobRunnerExecuteRemovesStaleTemporaryOutputBeforeRun(t *testing.T) {
 	}
 
 	runner := NewJobRunner(fileWritingRunner{
-		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
 			content, err := os.ReadFile(draft.OutputPath)
 			if err == nil && string(content) == "stale" {
 				t.Fatalf("expected stale temporary output to be removed before run")
@@ -274,7 +281,8 @@ func TestJobRunnerExecuteRemovesTemporaryOutputWhenFinalizeRenameFails(t *testin
 	tempPath := finalPath + ".tmp"
 
 	runner := NewJobRunner(fileWritingRunner{
-		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
 			if err := os.WriteFile(draft.OutputPath, []byte("muxed"), 0o644); err != nil {
 				t.Fatalf("WriteFile failed: %v", err)
 			}
@@ -372,7 +380,8 @@ func TestJobRunnerExecuteClearsTempDirContentsButPreservesDirectory(t *testing.T
 	}
 
 	jobRunner := NewJobRunner(fileWritingRunner{
-		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = onOutput
 			if draft.SourcePath != intermediatePath {
 				t.Fatalf("expected second pass to use intermediate mkv %q, got %q", intermediatePath, draft.SourcePath)
 			}
@@ -456,16 +465,25 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 	intermediatePath := filepath.Join(intermediateDir, "title_t00.mkv")
 	calls := make([]string, 0, 4)
 	capturingRunner := fileWritingRunner{
-		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
 			calls = append(calls, "mkvmerge")
 			if draft.SourcePath != intermediatePath {
 				t.Fatalf("expected second pass to use intermediate mkv %q, got %q", intermediatePath, draft.SourcePath)
 			}
-			if len(draft.Audio) != 1 || draft.Audio[0].ID != "3" {
-				t.Fatalf("expected remapped audio track id 3, got %+v", draft.Audio)
+			if len(draft.Audio) != 1 || draft.Audio[0].ID != "audio-0" {
+				t.Fatalf("expected draft audio id to remain edit-state value, got %+v", draft.Audio)
 			}
-			if len(draft.Subtitles) != 1 || draft.Subtitles[0].ID != "7" {
-				t.Fatalf("expected remapped subtitle track id 7, got %+v", draft.Subtitles)
+			if len(draft.Subtitles) != 1 || draft.Subtitles[0].ID != "subtitle-0" {
+				t.Fatalf("expected draft subtitle id to remain edit-state value, got %+v", draft.Subtitles)
+			}
+			if !slices.Contains(args, "--audio-tracks") || !slices.Contains(args, "3") {
+				t.Fatalf("expected stage-two args to include resolved audio track id 3, got %v", args)
+			}
+			if !slices.Contains(args, "--subtitle-tracks") || !slices.Contains(args, "7") {
+				t.Fatalf("expected stage-two args to include resolved subtitle track id 7, got %v", args)
+			}
+			if !slices.Contains(args, "0:0,0:3,0:7") {
+				t.Fatalf("expected track order to use resolved ids, got %v", args)
 			}
 			if err := os.WriteFile(draft.OutputPath, []byte("muxed"), 0o644); err != nil {
 				t.Fatalf("WriteFile failed: %v", err)

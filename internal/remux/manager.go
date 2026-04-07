@@ -66,16 +66,18 @@ func NewManager(runner CommandRunner) *Manager {
 func NewManagerWithTempDir(runner CommandRunner, tempDir string) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	executor := NewJobRunner(runner)
+	manager := &Manager{
+		executor: executor,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+	executor.onCommandPreview = manager.updateCommandPreview
 	if strings.TrimSpace(tempDir) != "" {
 		executor.tempDir = func() string {
 			return tempDir
 		}
 	}
-	return &Manager{
-		executor: executor,
-		ctx:      ctx,
-		cancel:   cancel,
-	}
+	return manager
 }
 
 func (m *Manager) SetOnTaskFinished(fn func(StartRequest, Task)) {
@@ -296,6 +298,20 @@ func (m *Manager) appendLog(state *taskState, content string) {
 		return
 	}
 	state.log += content
+}
+
+func (m *Manager) updateCommandPreview(preview string) {
+	if m == nil || strings.TrimSpace(preview) == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.current != nil {
+		m.current.task.CommandPreview = preview
+	}
+	if m.latest != nil {
+		m.latest.task.CommandPreview = preview
+	}
 }
 
 func (m *Manager) updateProgressFromOutput(state *taskState, output string) {
