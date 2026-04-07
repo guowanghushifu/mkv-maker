@@ -80,7 +80,8 @@ export function buildFilenamePreview(draft: Draft, fallbackTitle: string): strin
 
 function makeTrack(idPrefix: string, name: string, index: number, isDefault: boolean): DraftTrack {
   return {
-    id: `${idPrefix}-${index + 1}`,
+    id: `${idPrefix}${index + 1}`,
+    sourceIndex: index,
     name,
     language: 'eng',
     codecLabel: normalizeCodecLabel(name),

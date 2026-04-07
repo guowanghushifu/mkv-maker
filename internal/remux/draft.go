@@ -10,6 +10,14 @@ type Draft struct {
 	Video        VideoTrack
 	Audio        []AudioTrack
 	Subtitles    []SubtitleTrack
+	MakeMKV      MakeMKVTitleCache
+}
+
+type MakeMKVTitleCache struct {
+	PlaylistName string
+	TitleID      int
+	Audio        []AudioTrack
+	Subtitles    []SubtitleTrack
 }
 
 type VideoTrack struct {
@@ -20,21 +28,23 @@ type VideoTrack struct {
 }
 
 type AudioTrack struct {
-	ID         string
-	Name       string
-	Language   string
-	CodecLabel string
-	Default    bool
-	Selected   bool
+	ID          string
+	SourceIndex int
+	Name        string
+	Language    string
+	CodecLabel  string
+	Default     bool
+	Selected    bool
 }
 
 type SubtitleTrack struct {
-	ID       string
-	Name     string
-	Language string
-	Default  bool
-	Selected bool
-	Forced   bool
+	ID          string
+	SourceIndex int
+	Name        string
+	Language    string
+	Default     bool
+	Selected    bool
+	Forced      bool
 }
 
 func (d Draft) DefaultSelectedAudio() (AudioTrack, bool) {

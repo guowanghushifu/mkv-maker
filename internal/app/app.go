@@ -72,7 +72,7 @@ func New(cfg config.Config) (*App, error) {
 		cfg.InputDir,
 		cfg.OutputDir,
 		scanner,
-		nil,
+		handlers.MakeMKVPlaylistInspector{},
 		isoManager,
 	)
 	bdinfoHandler := handlers.NewBDInfoHandler()

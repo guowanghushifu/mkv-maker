@@ -287,7 +287,7 @@ func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
 	reqBody := `{
 		"source":{"id":"movies-nightcrawler-iso","name":"Nightcrawler","path":"` + filepath.Join(t.TempDir(), "wrong.iso") + `","type":"iso"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
-		"draft":{"playlistName":"00800.MPLS"},
+		"draft":{"playlistName":"00800.MPLS","makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"Nightcrawler.mkv",
 		"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler.mkv") + `"
 	}`
@@ -357,7 +357,7 @@ func TestJobsHandlerCreateUsesCanonicalISOScanData(t *testing.T) {
 	reqBody := `{
 		"source":{"id":"movies-nightcrawler-iso","name":"Sneaky","path":"` + forgedPath + `","type":"iso"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
-		"draft":{"playlistName":"00800.MPLS"},
+		"draft":{"playlistName":"00800.MPLS","makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"Nightcrawler.mkv",
 		"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler.mkv") + `"
 	}`
@@ -481,7 +481,7 @@ func TestJobsHandlerCreateRejectsSymlinkEscapeInOutputPath(t *testing.T) {
 	reqBody := `{
 		"source":{"name":"Disc","path":"` + sourcePath + `","type":"bdmv"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
-		"draft":{"playlistName":"00800.MPLS"},
+		"draft":{"playlistName":"00800.MPLS","makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"Disc.mkv",
 		"outputPath":"` + filepath.Join(outputRoot, "outside-link", "Disc.mkv") + `"
 	}`
@@ -517,7 +517,7 @@ func TestJobsHandlerCreateAllowsExistingOutputFile(t *testing.T) {
 	reqBody := `{
 		"source":{"name":"Disc","path":"` + sourcePath + `","type":"bdmv"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
-		"draft":{"playlistName":"00800.MPLS"},
+		"draft":{"playlistName":"00800.MPLS","makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"Disc.mkv",
 		"outputPath":"` + existingOutput + `"
 	}`
@@ -549,7 +549,7 @@ func TestJobsHandlerCreateAcceptsLowercasePlaylistFileOnDisk(t *testing.T) {
 	reqBody := `{
 		"source":{"name":"Disc","path":"` + sourcePath + `","type":"bdmv"},
 		"bdinfo":{"playlistName":"00003.MPLS","rawText":"PLAYLIST REPORT:\nName: 00003.MPLS"},
-		"draft":{"playlistName":"00003.MPLS"},
+		"draft":{"playlistName":"00003.MPLS","makemkv":{"playlistName":"00003.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"Disc.mkv",
 		"outputPath":"` + filepath.Join(outputRoot, "Disc.mkv") + `"
 	}`
@@ -670,7 +670,7 @@ func TestJobsHandlerCreateReturnsConflictWhenTaskRunning(t *testing.T) {
 		PayloadJSON: `{
 			"source":{"name":"Nightcrawler Disc","path":"` + sourcePath + `","type":"bdmv"},
 			"bdinfo":{"playlistName":"00800.MPLS"},
-			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
+			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[],"makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 			"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler.mkv") + `"
 		}`,
 	})
@@ -680,7 +680,7 @@ func TestJobsHandlerCreateReturnsConflictWhenTaskRunning(t *testing.T) {
 	reqBody := `{
 		"source":{"id":"Nightcrawler","name":"Nightcrawler Disc","path":"` + sourcePath + `","type":"bdmv"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
-		"draft":{"sourceId":"Nightcrawler","playlistName":"00800.MPLS"},
+		"draft":{"sourceId":"Nightcrawler","playlistName":"00800.MPLS","makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"Nightcrawler.mkv",
 		"outputPath":"` + filepath.Join(outputRoot, "Nightcrawler.mkv") + `"
 	}`
@@ -698,7 +698,7 @@ func validCreateBody(sourcePath, outputRoot, outputFilename, playlistName, sourc
 	return `{
 		"source":{"id":"Nightcrawler","name":"` + sourceName + `","path":"` + sourcePath + `","type":"bdmv"},
 		"bdinfo":{"playlistName":"` + playlistName + `","rawText":"PLAYLIST REPORT:\nName: ` + playlistName + `"},
-		"draft":{"sourceId":"Nightcrawler","playlistName":"` + playlistName + `"},
+		"draft":{"sourceId":"Nightcrawler","playlistName":"` + playlistName + `","makemkv":{"playlistName":"` + playlistName + `","titleId":0,"audio":[],"subtitles":[]}},
 		"outputFilename":"` + outputFilename + `",
 		"outputPath":"` + filepath.Join(outputRoot, outputFilename) + `"
 	}`

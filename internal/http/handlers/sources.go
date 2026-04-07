@@ -17,7 +17,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	mediabdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
+	makemkv "github.com/guowanghushifu/mkv-maker/internal/media/makemkv"
 	mediampls "github.com/guowanghushifu/mkv-maker/internal/media/mpls"
+	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 type SourceScanner interface {
@@ -61,15 +63,16 @@ type resolveBDInfoInput struct {
 }
 
 type resolveSourceResponse struct {
-	SourceID       string         `json:"sourceId"`
-	PlaylistName   string         `json:"playlistName"`
-	OutputDir      string         `json:"outputDir"`
-	Title          string         `json:"title"`
-	DVMergeEnabled bool           `json:"dvMergeEnabled"`
-	SegmentPaths   []string       `json:"segmentPaths,omitempty"`
-	Video          resolveVideo   `json:"video"`
-	Audio          []resolveTrack `json:"audio"`
-	Subtitles      []resolveTrack `json:"subtitles"`
+	SourceID       string                  `json:"sourceId"`
+	PlaylistName   string                  `json:"playlistName"`
+	OutputDir      string                  `json:"outputDir"`
+	Title          string                  `json:"title"`
+	DVMergeEnabled bool                    `json:"dvMergeEnabled"`
+	SegmentPaths   []string                `json:"segmentPaths,omitempty"`
+	Video          resolveVideo            `json:"video"`
+	Audio          []resolveTrack          `json:"audio"`
+	Subtitles      []resolveTrack          `json:"subtitles"`
+	MakeMKV        remux.MakeMKVTitleCache `json:"makemkv"`
 }
 
 type resolveVideo struct {
@@ -80,24 +83,26 @@ type resolveVideo struct {
 }
 
 type resolveTrack struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Language   string `json:"language"`
-	CodecLabel string `json:"codecLabel,omitempty"`
-	Selected   bool   `json:"selected"`
-	Default    bool   `json:"default"`
-	Forced     bool   `json:"forced,omitempty"`
+	ID          string `json:"id"`
+	SourceIndex int    `json:"sourceIndex"`
+	Name        string `json:"name"`
+	Language    string `json:"language"`
+	CodecLabel  string `json:"codecLabel,omitempty"`
+	Selected    bool   `json:"selected"`
+	Default     bool   `json:"default"`
+	Forced      bool   `json:"forced,omitempty"`
 }
 
 type PlaylistInspector interface {
-	Inspect(playlistPath string) (PlaylistInspection, error)
+	Inspect(ctx context.Context, sourcePath, playlistPath string) (MakeMKVInspection, error)
 }
 
-type PlaylistInspection struct {
-	AudioTrackIDs     []string
-	AudioLanguages    []string
-	SubtitleTrackIDs  []string
-	SubtitleLanguages []string
+type MakeMKVInspection struct {
+	TitleID      int
+	PlaylistName string
+	Audio        []resolveTrack
+	Subtitles    []resolveTrack
+	Cache        remux.MakeMKVTitleCache
 }
 
 var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
@@ -109,7 +114,7 @@ func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspec
 		scanner = media.NewScanner(filepath.Join(inputDir, "iso_auto_mount"), true)
 	}
 	if inspector == nil {
-		inspector = MKVMergePlaylistInspector{}
+		inspector = MakeMKVPlaylistInspector{}
 	}
 	var manager ISOMountResolver
 	if len(isoManager) > 0 {
@@ -241,7 +246,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		clipNames = parsed.StreamFiles
 	}
 	segmentPaths := buildSegmentPaths(sourcePath, clipNames)
-	inspection, err := h.Inspector.Inspect(playlistPath)
+	inspection, err := h.Inspector.Inspect(r.Context(), sourcePath, playlistPath)
 	if err != nil {
 		log.Printf(
 			"resolve source=%s playlist=%s playlistPath=%s segments=%q: playlist inspection failed: %v",
@@ -256,25 +261,6 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.Error(w, "failed to inspect playlist tracks", http.StatusInternalServerError)
-		return
-	}
-
-	audioLabels := compactLabels(req.BDInfo.AudioLabels)
-	if len(audioLabels) == 0 {
-		audioLabels = compactLabels(parsed.AudioLabels)
-	}
-	subtitleLabels := compactLabels(req.BDInfo.SubtitleLabels)
-	if len(subtitleLabels) == 0 {
-		subtitleLabels = compactLabels(parsed.SubtitleLabels)
-	}
-	if err := validateResolvedTrackIDs(audioLabels, inspection.AudioTrackIDs, "audio"); err != nil {
-		logResolveFailure(pathSourceID, playlistName, "audio track validation failed: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := validateResolvedTrackIDs(subtitleLabels, inspection.SubtitleTrackIDs, "subtitle"); err != nil {
-		logResolveFailure(pathSourceID, playlistName, "subtitle track validation failed: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -295,8 +281,9 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		DVMergeEnabled: dvMergeEnabled,
 		SegmentPaths:   segmentPaths,
 		Video:          video,
-		Audio:          buildResolveTracks(audioLabels, parsed.AudioLanguages, inspection.AudioLanguages, parsed.AudioCodecInfo, inspection.AudioTrackIDs, false),
-		Subtitles:      buildResolveTracks(subtitleLabels, parsed.SubtitleLanguages, inspection.SubtitleLanguages, nil, inspection.SubtitleTrackIDs, true),
+		Audio:          inspection.Audio,
+		Subtitles:      inspection.Subtitles,
+		MakeMKV:        inspection.Cache,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -520,152 +507,121 @@ func buildSegmentPaths(sourceRoot string, streamFiles []string) []string {
 	return paths
 }
 
-type MKVMergePlaylistInspector struct {
+func makeMKVSourceArg(sourcePath string) string {
+	trimmed := strings.TrimSpace(sourcePath)
+	if strings.EqualFold(filepath.Base(trimmed), "BDMV") {
+		return "file:" + filepath.Dir(trimmed)
+	}
+	return "file:" + trimmed
+}
+
+type MakeMKVPlaylistInspector struct {
 	Binary string
 }
 
-type mkvmergeTrack struct {
-	ID         int                     `json:"id"`
-	Type       string                  `json:"type"`
-	Codec      string                  `json:"codec"`
-	Properties mkvmergeTrackProperties `json:"properties"`
-}
-
-type mkvmergeTrackProperties struct {
-	AudioChannels     int    `json:"audio_channels"`
-	Language          string `json:"language"`
-	Number            int    `json:"number"`
-	StreamID          int    `json:"stream_id"`
-	MultiplexedTracks []int  `json:"multiplexed_tracks"`
-}
-
-type mkvmergeIdentifyPayload struct {
-	Tracks []mkvmergeTrack `json:"tracks"`
-}
-
-func (i MKVMergePlaylistInspector) Inspect(playlistPath string) (PlaylistInspection, error) {
+func (i MakeMKVPlaylistInspector) Inspect(ctx context.Context, sourcePath, playlistPath string) (MakeMKVInspection, error) {
 	binary := strings.TrimSpace(i.Binary)
 	if binary == "" {
-		binary = "mkvmerge"
+		binary = "makemkvcon"
 	}
 
-	output, err := exec.Command(binary, "-J", playlistPath).Output()
+	output, err := exec.CommandContext(ctx, binary, "info", makeMKVSourceArg(sourcePath), "--robot").Output()
 	if err != nil {
-		return PlaylistInspection{}, err
+		return MakeMKVInspection{}, err
 	}
 
-	var payload mkvmergeIdentifyPayload
-	if err := json.Unmarshal(output, &payload); err != nil {
-		return PlaylistInspection{}, err
+	parsed, err := makemkv.ParseRobotOutput(output)
+	if err != nil {
+		return MakeMKVInspection{}, err
 	}
 
-	audioSelections, subtitleSelections := collectTrackSelections(payload)
-	return PlaylistInspection{
-		AudioTrackIDs:     collectSelectionIDs(audioSelections),
-		AudioLanguages:    collectSelectionLanguages(audioSelections),
-		SubtitleTrackIDs:  collectSelectionIDs(subtitleSelections),
-		SubtitleLanguages: collectSelectionLanguages(subtitleSelections),
-	}, nil
+	title, err := parsed.TitleByPlaylist(filepath.Base(strings.TrimSpace(playlistPath)))
+	if err != nil {
+		return MakeMKVInspection{}, err
+	}
+
+	view, err := makemkv.BuildTitleView(title)
+	if err != nil {
+		return MakeMKVInspection{}, err
+	}
+
+	inspection := MakeMKVInspection{
+		TitleID:      view.TitleID,
+		PlaylistName: view.PlaylistName,
+		Audio:        makeResolveAudioTracks(view.Audio),
+		Subtitles:    makeResolveSubtitleTracks(view.Subtitles),
+	}
+	inspection.Cache = remux.MakeMKVTitleCache{
+		PlaylistName: inspection.PlaylistName,
+		TitleID:      inspection.TitleID,
+		Audio:        makeCacheAudioTracks(inspection.Audio),
+		Subtitles:    makeCacheSubtitleTracks(inspection.Subtitles),
+	}
+	return inspection, nil
 }
 
-func collectTrackIDs(payload mkvmergeIdentifyPayload) ([]string, []string) {
-	audioSelections, subtitleSelections := collectTrackSelections(payload)
-	return collectSelectionIDs(audioSelections), collectSelectionIDs(subtitleSelections)
+func makeResolveAudioTracks(tracks []makemkv.VisibleTrack) []resolveTrack {
+	resolved := make([]resolveTrack, 0, len(tracks))
+	for _, track := range tracks {
+		resolved = append(resolved, resolveTrack{
+			ID:          track.ID,
+			SourceIndex: track.SourceIndex,
+			Name:        track.Name,
+			Language:    track.Language,
+			CodecLabel:  track.CodecLabel,
+			Selected:    track.Selected,
+			Default:     track.Default,
+		})
+	}
+	return resolved
 }
 
-type trackSelection struct {
-	ID       string
-	Language string
+func makeResolveSubtitleTracks(tracks []makemkv.VisibleTrack) []resolveTrack {
+	resolved := make([]resolveTrack, 0, len(tracks))
+	for _, track := range tracks {
+		resolved = append(resolved, resolveTrack{
+			ID:          track.ID,
+			SourceIndex: track.SourceIndex,
+			Name:        track.Name,
+			Language:    track.Language,
+			Selected:    track.Selected,
+			Default:     track.Default,
+			Forced:      track.Forced,
+		})
+	}
+	return resolved
 }
 
-func collectTrackSelections(payload mkvmergeIdentifyPayload) ([]trackSelection, []trackSelection) {
-	audioSelections := make([]trackSelection, 0, len(payload.Tracks))
-	subtitleSelections := make([]trackSelection, 0, len(payload.Tracks))
-	groupBest := make(map[string]mkvmergeTrack, len(payload.Tracks))
-	audioDirect := make(map[string]trackSelection, len(payload.Tracks))
-	audioOrder := make([]string, 0, len(payload.Tracks))
-
-	for _, track := range payload.Tracks {
-		switch strings.ToLower(strings.TrimSpace(track.Type)) {
-		case "audio":
-			if key := multiplexedGroupKey(track); key != "" {
-				if _, ok := groupBest[key]; !ok {
-					audioOrder = append(audioOrder, key)
-					groupBest[key] = track
-					continue
-				}
-				if shouldPreferMultiplexedTrack(track, groupBest[key]) {
-					groupBest[key] = track
-				}
-				continue
-			}
-			key := strconv.Itoa(track.ID)
-			audioOrder = append(audioOrder, key)
-			audioDirect[key] = trackSelection{
-				ID:       strconv.Itoa(track.ID),
-				Language: strings.TrimSpace(track.Properties.Language),
-			}
-		case "subtitles":
-			subtitleSelections = append(subtitleSelections, trackSelection{
-				ID:       strconv.Itoa(track.ID),
-				Language: strings.TrimSpace(track.Properties.Language),
-			})
-		}
+func makeCacheAudioTracks(tracks []resolveTrack) []remux.AudioTrack {
+	resolved := make([]remux.AudioTrack, 0, len(tracks))
+	for _, track := range tracks {
+		resolved = append(resolved, remux.AudioTrack{
+			ID:          track.ID,
+			SourceIndex: track.SourceIndex,
+			Name:        track.Name,
+			Language:    track.Language,
+			CodecLabel:  track.CodecLabel,
+			Default:     track.Default,
+			Selected:    track.Selected,
+		})
 	}
-
-	for _, entry := range audioOrder {
-		if track, ok := groupBest[entry]; ok {
-			audioSelections = append(audioSelections, trackSelection{
-				ID:       strconv.Itoa(track.ID),
-				Language: strings.TrimSpace(track.Properties.Language),
-			})
-			continue
-		}
-		if selection, ok := audioDirect[entry]; ok {
-			audioSelections = append(audioSelections, selection)
-		}
-	}
-	return audioSelections, subtitleSelections
+	return resolved
 }
 
-func collectSelectionIDs(selections []trackSelection) []string {
-	ids := make([]string, 0, len(selections))
-	for _, selection := range selections {
-		ids = append(ids, selection.ID)
+func makeCacheSubtitleTracks(tracks []resolveTrack) []remux.SubtitleTrack {
+	resolved := make([]remux.SubtitleTrack, 0, len(tracks))
+	for _, track := range tracks {
+		resolved = append(resolved, remux.SubtitleTrack{
+			ID:          track.ID,
+			SourceIndex: track.SourceIndex,
+			Name:        track.Name,
+			Language:    track.Language,
+			Default:     track.Default,
+			Selected:    track.Selected,
+			Forced:      track.Forced,
+		})
 	}
-	return ids
-}
-
-func collectSelectionLanguages(selections []trackSelection) []string {
-	languages := make([]string, 0, len(selections))
-	for _, selection := range selections {
-		languages = append(languages, selection.Language)
-	}
-	return languages
-}
-
-func multiplexedGroupKey(track mkvmergeTrack) string {
-	if len(track.Properties.MultiplexedTracks) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(track.Properties.MultiplexedTracks)+2)
-	if track.Properties.Number > 0 {
-		parts = append(parts, strconv.Itoa(track.Properties.Number))
-	}
-	if track.Properties.StreamID > 0 {
-		parts = append(parts, strconv.Itoa(track.Properties.StreamID))
-	}
-	for _, id := range track.Properties.MultiplexedTracks {
-		parts = append(parts, strconv.Itoa(id))
-	}
-	return strings.Join(parts, ":")
-}
-
-func shouldPreferMultiplexedTrack(candidate, current mkvmergeTrack) bool {
-	if candidate.Properties.AudioChannels != current.Properties.AudioChannels {
-		return candidate.Properties.AudioChannels > current.Properties.AudioChannels
-	}
-	return false
+	return resolved
 }
 
 func normalizeCodecLabel(label string) string {

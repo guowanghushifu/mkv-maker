@@ -209,13 +209,14 @@ type executionPayload struct {
 		PlaylistName string `json:"playlistName"`
 	} `json:"bdinfo"`
 	Draft struct {
-		Title        string          `json:"title"`
-		PlaylistName string          `json:"playlistName"`
-		EnableDV     bool            `json:"dvMergeEnabled"`
-		SegmentPaths []string        `json:"segmentPaths"`
-		Video        VideoTrack      `json:"video"`
-		Audio        []AudioTrack    `json:"audio"`
-		Subtitles    []SubtitleTrack `json:"subtitles"`
+		Title        string            `json:"title"`
+		PlaylistName string            `json:"playlistName"`
+		EnableDV     bool              `json:"dvMergeEnabled"`
+		SegmentPaths []string          `json:"segmentPaths"`
+		Video        VideoTrack        `json:"video"`
+		Audio        []AudioTrack      `json:"audio"`
+		Subtitles    []SubtitleTrack   `json:"subtitles"`
+		MakeMKV      MakeMKVTitleCache `json:"makemkv"`
 	} `json:"draft"`
 	OutputPath string `json:"outputPath"`
 }
@@ -260,7 +261,7 @@ func buildExecutionDraft(req StartRequest) (Draft, error) {
 		return Draft{}, errors.New("job payload is missing output path")
 	}
 
-	return Draft{
+	draft := Draft{
 		Title:        strings.TrimSpace(payload.Draft.Title),
 		Playlist:     playlistName,
 		SourcePath:   sourcePath,
@@ -270,7 +271,28 @@ func buildExecutionDraft(req StartRequest) (Draft, error) {
 		Video:        payload.Draft.Video,
 		Audio:        payload.Draft.Audio,
 		Subtitles:    payload.Draft.Subtitles,
-	}, nil
+		MakeMKV:      payload.Draft.MakeMKV,
+	}
+	if err := validateMakeMKVCache(draft, strings.TrimSpace(payload.Source.Type)); err != nil {
+		return Draft{}, err
+	}
+	return draft, nil
+}
+
+func validateMakeMKVCache(draft Draft, sourceType string) error {
+	if sourceType != "" && !strings.EqualFold(sourceType, "bdmv") {
+		return nil
+	}
+	if strings.TrimSpace(draft.MakeMKV.PlaylistName) == "" && draft.MakeMKV.TitleID == 0 && len(draft.MakeMKV.Audio) == 0 && len(draft.MakeMKV.Subtitles) == 0 {
+		return errors.New("makemkv cache is required for bdmv remux")
+	}
+	if !strings.EqualFold(strings.TrimSpace(draft.MakeMKV.PlaylistName), strings.TrimSpace(draft.Playlist)) {
+		return errors.New("makemkv cache playlist does not match draft playlist")
+	}
+	if draft.MakeMKV.TitleID < 0 {
+		return errors.New("makemkv cache titleId is invalid")
+	}
+	return nil
 }
 
 func resolvePlaylistPath(sourcePath, playlistName string) string {

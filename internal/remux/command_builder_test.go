@@ -13,7 +13,7 @@ func TestBuildMKVMergeArgsIncludesTrackMetadata(t *testing.T) {
 		Playlist:   "00800.MPLS",
 		EnableDV:   true,
 		Video:      VideoTrack{Name: "Main Video"},
-		Audio:      []AudioTrack{{ID: "a1", Name: "English Atmos", Language: "eng", Default: true, Selected: true}},
+		Audio:      []AudioTrack{{ID: "A1", SourceIndex: 0, Name: "English Atmos", Language: "eng", Default: true, Selected: true}},
 	}
 
 	args := BuildMKVMergeArgs(draft)
@@ -70,13 +70,13 @@ func TestBuildMKVMergeArgsUsesPlaylistInputEvenWhenSegmentPathsArePresent(t *tes
 	}
 }
 
-func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T) {
+func TestBuildMKVMergeArgsUsesSourceIndexSelectors(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
-			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true},
+			{ID: "A1", SourceIndex: 7, Name: "English", Language: "eng", Selected: true},
+			{ID: "A2", SourceIndex: 12, Name: "Japanese", Language: "jpn", Selected: true},
 		},
 	}
 
@@ -84,21 +84,21 @@ func TestBuildMKVMergeArgsPrefersNumericAudioIDAndFallsBackToIndex(t *testing.T)
 	joined := strings.Join(args, " ")
 
 	if !strings.Contains(joined, "--language 7:eng") || !strings.Contains(joined, "--track-name 7:English") {
-		t.Fatalf("expected numeric audio ID selector for first track, got %q", joined)
+		t.Fatalf("expected first audio selector to use sourceIndex, got %q", joined)
 	}
 	if !strings.Contains(joined, "--language 12:jpn") || !strings.Contains(joined, "--track-name 12:Japanese") {
-		t.Fatalf("expected selector parsed from second track id, got %q", joined)
+		t.Fatalf("expected second audio selector to use sourceIndex, got %q", joined)
 	}
 }
 
-func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSelectors(t *testing.T) {
+func TestBuildMKVMergeArgsAudioTracksIncludesOnlySelectedSourceIndexes(t *testing.T) {
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
-			{ID: "8", Name: "French", Language: "fra", Selected: false},
-			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true},
+			{ID: "A1", SourceIndex: 7, Name: "English", Language: "eng", Selected: true},
+			{ID: "A2", SourceIndex: 8, Name: "French", Language: "fra", Selected: false},
+			{ID: "A3", SourceIndex: 12, Name: "Japanese", Language: "jpn", Selected: true},
 		},
 	}
 
@@ -117,9 +117,9 @@ func TestBuildMKVMergeArgsTrackOrderIsVideoThenSelectedAudiosInInputOrder(t *tes
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "9", Name: "Commentary", Language: "eng", Selected: false},
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
-			{ID: "audio-12", Name: "Japanese", Language: "jpn", Selected: true},
+			{ID: "A1", SourceIndex: 9, Name: "Commentary", Language: "eng", Selected: false},
+			{ID: "A2", SourceIndex: 7, Name: "English", Language: "eng", Selected: true},
+			{ID: "A3", SourceIndex: 12, Name: "Japanese", Language: "jpn", Selected: true},
 		},
 	}
 
@@ -138,12 +138,12 @@ func TestBuildMKVMergeArgsIncludesSelectedSubtitlesAndTrackOrder(t *testing.T) {
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true},
+			{ID: "A1", SourceIndex: 7, Name: "English", Language: "eng", Selected: true},
 		},
 		Subtitles: []SubtitleTrack{
-			{ID: "12", Name: "English PGS", Language: "eng", Selected: true, Forced: true},
-			{ID: "13", Name: "Chinese PGS", Language: "chi", Selected: true, Default: true},
-			{ID: "14", Name: "French PGS", Language: "fra", Selected: false},
+			{ID: "S1", SourceIndex: 12, Name: "English PGS", Language: "eng", Selected: true, Forced: true},
+			{ID: "S2", SourceIndex: 13, Name: "Chinese PGS", Language: "chi", Selected: true, Default: true},
+			{ID: "S3", SourceIndex: 14, Name: "French PGS", Language: "fra", Selected: false},
 		},
 	}
 
@@ -184,8 +184,8 @@ func TestBuildMKVMergeArgsMarksNonDefaultAudioTracksAsNo(t *testing.T) {
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/bd_input/Nightcrawler",
 		Audio: []AudioTrack{
-			{ID: "7", Name: "English", Language: "eng", Selected: true, Default: true},
-			{ID: "8", Name: "Commentary", Language: "eng", Selected: true, Default: false},
+			{ID: "A1", SourceIndex: 7, Name: "English", Language: "eng", Selected: true, Default: true},
+			{ID: "A2", SourceIndex: 8, Name: "Commentary", Language: "eng", Selected: true, Default: false},
 		},
 	}
 

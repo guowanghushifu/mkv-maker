@@ -54,6 +54,56 @@ func TestBuildExecutionDraftUsesExistingPlaylistPathCaseInsensitive(t *testing.T
 	}
 }
 
+func TestBuildExecutionDraftPreservesMakeMKVCacheAndSourceIndexes(t *testing.T) {
+	runner := NewJobRunner(&stubRunner{})
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   "/remux/Disc.mkv",
+		PlaylistName: "00801.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Disc","path":"/bd_input/Disc","type":"bdmv"},
+			"bdinfo":{"playlistName":"00801.MPLS"},
+			"draft":{
+				"title":"Disc",
+				"playlistName":"00801.MPLS",
+				"dvMergeEnabled":true,
+				"segmentPaths":["/bd_input/Disc/BDMV/STREAM/00001.m2ts"],
+				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p","hdrType":"DV.HDR"},
+				"audio":[{"id":"A1","sourceIndex":0,"name":"English Atmos","language":"eng","codecLabel":"TrueHD.7.1","default":true,"selected":true}],
+				"subtitles":[{"id":"S1","sourceIndex":1,"name":"English","language":"eng","default":false,"selected":true,"forced":true}],
+				"makemkv":{
+					"playlistName":"00801.MPLS",
+					"titleId":3,
+					"audio":[{"id":"A1","sourceIndex":0,"name":"English Atmos","language":"eng","codecLabel":"TrueHD.7.1","default":true,"selected":true}],
+					"subtitles":[{"id":"S1","sourceIndex":1,"name":"English","language":"eng","default":false,"selected":true,"forced":true}]
+				}
+			},
+			"outputPath":"/remux/Disc.mkv"
+		}`,
+	}
+
+	draft, err := runner.BuildExecutionDraft(req)
+	if err != nil {
+		t.Fatalf("BuildExecutionDraft returned error: %v", err)
+	}
+	if draft.MakeMKV.TitleID != 3 || draft.MakeMKV.PlaylistName != "00801.MPLS" {
+		t.Fatalf("expected MakeMKV cache metadata to be preserved, got %+v", draft.MakeMKV)
+	}
+	if len(draft.Audio) != 1 || draft.Audio[0].SourceIndex != 0 {
+		t.Fatalf("expected audio sourceIndex to be preserved, got %+v", draft.Audio)
+	}
+	if len(draft.Subtitles) != 1 || draft.Subtitles[0].SourceIndex != 1 {
+		t.Fatalf("expected subtitle sourceIndex to be preserved, got %+v", draft.Subtitles)
+	}
+	if len(draft.MakeMKV.Audio) != 1 || draft.MakeMKV.Audio[0].SourceIndex != 0 {
+		t.Fatalf("expected MakeMKV audio cache to preserve sourceIndex, got %+v", draft.MakeMKV.Audio)
+	}
+	if len(draft.MakeMKV.Subtitles) != 1 || draft.MakeMKV.Subtitles[0].SourceIndex != 1 {
+		t.Fatalf("expected MakeMKV subtitle cache to preserve sourceIndex, got %+v", draft.MakeMKV.Subtitles)
+	}
+}
+
 func TestJobRunnerCommandPreviewUsesTemporaryOutputPath(t *testing.T) {
 	runner := NewJobRunner(&stubRunner{})
 	req := StartRequest{
@@ -224,5 +274,61 @@ func TestJobRunnerExecuteRemovesTemporaryOutputWhenFinalizeRenameFails(t *testin
 	}
 	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected temporary output to be removed, got %v", err)
+	}
+}
+
+func TestBuildExecutionDraftRequiresMakeMKVCacheForBDMVSource(t *testing.T) {
+	runner := NewJobRunner(&stubRunner{})
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   "/remux/Disc.mkv",
+		PlaylistName: "00801.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Disc","path":"/bd_input/Disc","type":"bdmv"},
+			"bdinfo":{"playlistName":"00801.MPLS"},
+			"draft":{
+				"title":"Disc",
+				"playlistName":"00801.MPLS",
+				"audio":[{"id":"A1","sourceIndex":0,"name":"English","language":"eng","selected":true}],
+				"subtitles":[{"id":"S1","sourceIndex":1,"name":"English","language":"eng","selected":true}]
+			},
+			"outputPath":"/remux/Disc.mkv"
+		}`,
+	}
+
+	_, err := runner.BuildExecutionDraft(req)
+	if err == nil || !strings.Contains(err.Error(), "makemkv cache") {
+		t.Fatalf("expected missing makemkv cache error, got %v", err)
+	}
+}
+
+func TestBuildExecutionDraftRejectsMismatchedMakeMKVPlaylist(t *testing.T) {
+	runner := NewJobRunner(&stubRunner{})
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   "/remux/Disc.mkv",
+		PlaylistName: "00801.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Disc","path":"/bd_input/Disc","type":"bdmv"},
+			"bdinfo":{"playlistName":"00801.MPLS"},
+			"draft":{
+				"title":"Disc",
+				"playlistName":"00801.MPLS",
+				"audio":[{"id":"A1","sourceIndex":0,"name":"English","language":"eng","selected":true}],
+				"makemkv":{
+					"playlistName":"00001.MPLS",
+					"titleId":3,
+					"audio":[{"id":"A1","sourceIndex":0,"name":"English","language":"eng","selected":true}]
+				}
+			},
+			"outputPath":"/remux/Disc.mkv"
+		}`,
+	}
+
+	_, err := runner.BuildExecutionDraft(req)
+	if err == nil || !strings.Contains(err.Error(), "makemkv cache playlist") {
+		t.Fatalf("expected mismatched playlist error, got %v", err)
 	}
 }

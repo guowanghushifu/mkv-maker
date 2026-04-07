@@ -15,7 +15,8 @@ describe('buildFilenamePreview', () => {
         },
         audio: [
           {
-            id: 'a1',
+            id: 'A1',
+            sourceIndex: 0,
             name: '英文次世代全景声',
             language: 'eng',
             selected: true,
@@ -42,7 +43,8 @@ describe('buildFilenamePreview', () => {
         },
         audio: [
           {
-            id: 'a1',
+            id: 'A1',
+            sourceIndex: 0,
             name: 'English',
             language: 'eng',
             codecLabel: 'DTS_HD.MA.5.1',
@@ -141,6 +143,110 @@ describe('createApiClient bdinfo error handling', () => {
 
     const client = createApiClient('/api');
     await expect(client.parseBDInfo('bad payload', 'session')).rejects.toThrow('missing playlist name');
+  });
+
+  it('preserves sourceIndex and makemkv cache fields from resolve responses', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          sourceId: 'disc-1',
+          playlistName: '00800.MPLS',
+          outputDir: '/remux',
+          title: 'Nightcrawler',
+          dvMergeEnabled: true,
+          segmentPaths: ['/bd_input/Nightcrawler/BDMV/STREAM/00001.m2ts'],
+          video: {
+            name: 'Main Video',
+            codec: 'HEVC',
+            resolution: '2160p',
+            hdrType: 'DV.HDR',
+          },
+          audio: [
+            {
+              id: 'A1',
+              sourceIndex: 7,
+              name: 'English Atmos',
+              language: 'eng',
+              codecLabel: 'TrueHD.7.1',
+              selected: true,
+              default: true,
+            },
+          ],
+          subtitles: [
+            {
+              id: 'S1',
+              sourceIndex: 12,
+              name: 'English PGS',
+              language: 'eng',
+              selected: true,
+              default: false,
+              forced: true,
+            },
+          ],
+          makemkv: {
+            playlistName: '00800.MPLS',
+            titleId: 0,
+            audio: [
+              {
+                id: 'A1',
+                sourceIndex: 7,
+                name: 'English Atmos',
+                language: 'eng',
+                codecLabel: 'TrueHD.7.1',
+                selected: true,
+                default: true,
+              },
+            ],
+            subtitles: [
+              {
+                id: 'S1',
+                sourceIndex: 12,
+                name: 'English PGS',
+                language: 'eng',
+                selected: true,
+                default: false,
+                forced: true,
+              },
+            ],
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(
+      client.createDraft(
+        {
+          id: 'disc-1',
+          name: 'Nightcrawler Disc',
+          path: '/bd_input/Nightcrawler/BDMV',
+          type: 'bdmv',
+          size: 1,
+          modifiedAt: '2026-03-29T12:00:00Z',
+        },
+        {
+          playlistName: '00800.MPLS',
+          rawText: 'PLAYLIST REPORT',
+          audioLabels: [],
+          subtitleLabels: [],
+        },
+        'session'
+      )
+    ).resolves.toMatchObject({
+      audio: [{ id: 'A1', sourceIndex: 7 }],
+      subtitles: [{ id: 'S1', sourceIndex: 12, forced: true }],
+      makemkv: {
+        playlistName: '00800.MPLS',
+        titleId: 0,
+        audio: [{ id: 'A1', sourceIndex: 7 }],
+        subtitles: [{ id: 'S1', sourceIndex: 12, forced: true }],
+      },
+    });
   });
 
   it('surfaces plain-text resolve errors returned by the backend', async () => {

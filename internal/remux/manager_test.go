@@ -209,12 +209,7 @@ func TestManagerCurrentReturnsRunningAndLatestLog(t *testing.T) {
 		OutputName:   "Nightcrawler.mkv",
 		OutputPath:   outputPath,
 		PlaylistName: "00800.MPLS",
-		PayloadJSON: `{
-			"source":{"name":"Nightcrawler Disc","path":"/bd_input/Nightcrawler","type":"bdmv"},
-			"bdinfo":{"playlistName":"00800.MPLS"},
-			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
-			"outputPath":"` + outputPath + `"
-		}`,
+		PayloadJSON:  validPayloadJSON("Nightcrawler Disc", "/bd_input/Nightcrawler", "00800.MPLS", outputPath),
 	})
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
@@ -837,7 +832,13 @@ func validPayloadJSON(sourceName, sourcePath, playlistName, outputPath string) s
 	return `{
 		"source":{"name":"` + sourceName + `","path":"` + sourcePath + `","type":"bdmv"},
 		"bdinfo":{"playlistName":"` + playlistName + `"},
-		"draft":{"playlistName":"` + playlistName + `","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
+		"draft":{
+			"playlistName":"` + playlistName + `",
+			"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
+			"audio":[],
+			"subtitles":[],
+			"makemkv":{"playlistName":"` + playlistName + `","titleId":0,"audio":[],"subtitles":[]}
+		},
 		"outputPath":"` + outputPath + `"
 	}`
 }
