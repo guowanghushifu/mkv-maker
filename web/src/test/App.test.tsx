@@ -25,8 +25,14 @@ const draft = {
   outputDir: '/remux',
   dvMergeEnabled: true,
   video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
-  audio: [{ id: 'a1', name: 'English', language: 'eng', selected: true, default: true }],
-  subtitles: [{ id: 's1', name: 'English', language: 'eng', selected: true, default: true }],
+  audio: [{ id: 'A1', sourceIndex: 0, name: 'English', language: 'eng', selected: true, default: true }],
+  subtitles: [{ id: 'S1', sourceIndex: 0, name: 'English', language: 'eng', selected: true, default: true }],
+  makemkv: {
+    playlistName: '00800.MPLS',
+    titleId: 0,
+    audio: [{ id: 'A1', sourceIndex: 0, name: 'English', language: 'eng', selected: true, default: true }],
+    subtitles: [{ id: 'S1', sourceIndex: 0, name: 'English', language: 'eng', selected: true, default: true }],
+  },
 };
 
 type BackendState = {

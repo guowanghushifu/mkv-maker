@@ -42,6 +42,13 @@ export type DraftTrack = {
   forced?: boolean;
 };
 
+export type MakeMKVCache = {
+  playlistName: string;
+  titleId: number;
+  audio: DraftTrack[];
+  subtitles: DraftTrack[];
+};
+
 export type Draft = {
   title?: string;
   sourceId?: string;
@@ -52,6 +59,7 @@ export type Draft = {
   video: DraftVideo;
   audio: DraftTrack[];
   subtitles: DraftTrack[];
+  makemkv?: MakeMKVCache;
 };
 
 export type JobStatus = 'running' | 'succeeded' | 'failed';

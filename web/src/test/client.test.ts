@@ -15,7 +15,7 @@ describe('buildFilenamePreview', () => {
         },
         audio: [
           {
-            id: 'a1',
+            id: 'A1',
             sourceIndex: 0,
             name: '英文次世代全景声',
             language: 'eng',
@@ -43,7 +43,7 @@ describe('buildFilenamePreview', () => {
         },
         audio: [
           {
-            id: 'a1',
+            id: 'A1',
             sourceIndex: 0,
             name: 'English',
             language: 'eng',
@@ -61,57 +61,24 @@ describe('buildFilenamePreview', () => {
   });
 });
 
-describe('createApiClient synthetic track IDs', () => {
-  it('uses zero-based synthetic IDs', async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p' },
-          audio: [
-            { id: 'audio-0', name: 'English DTS-HD MA', language: 'eng', default: true, selected: true },
-            { id: 'audio-1', name: 'Japanese DTS-HD MA', language: 'jpn', default: false, selected: true },
-          ],
-          subtitles: [
-            { id: 'subtitle-0', name: 'English PGS', language: 'eng', default: false, selected: true },
-          ],
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+describe('createApiClient currentJob', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('does not send Authorization headers for protected requests', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.has('Authorization')).toBe(false);
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     });
     vi.stubGlobal('fetch', fetchMock);
 
     const client = createApiClient('/api');
-    await expect(
-      client.createDraft(
-        {
-          id: 'disc-1',
-          name: 'Disc',
-          path: '/bd_input/Disc',
-          type: 'bdmv',
-          size: 1,
-          modifiedAt: '2026-04-06T00:00:00Z',
-        },
-        {
-          playlistName: '00801.MPLS',
-          rawText: 'PLAYLIST REPORT',
-          audioLabels: [],
-          subtitleLabels: [],
-        },
-        'session'
-      )
-    ).resolves.toMatchObject({
-      audio: [{ id: 'audio-0' }, { id: 'audio-1' }],
-      subtitles: [{ id: 'subtitle-0' }],
-    });
-  });
-});
-
-describe('createApiClient currentJob', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    await expect(client.scanSources('session')).resolves.toEqual([]);
   });
 
   it('preserves command preview and progress percent from current job payload', async () => {
@@ -160,79 +127,6 @@ describe('createApiClient currentJob', () => {
   });
 });
 
-describe('createApiClient draft track builders', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('returns draft tracks with sourceIndex and synthetic ids', async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          title: 'Nightcrawler',
-          outputDir: '/remux',
-          dvMergeEnabled: true,
-          video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
-          audio: [
-            {
-              id: 'audio-0',
-              sourceIndex: 0,
-              name: 'English Atmos',
-              language: 'eng',
-              codecLabel: 'TrueHD.7.1.Atmos',
-              selected: true,
-              default: true,
-            },
-          ],
-          subtitles: [
-            {
-              id: 'subtitle-0',
-              sourceIndex: 1,
-              name: 'Signs',
-              language: 'eng',
-              selected: true,
-              default: false,
-            },
-          ],
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const client = createApiClient('/api');
-    const draft = await client.createDraft(
-      {
-        id: 'disc-1',
-        name: 'Nightcrawler Disc',
-        path: '/bd_input/Nightcrawler/BDMV',
-        type: 'bdmv',
-        size: 1,
-        modifiedAt: '2026-03-29T12:00:00Z',
-      },
-      {
-        playlistName: '00800.MPLS',
-        rawText: 'PLAYLIST REPORT',
-        audioLabels: [],
-        subtitleLabels: [],
-      },
-      'session'
-    );
-
-    expect(draft.audio[0]).toMatchObject({
-      id: 'audio-0',
-      sourceIndex: 0,
-    });
-    expect(draft.subtitles[0]).toMatchObject({
-      id: 'subtitle-0',
-      sourceIndex: 1,
-    });
-  });
-});
-
 describe('createApiClient bdinfo error handling', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -249,6 +143,110 @@ describe('createApiClient bdinfo error handling', () => {
 
     const client = createApiClient('/api');
     await expect(client.parseBDInfo('bad payload', 'session')).rejects.toThrow('missing playlist name');
+  });
+
+  it('preserves sourceIndex and makemkv cache fields from resolve responses', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          sourceId: 'disc-1',
+          playlistName: '00800.MPLS',
+          outputDir: '/remux',
+          title: 'Nightcrawler',
+          dvMergeEnabled: true,
+          segmentPaths: ['/bd_input/Nightcrawler/BDMV/STREAM/00001.m2ts'],
+          video: {
+            name: 'Main Video',
+            codec: 'HEVC',
+            resolution: '2160p',
+            hdrType: 'DV.HDR',
+          },
+          audio: [
+            {
+              id: 'A1',
+              sourceIndex: 7,
+              name: 'English Atmos',
+              language: 'eng',
+              codecLabel: 'TrueHD.7.1',
+              selected: true,
+              default: true,
+            },
+          ],
+          subtitles: [
+            {
+              id: 'S1',
+              sourceIndex: 12,
+              name: 'English PGS',
+              language: 'eng',
+              selected: true,
+              default: false,
+              forced: true,
+            },
+          ],
+          makemkv: {
+            playlistName: '00800.MPLS',
+            titleId: 0,
+            audio: [
+              {
+                id: 'A1',
+                sourceIndex: 7,
+                name: 'English Atmos',
+                language: 'eng',
+                codecLabel: 'TrueHD.7.1',
+                selected: true,
+                default: true,
+              },
+            ],
+            subtitles: [
+              {
+                id: 'S1',
+                sourceIndex: 12,
+                name: 'English PGS',
+                language: 'eng',
+                selected: true,
+                default: false,
+                forced: true,
+              },
+            ],
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(
+      client.createDraft(
+        {
+          id: 'disc-1',
+          name: 'Nightcrawler Disc',
+          path: '/bd_input/Nightcrawler/BDMV',
+          type: 'bdmv',
+          size: 1,
+          modifiedAt: '2026-03-29T12:00:00Z',
+        },
+        {
+          playlistName: '00800.MPLS',
+          rawText: 'PLAYLIST REPORT',
+          audioLabels: [],
+          subtitleLabels: [],
+        },
+        'session'
+      )
+    ).resolves.toMatchObject({
+      audio: [{ id: 'A1', sourceIndex: 7 }],
+      subtitles: [{ id: 'S1', sourceIndex: 12, forced: true }],
+      makemkv: {
+        playlistName: '00800.MPLS',
+        titleId: 0,
+        audio: [{ id: 'A1', sourceIndex: 7 }],
+        subtitles: [{ id: 'S1', sourceIndex: 12, forced: true }],
+      },
+    });
   });
 
   it('surfaces plain-text resolve errors returned by the backend', async () => {

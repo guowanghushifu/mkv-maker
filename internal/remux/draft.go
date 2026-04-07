@@ -1,16 +1,23 @@
 package remux
 
 type Draft struct {
-	Title             string
-	SourcePath        string
-	MakeMKVSourcePath string
-	Playlist          string
-	OutputPath        string
-	EnableDV          bool
-	SegmentPaths      []string
-	Video             VideoTrack
-	Audio             []AudioTrack
-	Subtitles         []SubtitleTrack
+	Title        string
+	SourcePath   string
+	Playlist     string
+	OutputPath   string
+	EnableDV     bool
+	SegmentPaths []string
+	Video        VideoTrack
+	Audio        []AudioTrack
+	Subtitles    []SubtitleTrack
+	MakeMKV      MakeMKVTitleCache
+}
+
+type MakeMKVTitleCache struct {
+	PlaylistName string
+	TitleID      int
+	Audio        []AudioTrack
+	Subtitles    []SubtitleTrack
 }
 
 type VideoTrack struct {
@@ -22,19 +29,19 @@ type VideoTrack struct {
 
 type AudioTrack struct {
 	ID          string
+	SourceIndex int
 	Name        string
 	Language    string
 	CodecLabel  string
-	SourceIndex int
 	Default     bool
 	Selected    bool
 }
 
 type SubtitleTrack struct {
 	ID          string
+	SourceIndex int
 	Name        string
 	Language    string
-	SourceIndex int
 	Default     bool
 	Selected    bool
 	Forced      bool

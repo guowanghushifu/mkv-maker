@@ -1,10 +1,9 @@
 package remux
 
 import (
+	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"unicode"
 )
 
 func BuildMKVMergeArgs(d Draft) []string {
@@ -22,7 +21,7 @@ func BuildMKVMergeArgs(d Draft) []string {
 			continue
 		}
 
-		audioSelector := resolveTrackSelector(track.ID, track.SourceIndex)
+		audioSelector := resolveTrackSelector(track.SourceIndex)
 		audioSelectors = append(audioSelectors, audioSelector)
 		trackOrder = append(trackOrder, "0:"+audioSelector)
 
@@ -40,7 +39,7 @@ func BuildMKVMergeArgs(d Draft) []string {
 			continue
 		}
 
-		subtitleSelector := resolveTrackSelector(track.ID, track.SourceIndex)
+		subtitleSelector := resolveTrackSelector(track.SourceIndex)
 		subtitleSelectors = append(subtitleSelectors, subtitleSelector)
 		trackOrder = append(trackOrder, "0:"+subtitleSelector)
 
@@ -70,28 +69,11 @@ func BuildMKVMergeArgs(d Draft) []string {
 	return args
 }
 
-func resolveTrackSelector(trackID string, sourceIndex int) string {
-	trimmed := strings.TrimSpace(trackID)
-	if trimmed != "" {
-		if _, err := strconv.Atoi(trimmed); err == nil {
-			return trimmed
-		}
-
-		if sourceIndex >= 0 {
-			return strconv.Itoa(sourceIndex + 1)
-		}
-
-		digits := strings.Builder{}
-		for _, r := range trimmed {
-			if unicode.IsDigit(r) {
-				digits.WriteRune(r)
-			}
-		}
-		if digits.Len() > 0 {
-			return digits.String()
-		}
+func resolveTrackSelector(sourceIndex int) string {
+	if sourceIndex < 0 {
+		return "0"
 	}
-	return strconv.Itoa(sourceIndex + 1)
+	return fmt.Sprintf("%d", sourceIndex)
 }
 
 func resolveInputPath(d Draft) string {

@@ -8,7 +8,8 @@ function createDraft() {
     video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
     audio: [
       {
-        id: 'a1',
+        id: 'A1',
+        sourceIndex: 0,
         name: 'English Atmos',
         language: 'eng',
         codecLabel: 'TrueHD.7.1.Atmos',
@@ -16,7 +17,8 @@ function createDraft() {
         default: true,
       },
       {
-        id: 'a2',
+        id: 'A2',
+        sourceIndex: 1,
         name: 'Commentary',
         language: 'eng',
         codecLabel: 'DTS-HD.MA.7.1',
@@ -25,9 +27,37 @@ function createDraft() {
       },
     ],
     subtitles: [
-      { id: 's1', name: 'English PGS', language: 'eng', selected: true, default: true },
-      { id: 's2', name: 'Signs', language: 'eng', selected: true, default: false },
+      { id: 'S1', sourceIndex: 0, name: 'English PGS', language: 'eng', selected: true, default: true },
+      { id: 'S2', sourceIndex: 1, name: 'Signs', language: 'eng', selected: true, default: false },
     ],
+    makemkv: {
+      playlistName: '00800.MPLS',
+      titleId: 0,
+      audio: [
+        {
+          id: 'A1',
+          sourceIndex: 0,
+          name: 'English Atmos',
+          language: 'eng',
+          codecLabel: 'TrueHD.7.1.Atmos',
+          selected: true,
+          default: true,
+        },
+        {
+          id: 'A2',
+          sourceIndex: 1,
+          name: 'Commentary',
+          language: 'eng',
+          codecLabel: 'DTS-HD.MA.7.1',
+          selected: true,
+          default: false,
+        },
+      ],
+      subtitles: [
+        { id: 'S1', sourceIndex: 0, name: 'English PGS', language: 'eng', selected: true, default: true },
+        { id: 'S2', sourceIndex: 1, name: 'Signs', language: 'eng', selected: true, default: false },
+      ],
+    },
   };
 }
 
@@ -57,8 +87,8 @@ describe('TrackEditorPage', () => {
       within(subtitleTable).getAllByRole('columnheader').map((header) => header.textContent?.trim()),
     ).toEqual(['Move', 'ID', 'Track', 'Language', 'Include', 'Default']);
 
-    expect(screen.getByText('a1')).toBeInTheDocument();
-    expect(screen.getByText('a2')).toBeInTheDocument();
+    expect(screen.getByText('A1')).toBeInTheDocument();
+    expect(screen.getByText('A2')).toBeInTheDocument();
     expect(screen.getByText('TrueHD.7.1.Atmos')).toBeInTheDocument();
     expect(screen.getByText('DTS-HD.MA.7.1')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Details' })).not.toBeInTheDocument();
@@ -111,8 +141,8 @@ describe('TrackEditorPage', () => {
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         audio: [
-          expect.objectContaining({ id: 'a1', default: false }),
-          expect.objectContaining({ id: 'a2', default: true }),
+          expect.objectContaining({ id: 'A1', default: false }),
+          expect.objectContaining({ id: 'A2', default: true }),
         ],
       }),
     );
@@ -128,8 +158,8 @@ describe('TrackEditorPage', () => {
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         subtitles: [
-          expect.objectContaining({ id: 's1', selected: false, default: false }),
-          expect.objectContaining({ id: 's2', selected: true, default: false }),
+          expect.objectContaining({ id: 'S1', selected: false, default: false }),
+          expect.objectContaining({ id: 'S2', selected: true, default: false }),
         ],
       }),
     );
@@ -143,8 +173,8 @@ describe('TrackEditorPage', () => {
         draft={{
           ...createDraft(),
           subtitles: [
-            { id: 's1', name: 'English PGS', language: 'eng', selected: false, default: false },
-            { id: 's2', name: 'Signs', language: 'eng', selected: true, default: true },
+            { id: 'S1', sourceIndex: 0, name: 'English PGS', language: 'eng', selected: false, default: false },
+            { id: 'S2', sourceIndex: 1, name: 'Signs', language: 'eng', selected: true, default: true },
           ],
         }}
         onChange={onChange}
@@ -181,8 +211,8 @@ describe('TrackEditorPage', () => {
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         audio: [
-          expect.objectContaining({ id: 'a2' }),
-          expect.objectContaining({ id: 'a1' }),
+          expect.objectContaining({ id: 'A2' }),
+          expect.objectContaining({ id: 'A1' }),
         ],
       }),
     );
@@ -196,9 +226,9 @@ describe('TrackEditorPage', () => {
         draft={{
           ...createDraft(),
           audio: [
-            { id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true },
-            { id: 'a2', name: 'Commentary', language: 'eng', selected: true, default: false },
-            { id: 'a3', name: 'French', language: 'fra', selected: true, default: false },
+            { id: 'A1', sourceIndex: 0, name: 'English Atmos', language: 'eng', selected: true, default: true },
+            { id: 'A2', sourceIndex: 1, name: 'Commentary', language: 'eng', selected: true, default: false },
+            { id: 'A3', sourceIndex: 2, name: 'French', language: 'fra', selected: true, default: false },
           ],
         }}
         onChange={onChange}
@@ -224,9 +254,9 @@ describe('TrackEditorPage', () => {
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         audio: [
-          expect.objectContaining({ id: 'a2' }),
-          expect.objectContaining({ id: 'a1' }),
-          expect.objectContaining({ id: 'a3' }),
+          expect.objectContaining({ id: 'A2' }),
+          expect.objectContaining({ id: 'A1' }),
+          expect.objectContaining({ id: 'A3' }),
         ],
       }),
     );
@@ -243,8 +273,8 @@ describe('TrackEditorPage', () => {
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         audio: [
-          expect.objectContaining({ id: 'a2' }),
-          expect.objectContaining({ id: 'a1' }),
+          expect.objectContaining({ id: 'A2' }),
+          expect.objectContaining({ id: 'A1' }),
         ],
       }),
     );

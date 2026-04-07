@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
+	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
 func TestNewSourcesHandlerStoresISOManager(t *testing.T) {
@@ -37,12 +38,12 @@ func (s stubSourceScanner) Scan(root string) ([]media.SourceEntry, error) {
 }
 
 type stubPlaylistInspector struct {
-	result PlaylistInspection
+	result MakeMKVInspection
 	err    error
 	path   *string
 }
 
-func (s stubPlaylistInspector) Inspect(playlistPath string) (PlaylistInspection, error) {
+func (s stubPlaylistInspector) Inspect(ctx context.Context, sourcePath, playlistPath string) (MakeMKVInspection, error) {
 	if s.path != nil {
 		*s.path = playlistPath
 	}
@@ -186,10 +187,7 @@ func TestSourcesHandlerResolveMountsISOSourceBeforeInspection(t *testing.T) {
 	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{
 		ID: "movies-nightcrawler-iso", Name: "Nightcrawler", Path: isoPath, Type: media.SourceISO,
 	}}}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:    []string{"2"},
-			SubtitleTrackIDs: []string{"9"},
-		},
+		result: MakeMKVInspection{},
 		path: &inspectedPath,
 	}, isoManager)
 	reqBody := `{
@@ -245,9 +243,24 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			},
 		},
 	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:    []string{"2", "5", "7"},
-			SubtitleTrackIDs: []string{"9", "10"},
+		result: MakeMKVInspection{
+			TitleID:      0,
+			PlaylistName: "00800.MPLS",
+			Audio: []resolveTrack{
+				{ID: "A1", Name: "English Atmos", Language: "eng", CodecLabel: "TrueHD.7.1", Selected: true, Default: true, SourceIndex: 0},
+				{ID: "A2", Name: "普通话", Language: "chi", Selected: true, Default: false, SourceIndex: 1},
+				{ID: "A3", Name: "国配简体特效", Language: "chi", Selected: true, Default: false, SourceIndex: 2},
+			},
+			Subtitles: []resolveTrack{
+				{ID: "S1", Name: "国配简体特效", Language: "chi", Selected: true, Default: true, SourceIndex: 0},
+				{ID: "S2", Name: "简英特效", Language: "chi", Selected: true, Default: false, SourceIndex: 1},
+			},
+			Cache: remux.MakeMKVTitleCache{
+				PlaylistName: "00800.MPLS",
+				TitleID:      0,
+				Audio: []remux.AudioTrack{{ID: "A1", Name: "English Atmos", Language: "eng", CodecLabel: "TrueHD.7.1", Default: true, Selected: true, SourceIndex: 0}},
+				Subtitles: []remux.SubtitleTrack{{ID: "S1", Name: "国配简体特效", Language: "chi", Default: true, Selected: true, SourceIndex: 0}},
+			},
 		},
 		path: &inspectedPath,
 	})
@@ -288,18 +301,33 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 		} `json:"video"`
 		Audio []struct {
 			ID          string `json:"id"`
-			SourceIndex int    `json:"sourceIndex"`
 			Name        string `json:"name"`
+			Language    string `json:"language"`
+			CodecLabel  string `json:"codecLabel"`
+			SourceIndex int    `json:"sourceIndex"`
 			Selected    bool   `json:"selected"`
 			Default     bool   `json:"default"`
 		} `json:"audio"`
 		Subtitles []struct {
 			ID          string `json:"id"`
-			SourceIndex int    `json:"sourceIndex"`
 			Name        string `json:"name"`
+			Language    string `json:"language"`
+			SourceIndex int    `json:"sourceIndex"`
 			Selected    bool   `json:"selected"`
 			Default     bool   `json:"default"`
 		} `json:"subtitles"`
+		MakeMKV struct {
+			PlaylistName string `json:"playlistName"`
+			TitleID      int    `json:"titleId"`
+			Audio        []struct {
+				ID          string `json:"id"`
+				SourceIndex int    `json:"sourceIndex"`
+			} `json:"audio"`
+			Subtitles []struct {
+				ID          string `json:"id"`
+				SourceIndex int    `json:"sourceIndex"`
+			} `json:"subtitles"`
+		} `json:"makemkv"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode failed: %v", err)
@@ -334,169 +362,56 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if !body.Audio[0].Default || !body.Audio[0].Selected {
 		t.Fatalf("expected first audio to be default+selected: %+v", body.Audio[0])
 	}
-	if body.Audio[0].ID != "audio-0" || body.Audio[1].ID != "audio-1" || body.Audio[2].ID != "audio-2" {
-		t.Fatalf("expected synthetic audio ids, got %+v", body.Audio)
+	if body.Audio[0].ID != "A1" || body.Audio[1].ID != "A2" || body.Audio[2].ID != "A3" {
+		t.Fatalf("expected MakeMKV audio ids, got %+v", body.Audio)
 	}
 	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 || body.Audio[2].SourceIndex != 2 {
-		t.Fatalf("expected audio source indexes 0..2, got %+v", body.Audio)
+		t.Fatalf("expected MakeMKV audio source indexes, got %+v", body.Audio)
 	}
 	if !body.Subtitles[0].Default || !body.Subtitles[0].Selected {
 		t.Fatalf("expected first subtitle to be default+selected: %+v", body.Subtitles[0])
 	}
-	if body.Subtitles[0].ID != "subtitle-0" || body.Subtitles[1].ID != "subtitle-1" {
-		t.Fatalf("expected synthetic subtitle ids, got %+v", body.Subtitles)
+	if body.Subtitles[0].ID != "S1" || body.Subtitles[1].ID != "S2" {
+		t.Fatalf("expected MakeMKV subtitle ids, got %+v", body.Subtitles)
 	}
 	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
-		t.Fatalf("expected subtitle source indexes 0..1, got %+v", body.Subtitles)
+		t.Fatalf("expected MakeMKV subtitle source indexes, got %+v", body.Subtitles)
+	}
+	if body.MakeMKV.PlaylistName != "00800.MPLS" || body.MakeMKV.TitleID != 0 {
+		t.Fatalf("expected MakeMKV cache metadata, got %+v", body.MakeMKV)
+	}
+	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].ID != "A1" || body.MakeMKV.Audio[0].SourceIndex != 0 {
+		t.Fatalf("expected MakeMKV cache audio payload, got %+v", body.MakeMKV.Audio)
+	}
+	if len(body.MakeMKV.Subtitles) != 1 || body.MakeMKV.Subtitles[0].ID != "S1" || body.MakeMKV.Subtitles[0].SourceIndex != 0 {
+		t.Fatalf("expected MakeMKV cache subtitle payload, got %+v", body.MakeMKV.Subtitles)
 	}
 }
 
-func TestSourcesHandlerResolveFiltersHiddenRowsAndKeepsVisibleSourceIndexes(t *testing.T) {
+func TestSourcesHandlerResolveReturnsMakeMKVAudioCodecLabel(t *testing.T) {
 	inputRoot := t.TempDir()
-	sourceID := "HiddenRowsDisc"
+	sourceID := "Nightcrawler"
 	sourcePath := filepath.Join(inputRoot, sourceID)
-	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00802.MPLS")
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
 	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
 	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
-	streamPath := filepath.Join(sourcePath, "BDMV", "STREAM", "00005.m2ts")
-	if err := os.MkdirAll(filepath.Dir(streamPath), 0o755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:     []string{"2", "5", "7"},
-			AudioLanguages:    []string{"eng", "chi", "jpn"},
-			SubtitleTrackIDs:  []string{"9", "10", "11"},
-			SubtitleLanguages: []string{"eng", "chi", "jpn"},
-		},
-	})
-
-	reqBody := `{
-		"sourceId":"HiddenRowsDisc",
-		"bdinfo":{
-			"playlistName":"00802.MPLS",
-			"rawText":"PLAYLIST REPORT:\nName: 00802.MPLS\nVIDEO:\nCodec                   Bitrate             Description\n-----                   -------             -----------\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer\nAUDIO:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby TrueHD/Atmos Audio        English         3984 kbps       7.1 / 48 kHz / 3984 kbps / 24-bit\n* Dolby Digital Audio           Chinese         640 kbps        5.1 / 48 kHz / 640 kbps / 普通话\nDTS-HD Master Audio             Japanese        2123 kbps       5.1 / 48 kHz / 2123 kbps / 日语评论音轨\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           English         54.085 kbps\n* Presentation Graphics         Chinese         31.415 kbps                    简体中文特效\nPresentation Graphics           Japanese        30.071 kbps                    日文注释"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/HiddenRowsDisc/resolve", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	req = withRouteParam(req, "id", sourceID)
-	w := httptest.NewRecorder()
-
-	h.Resolve(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
-	}
-
-	var body struct {
-		Audio []struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Language    string `json:"language"`
-			SourceIndex int    `json:"sourceIndex"`
-		} `json:"audio"`
-		Subtitles []struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Language    string `json:"language"`
-			SourceIndex int    `json:"sourceIndex"`
-		} `json:"subtitles"`
-	}
-	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-	if len(body.Audio) != 2 {
-		t.Fatalf("expected 2 visible audio tracks, got %+v", body.Audio)
-	}
-	if body.Audio[0].ID != "audio-0" || body.Audio[1].ID != "audio-1" {
-		t.Fatalf("expected visible audio ids to be renumbered, got %+v", body.Audio)
-	}
-	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 {
-		t.Fatalf("expected visible audio source indexes 0 and 1, got %+v", body.Audio)
-	}
-	if body.Audio[0].Language != "eng" || body.Audio[1].Language != "jpn" {
-		t.Fatalf("expected hidden audio language to be skipped, got %+v", body.Audio)
-	}
-	if len(body.Subtitles) != 2 {
-		t.Fatalf("expected 2 visible subtitle tracks, got %+v", body.Subtitles)
-	}
-	if body.Subtitles[0].ID != "subtitle-0" || body.Subtitles[1].ID != "subtitle-1" {
-		t.Fatalf("expected visible subtitle ids to be renumbered, got %+v", body.Subtitles)
-	}
-	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
-		t.Fatalf("expected visible subtitle source indexes 0 and 1, got %+v", body.Subtitles)
-	}
-	if body.Subtitles[0].Language != "eng" || body.Subtitles[1].Language != "jpn" {
-		t.Fatalf("expected hidden subtitle language to be skipped, got %+v", body.Subtitles)
-	}
-}
-
-func TestSourcesHandlerResolvePreservesAudioCodecLabelWhenDisplayLabelIsDescriptive(t *testing.T) {
-	inputRoot := t.TempDir()
-	sourceID := "Nightcrawler"
-	sourcePath := filepath.Join(inputRoot, sourceID)
-	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "PLAYLIST"), 0o755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(sourcePath, "BDMV", "STREAM"), 0o755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
-	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-	streamPath := filepath.Join(sourcePath, "BDMV", "STREAM", "00005.m2ts")
-	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
 
 	h := NewSourcesHandler(inputRoot, "/custom/remux", stubSourceScanner{
-		items: []media.SourceEntry{
-			{
-				ID:   sourceID,
-				Name: "Nightcrawler (2014)",
-				Path: sourcePath,
-				Type: media.SourceBDMV,
-			},
-		},
+		items: []media.SourceEntry{{ID: sourceID, Name: "Nightcrawler (2014)", Path: sourcePath, Type: media.SourceBDMV}},
 	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs: []string{"2"},
-		},
+		result: MakeMKVInspection{Audio: []resolveTrack{{ID: "A1", Name: "English Atmos", Language: "eng", CodecLabel: "TrueHD.7.1.Atmos", Selected: true, Default: true, SourceIndex: 0}}},
 	})
 
-	reqBody := `{
-		"sourceId":"Nightcrawler",
-		"bdinfo":{
-			"playlistName":"00800.MPLS",
-			"discTitle":"Nightcrawler",
-			"audioLabels":["英文次世代全景声"],
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\nAUDIO:\nDolby TrueHD/Atmos Audio        English         7.1 / 48 kHz / 3984 kbps / 24-bit"
-		}
-	}`
+	reqBody := `{"sourceId":"Nightcrawler","bdinfo":{"playlistName":"00800.MPLS","discTitle":"Nightcrawler","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/Nightcrawler/resolve", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", sourceID)
-
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
@@ -505,24 +420,17 @@ func TestSourcesHandlerResolvePreservesAudioCodecLabelWhenDisplayLabelIsDescript
 		Audio []struct {
 			Name       string `json:"name"`
 			CodecLabel string `json:"codecLabel"`
-			Default    bool   `json:"default"`
 		} `json:"audio"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	if len(body.Audio) != 1 {
-		t.Fatalf("expected 1 audio track, got %d", len(body.Audio))
-	}
-	if body.Audio[0].Name != "英文次世代全景声" {
-		t.Fatalf("expected display label to stay descriptive, got %+v", body.Audio[0])
-	}
-	if body.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" {
-		t.Fatalf("expected codec label TrueHD.7.1.Atmos, got %+v", body.Audio[0])
+	if len(body.Audio) != 1 || body.Audio[0].Name != "English Atmos" || body.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" {
+		t.Fatalf("expected MakeMKV audio track payload, got %+v", body.Audio)
 	}
 }
 
-func TestSourcesHandlerResolveUsesSubtitleLanguageColumnInsteadOfGuessingFromLabel(t *testing.T) {
+func TestSourcesHandlerResolveReturnsMakeMKVSubtitleLanguages(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "Zootopia2"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -534,67 +442,34 @@ func TestSourcesHandlerResolveUsesSubtitleLanguageColumnInsteadOfGuessingFromLab
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			SubtitleTrackIDs: []string{"11", "12", "13", "14", "15"},
-		},
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{Subtitles: []resolveTrack{{ID: "S1", Name: "English", Language: "eng", Selected: true, Default: true, SourceIndex: 0}, {ID: "S2", Name: "简体中文特效", Language: "chi", Selected: true, Default: false, SourceIndex: 1}}},
 	})
 
-	reqBody := `{
-		"sourceId":"Zootopia2",
-		"bdinfo":{
-			"playlistName":"00800.MPLS",
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           English         54.085 kbps\nPresentation Graphics           French          43.255 kbps\nPresentation Graphics           Spanish         42.957 kbps\nPresentation Graphics           Japanese        30.071 kbps\nPresentation Graphics           Chinese         31.415 kbps                    简体中文特效"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/Zootopia2/resolve", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/Zootopia2/resolve", strings.NewReader(`{"sourceId":"Zootopia2","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", sourceID)
-
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
 	var body struct {
 		Subtitles []struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
 			Language string `json:"language"`
+			Name     string `json:"name"`
 		} `json:"subtitles"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	if len(body.Subtitles) != 5 {
-		t.Fatalf("expected 5 subtitle tracks, got %d", len(body.Subtitles))
-	}
-	gotLanguages := []string{
-		body.Subtitles[0].Language,
-		body.Subtitles[1].Language,
-		body.Subtitles[2].Language,
-		body.Subtitles[3].Language,
-		body.Subtitles[4].Language,
-	}
-	wantLanguages := []string{"eng", "fre", "spa", "jpn", "chi"}
-	if !equalStringSlices(gotLanguages, wantLanguages) {
-		t.Fatalf("expected subtitle languages %+v, got %+v", wantLanguages, gotLanguages)
-	}
-	if body.Subtitles[0].Name != "English" || body.Subtitles[4].Name != "简体中文特效" {
-		t.Fatalf("expected display labels to remain subtitle-facing, got %+v", body.Subtitles)
+	if len(body.Subtitles) != 2 || body.Subtitles[0].Language != "eng" || body.Subtitles[1].Language != "chi" {
+		t.Fatalf("expected MakeMKV subtitle languages, got %+v", body.Subtitles)
 	}
 }
 
-func TestSourcesHandlerResolveRejectsIncompleteSubtitleTrackIDs(t *testing.T) {
+func TestSourcesHandlerResolveAllowsEmptyMakeMKVTracks(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "BrokenDisc"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -606,42 +481,18 @@ func TestSourcesHandlerResolveRejectsIncompleteSubtitleTrackIDs(t *testing.T) {
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			SubtitleTrackIDs: []string{"11"},
-		},
-	})
-
-	reqBody := `{
-		"sourceId":"BrokenDisc",
-		"bdinfo":{
-			"playlistName":"00800.MPLS",
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           English         54.085 kbps\nPresentation Graphics           Chinese         31.415 kbps                    简体中文特效"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/BrokenDisc/resolve", strings.NewReader(reqBody))
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{result: MakeMKVInspection{}})
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/BrokenDisc/resolve", strings.NewReader(`{"sourceId":"BrokenDisc","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", sourceID)
-
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, w.Code, w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "subtitle track ids") {
-		t.Fatalf("expected subtitle track id error, got %q", w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 }
 
-func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAreUnavailable(t *testing.T) {
+func TestSourcesHandlerResolveReturnsMakeMKVTrackLanguages(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "FallbackDisc"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -653,153 +504,38 @@ func TestSourcesHandlerResolveFallsBackToMKVMergeLanguagesWhenBDInfoLanguagesAre
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:     []string{"2", "4"},
-			AudioLanguages:    []string{"eng", "fre"},
-			SubtitleTrackIDs:  []string{"11", "12"},
-			SubtitleLanguages: []string{"spa", "chi"},
-		},
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{Audio: []resolveTrack{{ID: "A1", Language: "eng", Name: "Atmos", Selected: true, Default: true, SourceIndex: 0}, {ID: "A2", Language: "fre", Name: "DD+", Selected: true, Default: false, SourceIndex: 1}}, Subtitles: []resolveTrack{{ID: "S1", Name: "Signs & Songs", Language: "spa", Selected: true, Default: true, SourceIndex: 0}, {ID: "S2", Name: "简体中文特效", Language: "chi", Selected: true, Default: false, SourceIndex: 1}}},
 	})
 
-	reqBody := `{
-		"sourceId":"FallbackDisc",
-		"bdinfo":{
-			"playlistName":"00800.MPLS",
-			"audioLabels":["Dolby TrueHD/Atmos Audio","Dolby Digital Plus Audio"],
-			"subtitleLabels":["Signs & Songs","简体中文特效"],
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/FallbackDisc/resolve", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/FallbackDisc/resolve", strings.NewReader(`{"sourceId":"FallbackDisc","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", sourceID)
-
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
 	var body struct {
-		Audio []struct {
-			ID          string `json:"id"`
-			SourceIndex int    `json:"sourceIndex"`
-			Language    string `json:"language"`
-		} `json:"audio"`
+		Audio []struct{ Language string `json:"language"` } `json:"audio"`
 		Subtitles []struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			SourceIndex int    `json:"sourceIndex"`
-			Language    string `json:"language"`
+			Name     string `json:"name"`
+			Language string `json:"language"`
 		} `json:"subtitles"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	gotAudioLanguages := []string{body.Audio[0].Language, body.Audio[1].Language}
-	if !equalStringSlices(gotAudioLanguages, []string{"eng", "fre"}) {
-		t.Fatalf("expected audio language fallback [eng fre], got %+v", gotAudioLanguages)
+	if len(body.Audio) != 2 || body.Audio[0].Language != "eng" || body.Audio[1].Language != "fre" {
+		t.Fatalf("expected MakeMKV audio languages, got %+v", body.Audio)
 	}
-	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 {
-		t.Fatalf("expected audio source indexes [0 1], got %+v", body.Audio)
-	}
-	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language}
-	if !equalStringSlices(gotSubtitleLanguages, []string{"spa", "chi"}) {
-		t.Fatalf("expected subtitle language fallback [spa chi], got %+v", gotSubtitleLanguages)
-	}
-	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
-		t.Fatalf("expected subtitle source indexes [0 1], got %+v", body.Subtitles)
-	}
-	if body.Subtitles[0].Name != "Signs & Songs" || body.Subtitles[1].Name != "简体中文特效" {
-		t.Fatalf("expected subtitle labels to remain unchanged, got %+v", body.Subtitles)
+	if len(body.Subtitles) != 2 || body.Subtitles[0].Language != "spa" || body.Subtitles[1].Language != "chi" {
+		t.Fatalf("expected MakeMKV subtitle languages, got %+v", body.Subtitles)
 	}
 }
 
-func TestSourcesHandlerResolveAlignsFallbackLanguagesWithVisibleRows(t *testing.T) {
-	inputRoot := t.TempDir()
-	sourceID := "FallbackHiddenDisc"
-	sourcePath := filepath.Join(inputRoot, sourceID)
-	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00803.MPLS")
-	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:     []string{"2", "5", "7"},
-			AudioLanguages:    []string{"eng", "chi", "jpn"},
-			SubtitleTrackIDs:  []string{"9", "10", "11"},
-			SubtitleLanguages: []string{"eng", "chi", "jpn"},
-		},
-	})
-
-	reqBody := `{
-		"sourceId":"FallbackHiddenDisc",
-		"bdinfo":{
-			"playlistName":"00803.MPLS",
-			"audioLabels":["English Dolby TrueHD/Atmos Audio","日语评论音轨"],
-			"subtitleLabels":["English","日文注释"],
-			"rawText":"PLAYLIST REPORT:\nName: 00803.MPLS\nAUDIO:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby TrueHD/Atmos Audio                                3984 kbps       7.1 / 48 kHz / 3984 kbps / 24-bit\n* Dolby Digital Audio                                   640 kbps        5.1 / 48 kHz / 640 kbps / 普通话\nDTS-HD Master Audio                                     2123 kbps       5.1 / 48 kHz / 2123 kbps / 日语评论音轨\nSUBTITLES:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics                                   54.085 kbps\n* Presentation Graphics                                 31.415 kbps                    简体中文特效\nPresentation Graphics                                   30.071 kbps                    日文注释"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/FallbackHiddenDisc/resolve", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	req = withRouteParam(req, "id", sourceID)
-
-	w := httptest.NewRecorder()
-	h.Resolve(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
-	}
-
-	var body struct {
-		Audio []struct {
-			Language    string `json:"language"`
-			SourceIndex int    `json:"sourceIndex"`
-		} `json:"audio"`
-		Subtitles []struct {
-			Language    string `json:"language"`
-			SourceIndex int    `json:"sourceIndex"`
-		} `json:"subtitles"`
-	}
-	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-	if !equalStringSlices([]string{body.Audio[0].Language, body.Audio[1].Language}, []string{"eng", "jpn"}) {
-		t.Fatalf("expected aligned audio fallback languages [eng jpn], got %+v", body.Audio)
-	}
-	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 {
-		t.Fatalf("expected visible audio source indexes [0 1], got %+v", body.Audio)
-	}
-	if !equalStringSlices([]string{body.Subtitles[0].Language, body.Subtitles[1].Language}, []string{"eng", "jpn"}) {
-		t.Fatalf("expected aligned subtitle fallback languages [eng jpn], got %+v", body.Subtitles)
-	}
-	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
-		t.Fatalf("expected visible subtitle source indexes [0 1], got %+v", body.Subtitles)
-	}
-}
-
-func TestSourcesHandlerResolveRecognizesAdditionalNamedLanguages(t *testing.T) {
+func TestSourcesHandlerResolveReturnsMakeMKVAdditionalLanguages(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "EuropeanDisc"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -811,64 +547,21 @@ func TestSourcesHandlerResolveRecognizesAdditionalNamedLanguages(t *testing.T) {
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:     []string{"12", "14", "15"},
-			AudioLanguages:    []string{"ger", "ita", "kor"},
-			SubtitleTrackIDs:  []string{"23", "24", "26", "27"},
-			SubtitleLanguages: []string{"ger", "ita", "dut", "kor"},
-		},
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{Audio: []resolveTrack{{ID: "A1", Language: "ger", Name: "German", Selected: true, Default: true, SourceIndex: 0}, {ID: "A2", Language: "ita", Name: "Italian", Selected: true, Default: false, SourceIndex: 1}, {ID: "A3", Language: "kor", Name: "Korean", Selected: true, Default: false, SourceIndex: 2}}, Subtitles: []resolveTrack{{ID: "S1", Language: "ger", Name: "German", Selected: true, Default: true, SourceIndex: 0}, {ID: "S2", Language: "ita", Name: "Italian", Selected: true, Default: false, SourceIndex: 1}, {ID: "S3", Language: "dut", Name: "Dutch", Selected: true, Default: false, SourceIndex: 2}, {ID: "S4", Language: "kor", Name: "Korean", Selected: true, Default: false, SourceIndex: 3}}},
 	})
 
-	reqBody := `{
-		"sourceId":"EuropeanDisc",
-		"bdinfo":{
-			"playlistName":"00800.MPLS",
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\n\nAUDIO:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby Digital Audio             German          640 kbps        5.1 / 48 kHz / 640 kbps\nDolby Digital Audio             Italian         640 kbps        5.1 / 48 kHz / 640 kbps\nDolby Digital Audio             Korean          640 kbps        5.1 / 48 kHz / 640 kbps\n\nSUBTITLES:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           German          34.497 kbps\nPresentation Graphics           Italian         35.187 kbps\nPresentation Graphics           Dutch           24.865 kbps\nPresentation Graphics           Korean          24.865 kbps\n"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/EuropeanDisc/resolve", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/EuropeanDisc/resolve", strings.NewReader(`{"sourceId":"EuropeanDisc","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", sourceID)
-
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
-
-	var body struct {
-		Audio []struct {
-			Language string `json:"language"`
-		} `json:"audio"`
-		Subtitles []struct {
-			Language string `json:"language"`
-		} `json:"subtitles"`
-	}
-	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-
-	gotAudioLanguages := []string{body.Audio[0].Language, body.Audio[1].Language, body.Audio[2].Language}
-	if !equalStringSlices(gotAudioLanguages, []string{"ger", "ita", "kor"}) {
-		t.Fatalf("expected audio languages [ger ita kor], got %+v", gotAudioLanguages)
-	}
-
-	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language, body.Subtitles[2].Language, body.Subtitles[3].Language}
-	if !equalStringSlices(gotSubtitleLanguages, []string{"ger", "ita", "dut", "kor"}) {
-		t.Fatalf("expected subtitle languages [ger ita dut kor], got %+v", gotSubtitleLanguages)
-	}
 }
 
-func TestSourcesHandlerResolveRecognizesPortugueseAndRussianLanguages(t *testing.T) {
+func TestSourcesHandlerResolveReturnsMakeMKVPortugueseAndRussian(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "LanguageDisc"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -880,60 +573,17 @@ func TestSourcesHandlerResolveRecognizesPortugueseAndRussianLanguages(t *testing
 		t.Fatalf("write file failed: %v", err)
 	}
 
-	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{
-		items: []media.SourceEntry{{
-			ID:   sourceID,
-			Name: sourceID,
-			Path: sourcePath,
-			Type: media.SourceBDMV,
-		}},
-	}, stubPlaylistInspector{
-		result: PlaylistInspection{
-			AudioTrackIDs:     []string{"16", "17"},
-			AudioLanguages:    []string{"por", "rus"},
-			SubtitleTrackIDs:  []string{"28", "29"},
-			SubtitleLanguages: []string{"por", "rus"},
-		},
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{Audio: []resolveTrack{{ID: "A1", Language: "por", Name: "Portuguese", Selected: true, Default: true, SourceIndex: 0}, {ID: "A2", Language: "rus", Name: "Russian", Selected: true, Default: false, SourceIndex: 1}}, Subtitles: []resolveTrack{{ID: "S1", Language: "por", Name: "Portuguese", Selected: true, Default: true, SourceIndex: 0}, {ID: "S2", Language: "rus", Name: "Russian", Selected: true, Default: false, SourceIndex: 1}}},
 	})
 
-	reqBody := `{
-		"sourceId":"LanguageDisc",
-		"bdinfo":{
-			"playlistName":"00800.MPLS",
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\n\nAUDIO:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby Digital Audio             Portuguese      640 kbps        5.1 / 48 kHz / 640 kbps\nDolby Digital Audio             Russian         640 kbps        5.1 / 48 kHz / 640 kbps\n\nSUBTITLES:\n\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nPresentation Graphics           Portuguese      24.865 kbps\nPresentation Graphics           Russian         24.865 kbps\n"
-		}
-	}`
-	req := httptest.NewRequest(http.MethodPost, "/api/sources/LanguageDisc/resolve", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/LanguageDisc/resolve", strings.NewReader(`{"sourceId":"LanguageDisc","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", sourceID)
-
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
-	}
-
-	var body struct {
-		Audio []struct {
-			Language string `json:"language"`
-		} `json:"audio"`
-		Subtitles []struct {
-			Language string `json:"language"`
-		} `json:"subtitles"`
-	}
-	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-
-	gotAudioLanguages := []string{body.Audio[0].Language, body.Audio[1].Language}
-	if !equalStringSlices(gotAudioLanguages, []string{"por", "rus"}) {
-		t.Fatalf("expected audio languages [por rus], got %+v", gotAudioLanguages)
-	}
-
-	gotSubtitleLanguages := []string{body.Subtitles[0].Language, body.Subtitles[1].Language}
-	if !equalStringSlices(gotSubtitleLanguages, []string{"por", "rus"}) {
-		t.Fatalf("expected subtitle languages [por rus], got %+v", gotSubtitleLanguages)
 	}
 }
 
@@ -987,7 +637,7 @@ func TestSourcesHandlerResolveFindsPlaylistCaseInsensitively(t *testing.T) {
 			Type: media.SourceBDMV,
 		}},
 	}, stubPlaylistInspector{
-		result: PlaylistInspection{},
+		result: MakeMKVInspection{},
 	})
 
 	reqBody := `{"sourceId":"CaseDisc","bdinfo":{"playlistName":"00003.MPLS","rawText":"PLAYLIST REPORT:\nName: 00003.MPLS"}}`
@@ -1122,92 +772,6 @@ func buildTestMPLS(clipNames []string) []byte {
 	return data
 }
 
-func TestCollectTrackIDsCollapsesTrueHDCoreMultiplexedAudioTracks(t *testing.T) {
-	payload := mkvmergeIdentifyPayload{
-		Tracks: []mkvmergeTrack{
-			{ID: 0, Type: "video"},
-			{
-				ID:         1,
-				Type:       "audio",
-				Codec:      "TrueHD Atmos",
-				Properties: mkvmergeTrackProperties{AudioChannels: 8, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
-			},
-			{
-				ID:         2,
-				Type:       "audio",
-				Codec:      "AC-3",
-				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 4352, StreamID: 4352, MultiplexedTracks: []int{1, 2}},
-			},
-			{
-				ID:         3,
-				Type:       "audio",
-				Codec:      "DTS-HD Master Audio",
-				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 4353, StreamID: 4353},
-			},
-			{
-				ID:    4,
-				Type:  "subtitles",
-				Codec: "HDMV PGS",
-			},
-		},
-	}
-
-	audioIDs, subtitleIDs := collectTrackIDs(payload)
-	if !equalStringSlices(audioIDs, []string{"1", "3"}) {
-		t.Fatalf("expected multiplexed audio ids to collapse to [1 3], got %+v", audioIDs)
-	}
-	if !equalStringSlices(subtitleIDs, []string{"4"}) {
-		t.Fatalf("expected subtitle ids [4], got %+v", subtitleIDs)
-	}
-}
-
-func TestCollectTrackIDsPrefersHigherChannelCountWithinMultiplexedGroup(t *testing.T) {
-	payload := mkvmergeIdentifyPayload{
-		Tracks: []mkvmergeTrack{
-			{
-				ID:         1,
-				Type:       "audio",
-				Codec:      "AC-3",
-				Properties: mkvmergeTrackProperties{AudioChannels: 2, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
-			},
-			{
-				ID:         2,
-				Type:       "audio",
-				Codec:      "DTS-HD Master Audio",
-				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 5000, StreamID: 5000, MultiplexedTracks: []int{1, 2}},
-			},
-		},
-	}
-
-	audioIDs, _ := collectTrackIDs(payload)
-	if !equalStringSlices(audioIDs, []string{"2"}) {
-		t.Fatalf("expected higher channel track id [2], got %+v", audioIDs)
-	}
-}
-
-func TestCollectTrackIDsKeepsFirstTrackWhenChannelCountMatches(t *testing.T) {
-	payload := mkvmergeIdentifyPayload{
-		Tracks: []mkvmergeTrack{
-			{
-				ID:         7,
-				Type:       "audio",
-				Codec:      "DTS-HD Master Audio",
-				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
-			},
-			{
-				ID:         8,
-				Type:       "audio",
-				Codec:      "AC-3",
-				Properties: mkvmergeTrackProperties{AudioChannels: 6, Number: 6000, StreamID: 6000, MultiplexedTracks: []int{7, 8}},
-			},
-		},
-	}
-
-	audioIDs, _ := collectTrackIDs(payload)
-	if !equalStringSlices(audioIDs, []string{"7"}) {
-		t.Fatalf("expected first track id [7] when channel counts match, got %+v", audioIDs)
-	}
-}
 
 func equalStringSlices(left, right []string) bool {
 	if len(left) != len(right) {

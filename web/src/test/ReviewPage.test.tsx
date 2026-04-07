@@ -517,8 +517,8 @@ describe('ReviewPage', () => {
       outputDir: '/remux',
       dvMergeEnabled: true,
       video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p', hdrType: 'DV.HDR' },
-      audio: [{ id: 'a1', name: 'English Atmos', language: 'eng', selected: true, default: true }],
-      subtitles: [{ id: 's1', name: 'English PGS', language: 'eng', selected: true, default: false }],
+      audio: [{ id: 'A1', sourceIndex: 0, name: 'English Atmos', language: 'eng', selected: true, default: true }],
+      subtitles: [{ id: 'S1', sourceIndex: 0, name: 'English PGS', language: 'eng', selected: true, default: false }],
     } as const;
 
     render(

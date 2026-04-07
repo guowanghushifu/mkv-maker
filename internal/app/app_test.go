@@ -102,7 +102,7 @@ func TestAppCloseStopsRemuxBeforeISOCleanup(t *testing.T) {
 		PayloadJSON: `{
 			"source":{"name":"Nightcrawler","path":"/tmp/Nightcrawler.mkv"},
 			"bdinfo":{"playlistName":"00800.MPLS"},
-			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[]},
+			"draft":{"playlistName":"00800.MPLS","video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},"audio":[],"subtitles":[],"makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}},
 			"outputPath":"` + outputPath + `"
 		}`,
 	})
