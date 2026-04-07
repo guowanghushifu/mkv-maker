@@ -40,7 +40,7 @@ func NewJobRunner(runner CommandRunner) *JobRunner {
 		runner:       runner,
 		renameOutput: os.Rename,
 		tempDir:      defaultMakeMKVTempDir,
-		cleanTempDir: removeAllIfPresent,
+		cleanTempDir: clearDirectoryContentsIfPresent,
 	}
 	jr.inspectIntermediateTrackJSON = jr.defaultInspectIntermediateTrackJSON
 	jr.runMakeMKVInfo = jr.defaultRunMakeMKVInfo
@@ -329,16 +329,24 @@ func defaultMakeMKVTempDir() string {
 	return "/remux_tmp"
 }
 
-func removeAllIfPresent(path string) error {
+func clearDirectoryContentsIfPresent(path string) error {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return nil
 	}
-	err := os.RemoveAll(trimmed)
-	if err == nil || errors.Is(err, os.ErrNotExist) {
-		return nil
+	entries, err := os.ReadDir(trimmed)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
-	return err
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(trimmed, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func defaultLocateIntermediateMKV(tempDir string) (string, error) {
