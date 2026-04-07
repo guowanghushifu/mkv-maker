@@ -50,10 +50,10 @@ func TestExtractProgressPercentParsesExplicitMkvmmergePercentages(t *testing.T) 
 	}
 }
 
-func TestFormatCommandPreviewAlwaysUsesLiteralMkvmergeBinary(t *testing.T) {
+func TestFormatCommandPreviewKeepsProvidedBinaryName(t *testing.T) {
 	got := FormatCommandPreview("/opt/homebrew/bin/mkvmerge", []string{"--output", "/remux/out.mkv"})
-	if !strings.HasPrefix(got, "mkvmerge\n") {
-		t.Fatalf("expected preview to start with literal mkvmerge, got %q", got)
+	if !strings.HasPrefix(got, "/opt/homebrew/bin/mkvmerge\n") {
+		t.Fatalf("expected preview to keep provided binary name, got %q", got)
 	}
 }
 
@@ -121,6 +121,39 @@ func TestExtractProgressPercentsFromChunkMapsMakeMKVSavingPhaseToFirstSixtyPerce
 	}
 	if remainder != "" {
 		t.Fatalf("expected empty remainder, got %q", remainder)
+	}
+}
+
+func TestExtractProgressPercentsFromChunkParsesMakeMKVCompositeSavingLine(t *testing.T) {
+	percents, remainder := extractProgressPercentsFromChunk(
+		"",
+		"Current action: Saving to MKV file\nCurrent progress - 97%  , Total progress - 96%\n",
+	)
+	if len(percents) != 1 || percents[0] != 57 {
+		t.Fatalf("expected mapped MakeMKV composite progress [57], got %v", percents)
+	}
+	if remainder != "" {
+		t.Fatalf("expected empty remainder, got %q", remainder)
+	}
+}
+
+func TestExtractProgressPercentsFromChunkIgnoresCompositeMakeMKVProgressBeforeSavingAction(t *testing.T) {
+	percents, remainder := extractProgressPercentsFromChunk(
+		"",
+		"Current progress - 97%  , Total progress - 96%\n",
+	)
+	if len(percents) != 0 {
+		t.Fatalf("expected no MakeMKV progress before saving action, got %v", percents)
+	}
+	if remainder != "" {
+		t.Fatalf("expected empty remainder, got %q", remainder)
+	}
+}
+
+func TestFormatCommandPreviewUsesProvidedBinaryName(t *testing.T) {
+	got := FormatCommandPreview("makemkvcon", []string{"--messages=-null", "mkv", "file:/bd_input/Disc", "4", "/remux_tmp"})
+	if !strings.HasPrefix(got, "makemkvcon\n") {
+		t.Fatalf("expected preview to start with makemkvcon, got %q", got)
 	}
 }
 

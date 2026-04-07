@@ -16,7 +16,7 @@ import (
 )
 
 type CommandRunner interface {
-	Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error)
+	Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error)
 }
 
 type JobRunner struct {
@@ -28,6 +28,8 @@ type JobRunner struct {
 	tempDir                      func() string
 	cleanTempDir                 func(path string) error
 	locateIntermediateMKV        func(tempDir string) (string, error)
+	onCommandPreview             func(string)
+	buildMKVMergeArgs            func(ctx context.Context, draft Draft) ([]string, error)
 }
 
 var makemkvconBinaryPath = "/opt/makemkv/bin/makemkvcon"
@@ -46,6 +48,7 @@ func NewJobRunner(runner CommandRunner) *JobRunner {
 	jr.runMakeMKVInfo = jr.defaultRunMakeMKVInfo
 	jr.runMakeMKVMKV = jr.defaultRunMakeMKVMKV
 	jr.locateIntermediateMKV = defaultLocateIntermediateMKV
+	jr.buildMKVMergeArgs = jr.defaultBuildMKVMergeArgs
 	return jr
 }
 
@@ -65,7 +68,7 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		return "", false, err
 	}
 
-	executionDraft, cleanupIntermediate, err := r.prepareExecutionDraft(ctx, executionDraft, onOutput)
+	executionDraft, executionArgs, cleanupIntermediate, err := r.prepareExecutionDraft(ctx, executionDraft, onOutput)
 	if cleanupIntermediate != nil {
 		defer cleanupIntermediate()
 	}
@@ -73,7 +76,7 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		return "", false, err
 	}
 
-	output, streamed, runErr := r.runCommand(ctx, executionDraft, onOutput)
+	output, streamed, runErr := r.runCommand(ctx, executionDraft, executionArgs, onOutput)
 	if runErr != nil {
 		_ = removeTemporaryOutput(tempPath)
 		return output, streamed, runErr
@@ -85,7 +88,7 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 	return output, streamed, nil
 }
 
-func (r *JobRunner) runCommand(ctx context.Context, draft Draft, onOutput func(string)) (string, bool, error) {
+func (r *JobRunner) runCommand(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, bool, error) {
 	var streamed atomic.Bool
 	wrappedOutput := func(chunk string) {
 		if strings.TrimSpace(chunk) == "" {
@@ -97,17 +100,19 @@ func (r *JobRunner) runCommand(ctx context.Context, draft Draft, onOutput func(s
 		}
 	}
 
-	output, runErr := r.runner.Run(ctx, draft, wrappedOutput)
+	preview := FormatCommandPreview("mkvmerge", args)
+	r.emitCommandPreview(preview)
+	output, runErr := r.runner.Run(ctx, draft, args, wrappedOutput)
 	return output, streamed.Load(), runErr
 }
 
-func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOutput func(string)) (Draft, func(), error) {
+func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOutput func(string)) (Draft, []string, func(), error) {
 	if strings.EqualFold(filepath.Ext(draft.SourcePath), ".mkv") {
-		remapped, err := r.remapExecutionDraftTrackIDs(ctx, draft)
-		return remapped, nil, err
+		args, err := r.defaultBuildMKVMergeArgs(ctx, draft)
+		return draft, args, nil, err
 	}
 	if r == nil {
-		return draft, nil, nil
+		return draft, nil, nil, nil
 	}
 
 	workingDir := defaultMakeMKVTempDir()
@@ -124,19 +129,19 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 	}
 	if r.cleanTempDir != nil {
 		if err := r.cleanTempDir(workingDir); err != nil {
-			return Draft{}, cleanup, err
+			return Draft{}, nil, cleanup, err
 		}
 	}
 	if err := os.MkdirAll(workingDir, 0o755); err != nil {
-		return Draft{}, cleanup, err
+		return Draft{}, nil, cleanup, err
 	}
 
 	if r.runMakeMKVInfo == nil {
-		return Draft{}, cleanup, errors.New("makemkv info runner is not configured")
+		return Draft{}, nil, cleanup, errors.New("makemkv info runner is not configured")
 	}
 	robotOutput, err := r.runMakeMKVInfo(ctx, makeMKVSourcePath(draft))
 	if err != nil {
-		return Draft{}, cleanup, err
+		return Draft{}, nil, cleanup, err
 	}
 	playlistName := draft.Playlist
 	if playlistName == "" {
@@ -146,59 +151,78 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 	if titleID <= 0 {
 		titleID, err = LookupMakeMKVTitleIDByPlaylist(robotOutput, playlistName)
 		if err != nil {
-			return Draft{}, cleanup, err
+			return Draft{}, nil, cleanup, err
 		}
 	}
 	if r.runMakeMKVMKV == nil {
-		return Draft{}, cleanup, errors.New("makemkv mkv runner is not configured")
+		return Draft{}, nil, cleanup, errors.New("makemkv mkv runner is not configured")
 	}
 	if err := r.runMakeMKVMKV(ctx, makeMKVSourcePath(draft), titleID, workingDir, onOutput); err != nil {
-		return Draft{}, cleanup, err
+		return Draft{}, nil, cleanup, err
 	}
 	if r.locateIntermediateMKV == nil {
-		return Draft{}, cleanup, errors.New("intermediate mkv locator is not configured")
+		return Draft{}, nil, cleanup, errors.New("intermediate mkv locator is not configured")
 	}
 	intermediatePath, err := r.locateIntermediateMKV(workingDir)
 	if err != nil {
-		return Draft{}, cleanup, err
+		return Draft{}, nil, cleanup, err
 	}
 	if r.inspectIntermediateTrackJSON == nil {
-		return Draft{}, cleanup, errors.New("intermediate track inspector is not configured")
+		return Draft{}, nil, cleanup, errors.New("intermediate track inspector is not configured")
 	}
 	identifyJSON, err := r.inspectIntermediateTrackJSON(ctx, intermediatePath)
 	if err != nil {
-		return Draft{}, cleanup, err
+		return Draft{}, nil, cleanup, err
 	}
 
 	secondPassDraft := draft
 	secondPassDraft.SourcePath = intermediatePath
-	remapped, err := RemapDraftTrackIDsBySourceIndex(secondPassDraft, identifyJSON)
+	audioSelectors, subtitleSelectors, err := BuildResolvedTrackSelectorsBySourceIndex(secondPassDraft, identifyJSON)
 	if err != nil {
-		return Draft{}, cleanup, err
+		return Draft{}, nil, cleanup, err
 	}
-	return remapped, cleanup, nil
+	stageTwoArgs, err := BuildMKVMergeArgsWithResolvedSelectors(secondPassDraft, audioSelectors, subtitleSelectors)
+	if err != nil {
+		return Draft{}, nil, cleanup, err
+	}
+	r.emitCommandPreview(FormatCommandPreview("mkvmerge", stageTwoArgs))
+	return secondPassDraft, stageTwoArgs, cleanup, nil
 }
 
 func (r *JobRunner) BuildExecutionDraft(req StartRequest) (Draft, error) {
 	return buildExecutionDraft(req)
 }
 
-func (r *JobRunner) remapExecutionDraftTrackIDs(ctx context.Context, draft Draft) (Draft, error) {
+func (r *JobRunner) defaultBuildMKVMergeArgs(ctx context.Context, draft Draft) ([]string, error) {
 	if r == nil || r.inspectIntermediateTrackJSON == nil {
-		return draft, nil
+		return BuildMKVMergeArgs(draft), nil
 	}
 	if !strings.EqualFold(filepath.Ext(draft.SourcePath), ".mkv") {
-		return draft, nil
+		return BuildMKVMergeArgs(draft), nil
 	}
 	if !hasSyntheticTrackIDs(draft) {
-		return draft, nil
+		return BuildMKVMergeArgs(draft), nil
 	}
 
 	identifyJSON, err := r.inspectIntermediateTrackJSON(ctx, draft.SourcePath)
 	if err != nil {
-		return Draft{}, err
+		return nil, err
 	}
-	return RemapDraftTrackIDsBySourceIndex(draft, identifyJSON)
+	audioSelectors, subtitleSelectors, err := BuildResolvedTrackSelectorsBySourceIndex(draft, identifyJSON)
+	if err != nil {
+		return nil, err
+	}
+	return BuildMKVMergeArgsWithResolvedSelectors(draft, audioSelectors, subtitleSelectors)
+}
+
+func (r *JobRunner) emitCommandPreview(preview string) {
+	if r == nil || r.onCommandPreview == nil {
+		return
+	}
+	if strings.TrimSpace(preview) == "" {
+		return
+	}
+	r.onCommandPreview(preview)
 }
 
 func hasSyntheticTrackIDs(draft Draft) bool {
@@ -285,15 +309,34 @@ func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
 	}
 
 	draft = withTemporaryOutputPath(draft)
-	previewDraft := draft
-	if strings.EqualFold(filepath.Ext(previewDraft.SourcePath), ".mkv") {
-		previewDraft, err = r.remapExecutionDraftTrackIDs(context.Background(), previewDraft)
-		if err != nil {
-			return "", err
+	if !strings.EqualFold(filepath.Ext(draft.SourcePath), ".mkv") {
+		workingDir := defaultMakeMKVTempDir()
+		if r != nil && r.tempDir != nil {
+			candidate := strings.TrimSpace(r.tempDir())
+			if candidate != "" {
+				workingDir = candidate
+			}
 		}
+		titleID := draft.MakeMKV.TitleID
+		if titleID <= 0 {
+			return "", errors.New("makemkv title id is required for stage-one preview")
+		}
+		args := []string{
+			"--messages=-null",
+			"--progress=-stdout",
+			"mkv",
+			makeMKVSourceArg(makeMKVSourcePath(draft)),
+			strconv.Itoa(titleID),
+			workingDir,
+			"--profile=/config/nocore.mmcp.xml",
+		}
+		return FormatCommandPreview("makemkvcon", args), nil
 	}
 
-	args := BuildMKVMergeArgs(previewDraft)
+	args, err := r.defaultBuildMKVMergeArgs(context.Background(), draft)
+	if err != nil {
+		return "", err
+	}
 	return FormatCommandPreview("mkvmerge", args), nil
 }
 
@@ -385,14 +428,16 @@ type MKVMergeRunner struct {
 	Binary string
 }
 
-func (r MKVMergeRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
-	return r.runWithOutput(ctx, draft, onOutput)
+func (r MKVMergeRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+	return r.runWithOutput(ctx, draft, args, onOutput)
 }
 
-func (r MKVMergeRunner) runWithOutput(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r MKVMergeRunner) runWithOutput(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+	_ = draft
 	binary := resolveBinaryName(r.Binary)
-
-	args := BuildMKVMergeArgs(draft)
+	if len(args) == 0 {
+		return "", errors.New("mkvmerge arguments are required")
+	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

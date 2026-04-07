@@ -12,13 +12,15 @@ import (
 
 type stubRunner struct {
 	lastDraft Draft
+	lastArgs  []string
 	output    string
 	err       error
 	wait      time.Duration
 }
 
-func (r *stubRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r *stubRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
 	r.lastDraft = draft
+	r.lastArgs = append([]string(nil), args...)
 	if r.wait > 0 {
 		timer := time.NewTimer(r.wait)
 		defer timer.Stop()
@@ -46,7 +48,9 @@ type controlledRunner struct {
 	release chan struct{}
 }
 
-func (r *controlledRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r *controlledRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+	_ = draft
+	_ = args
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -75,8 +79,9 @@ type signalKilledRunner struct {
 	started chan struct{}
 }
 
-func (r *signalKilledRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r *signalKilledRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
 	_ = draft
+	_ = args
 	_ = onOutput
 	if r.started != nil {
 		select {
@@ -99,10 +104,10 @@ type streamingRunner struct {
 type controlledFileRunner struct {
 	started chan struct{}
 	release chan struct{}
-	run     func(ctx context.Context, draft Draft, onOutput func(string)) (string, error)
+	run     func(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error)
 }
 
-func (r *controlledFileRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r *controlledFileRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -111,7 +116,7 @@ func (r *controlledFileRunner) Run(ctx context.Context, draft Draft, onOutput fu
 		}
 	}
 	if r.run != nil {
-		return r.run(ctx, draft, onOutput)
+		return r.run(ctx, draft, args, onOutput)
 	}
 	if r.release != nil {
 		select {
@@ -123,7 +128,8 @@ func (r *controlledFileRunner) Run(ctx context.Context, draft Draft, onOutput fu
 	return "", nil
 }
 
-func (r *streamingRunner) Run(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+func (r *streamingRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+	_ = args
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -478,7 +484,8 @@ func TestManagerStopCurrentRemovesTemporaryOutputAndKeepsFinalOutputPath(t *test
 
 	runner := &controlledFileRunner{
 		started: make(chan struct{}),
-		run: func(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
 			if draft.OutputPath != tempPath {
 				t.Fatalf("expected runner output path %q, got %q", tempPath, draft.OutputPath)
 			}
@@ -527,7 +534,8 @@ func TestManagerCloseRemovesTemporaryOutputAndKeepsFinalOutputPath(t *testing.T)
 
 	runner := &controlledFileRunner{
 		started: make(chan struct{}),
-		run: func(ctx context.Context, draft Draft, onOutput func(string)) (string, error) {
+		run: func(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
 			if draft.OutputPath != tempPath {
 				t.Fatalf("expected runner output path %q, got %q", tempPath, draft.OutputPath)
 			}
@@ -849,7 +857,7 @@ func validPayloadJSON(sourceName, sourcePath, playlistName, outputPath string) s
 			"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
 			"audio":[],
 			"subtitles":[],
-			"makemkv":{"playlistName":"` + playlistName + `","titleId":0,"audio":[],"subtitles":[]}
+			"makemkv":{"playlistName":"` + playlistName + `","titleId":4,"audio":[],"subtitles":[]}
 		},
 		"outputPath":"` + outputPath + `"
 	}`

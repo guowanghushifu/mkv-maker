@@ -21,7 +21,7 @@ type closeAwareRemuxRunner struct {
 	done    chan struct{}
 }
 
-func (r *closeAwareRemuxRunner) Run(ctx context.Context, _ remux.Draft, _ func(string)) (string, error) {
+func (r *closeAwareRemuxRunner) Run(ctx context.Context, _ remux.Draft, _ []string, _ func(string)) (string, error) {
 	if r.started != nil {
 		select {
 		case <-r.started:

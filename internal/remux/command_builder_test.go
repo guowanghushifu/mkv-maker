@@ -217,6 +217,60 @@ func TestBuildMKVMergeArgsMarksNonDefaultAudioTracksAsNo(t *testing.T) {
 	}
 }
 
+func TestBuildMKVMergeArgsWithResolvedSelectorsUsesResolvedTrackIDs(t *testing.T) {
+	draft := Draft{
+		OutputPath: "/remux/out.mkv",
+		SourcePath: "/tmp/intermediate.mkv",
+		Video:      VideoTrack{Name: "Main Video"},
+		Audio: []AudioTrack{
+			{ID: "audio-0", SourceIndex: 0, Name: "English", Language: "eng", Selected: true, Default: true},
+			{ID: "audio-1", SourceIndex: 1, Name: "Commentary", Language: "eng", Selected: true, Default: false},
+		},
+		Subtitles: []SubtitleTrack{
+			{ID: "subtitle-0", SourceIndex: 0, Name: "English PGS", Language: "eng", Selected: true, Forced: true},
+		},
+	}
+
+	args, err := BuildMKVMergeArgsWithResolvedSelectors(
+		draft,
+		[]ResolvedTrackSelector{{SourceIndex: 0, TrackID: "3"}, {SourceIndex: 1, TrackID: "8"}},
+		[]ResolvedTrackSelector{{SourceIndex: 0, TrackID: "14"}},
+	)
+	if err != nil {
+		t.Fatalf("BuildMKVMergeArgsWithResolvedSelectors returned error: %v", err)
+	}
+
+	if value, ok := optionValue(args, "--audio-tracks"); !ok || value != "3,8" {
+		t.Fatalf("expected resolved audio selectors 3,8, got %q (present=%t)", value, ok)
+	}
+	if value, ok := optionValue(args, "--subtitle-tracks"); !ok || value != "14" {
+		t.Fatalf("expected resolved subtitle selector 14, got %q (present=%t)", value, ok)
+	}
+	if value, ok := optionValue(args, "--track-order"); !ok || value != "0:0,0:3,0:8,0:14" {
+		t.Fatalf("expected resolved track order, got %q (present=%t)", value, ok)
+	}
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--track-name 3:English") || !strings.Contains(joined, "--track-name 8:Commentary") {
+		t.Fatalf("expected resolved audio track-name selectors, got %q", joined)
+	}
+	if !strings.Contains(joined, "--language 14:eng") || !strings.Contains(joined, "--forced-display-flag 14:yes") {
+		t.Fatalf("expected resolved subtitle selectors, got %q", joined)
+	}
+}
+
+func TestBuildMKVMergeArgsWithResolvedSelectorsFailsWhenMappingMissing(t *testing.T) {
+	draft := Draft{
+		OutputPath: "/remux/out.mkv",
+		SourcePath: "/tmp/intermediate.mkv",
+		Audio:      []AudioTrack{{ID: "audio-0", SourceIndex: 0, Name: "English", Language: "eng", Selected: true}},
+	}
+
+	_, err := BuildMKVMergeArgsWithResolvedSelectors(draft, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "audio sourceIndex 0") {
+		t.Fatalf("expected missing audio mapping error, got %v", err)
+	}
+}
+
 func optionValue(args []string, option string) (string, bool) {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == option {
