@@ -113,7 +113,7 @@ func (r RobotInfo) TitleByPlaylist(playlistName string) (TitleInfo, error) {
 
 func BuildTitleView(title TitleInfo) (TitleView, error) {
 	audioTracks := filterCompatibilityAudio(collectTracksByType(title.Tracks, "Audio"))
-	subtitleTracks := collectTracksByType(title.Tracks, "Subtitle")
+	subtitleTracks := collectTracksByType(title.Tracks, "Subtitles")
 	if len(audioTracks) == 0 && len(subtitleTracks) == 0 {
 		return TitleView{}, errors.New("title does not contain usable tracks")
 	}

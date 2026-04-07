@@ -25,7 +25,7 @@ SINFO:0,1,5,0,"A_AC3"
 SINFO:0,1,6,0,"AC3"
 SINFO:0,1,14,0,"6"
 SINFO:0,1,30,0,"English Compatibility Track"
-SINFO:0,2,1,6203,"Subtitle"
+SINFO:0,2,1,6203,"Subtitles"
 SINFO:0,2,3,0,"eng"
 SINFO:0,2,4,0,"English"
 SINFO:0,2,22,0,"4096"
@@ -243,18 +243,18 @@ SINFO:3,0,30,0,"English DD+"`))
 	}
 }
 
-func TestBuildTitleViewAppendsForcedSuffixForForcedSubtitleFlag(t *testing.T) {
-	parsed, err := ParseRobotOutput([]byte(`TINFO:4,16,0,"00805"
-SINFO:4,0,1,6203,"Subtitle"
-SINFO:4,0,3,0,"eng"
-SINFO:4,0,4,0,"English"
-SINFO:4,0,22,0,"4096"
-SINFO:4,0,30,0,"English"`))
+func TestBuildTitleViewIncludesSubtitlesTrackType(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:15,16,0,"00817"
+SINFO:15,0,1,6203,"Subtitles"
+SINFO:15,0,3,0,"eng"
+SINFO:15,0,4,0,"English"
+SINFO:15,0,22,0,"4096"
+SINFO:15,0,30,0,"English"`))
 	if err != nil {
 		t.Fatalf("ParseRobotOutput returned error: %v", err)
 	}
 
-	title, err := parsed.TitleByPlaylist("00805")
+	title, err := parsed.TitleByPlaylist("00817")
 	if err != nil {
 		t.Fatalf("TitleByPlaylist returned error: %v", err)
 	}
@@ -266,6 +266,9 @@ SINFO:4,0,30,0,"English"`))
 
 	if len(view.Subtitles) != 1 {
 		t.Fatalf("expected one subtitle track, got %+v", view.Subtitles)
+	}
+	if view.Subtitles[0].ID != "S1" {
+		t.Fatalf("expected subtitle id S1, got %+v", view.Subtitles[0])
 	}
 	if !view.Subtitles[0].Forced {
 		t.Fatalf("expected subtitle forced flag to be inferred from stream flags, got %+v", view.Subtitles[0])
@@ -510,7 +513,7 @@ SINFO:9,0,40,0,"7.1"`))
 
 func TestBuildTitleViewSubtitleNamePrefersLangNameOverDisplayName(t *testing.T) {
 	parsed, err := ParseRobotOutput([]byte(`TINFO:10,16,0,"00811"
-SINFO:10,0,1,6203,"Subtitle"
+SINFO:10,0,1,6203,"Subtitles"
 SINFO:10,0,3,0,"eng"
 SINFO:10,0,4,0,"English"
 SINFO:10,0,30,0,"English SDH"`))
