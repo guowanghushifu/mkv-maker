@@ -59,8 +59,8 @@ func TestParseRobotOutputBuildsPlaylistTracksAndFiltersCompatibilityAudio(t *tes
 	if !view.Audio[0].Default {
 		t.Fatalf("expected audio default=true, got %+v", view.Audio[0])
 	}
-	if len(view.Subtitles) != 1 || view.Subtitles[0].ID != "S1" || !view.Subtitles[0].Forced {
-		t.Fatalf("expected forced subtitle S1, got %+v", view.Subtitles)
+	if len(view.Subtitles) != 0 {
+		t.Fatalf("expected forced subtitles to be filtered from visible list, got %+v", view.Subtitles)
 	}
 }
 
@@ -243,13 +243,18 @@ SINFO:3,0,30,0,"English DD+"`))
 	}
 }
 
-func TestBuildTitleViewIncludesSubtitlesTrackType(t *testing.T) {
+func TestBuildTitleViewFiltersForcedSubtitleTracksFromVisibleSubtitles(t *testing.T) {
 	parsed, err := ParseRobotOutput([]byte(`TINFO:15,16,0,"00817"
 SINFO:15,0,1,6203,"Subtitles"
 SINFO:15,0,3,0,"eng"
 SINFO:15,0,4,0,"English"
-SINFO:15,0,22,0,"4096"
-SINFO:15,0,30,0,"English"`))
+SINFO:15,0,22,0,"0"
+SINFO:15,0,30,0,"English"
+SINFO:15,1,1,6203,"Subtitles"
+SINFO:15,1,3,0,"spa"
+SINFO:15,1,4,0,"Spanish"
+SINFO:15,1,22,0,"0"
+SINFO:15,1,30,0,"PGS Spanish  (forced only)"`))
 	if err != nil {
 		t.Fatalf("ParseRobotOutput returned error: %v", err)
 	}
@@ -265,16 +270,19 @@ SINFO:15,0,30,0,"English"`))
 	}
 
 	if len(view.Subtitles) != 1 {
-		t.Fatalf("expected one subtitle track, got %+v", view.Subtitles)
+		t.Fatalf("expected only non-forced subtitle to remain visible, got %+v", view.Subtitles)
 	}
 	if view.Subtitles[0].ID != "S1" {
-		t.Fatalf("expected subtitle id S1, got %+v", view.Subtitles[0])
+		t.Fatalf("expected remaining subtitle id S1, got %+v", view.Subtitles[0])
 	}
-	if !view.Subtitles[0].Forced {
-		t.Fatalf("expected subtitle forced flag to be inferred from stream flags, got %+v", view.Subtitles[0])
+	if view.Subtitles[0].Name != "English" {
+		t.Fatalf("expected normal subtitle name to remain unchanged, got %+v", view.Subtitles[0])
 	}
-	if view.Subtitles[0].Name != "English (forced only)" {
-		t.Fatalf("expected forced subtitle name to include suffix, got %+v", view.Subtitles[0])
+	if view.Subtitles[0].Language != "eng" {
+		t.Fatalf("expected remaining subtitle language eng, got %+v", view.Subtitles[0])
+	}
+	if view.Subtitles[0].Forced {
+		t.Fatalf("expected remaining visible subtitle not to be forced, got %+v", view.Subtitles[0])
 	}
 }
 
