@@ -1,16 +1,17 @@
 package remux
 
 type Draft struct {
-	Title        string
-	SourcePath   string
-	Playlist     string
-	OutputPath   string
-	EnableDV     bool
-	SegmentPaths []string
-	Video        VideoTrack
-	Audio        []AudioTrack
-	Subtitles    []SubtitleTrack
-	MakeMKV      MakeMKVTitleCache
+	Title             string
+	SourcePath        string
+	MakeMKVSourcePath string
+	Playlist          string
+	OutputPath        string
+	EnableDV          bool
+	SegmentPaths      []string
+	Video             VideoTrack
+	Audio             []AudioTrack
+	Subtitles         []SubtitleTrack
+	MakeMKV           MakeMKVTitleCache
 }
 
 type MakeMKVTitleCache struct {

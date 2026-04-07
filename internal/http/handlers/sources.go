@@ -522,7 +522,7 @@ type MakeMKVPlaylistInspector struct {
 func (i MakeMKVPlaylistInspector) Inspect(ctx context.Context, sourcePath, playlistPath string) (MakeMKVInspection, error) {
 	binary := strings.TrimSpace(i.Binary)
 	if binary == "" {
-		binary = "makemkvcon"
+		binary = "/opt/makemkv/bin/makemkvcon"
 	}
 
 	output, err := exec.CommandContext(ctx, binary, "info", makeMKVSourceArg(sourcePath), "--robot").Output()

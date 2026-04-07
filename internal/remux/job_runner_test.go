@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -175,7 +176,7 @@ func TestJobRunnerExecuteRenamesTemporaryOutputAfterSuccessfulRun(t *testing.T) 
 		OutputName:   "Disc.mkv",
 		OutputPath:   finalPath,
 		PlaylistName: "00801.MPLS",
-		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", finalPath),
 	}
 
 	_, _, err := runner.Execute(context.Background(), req, nil)
@@ -209,7 +210,7 @@ func TestJobRunnerExecuteRemovesTemporaryOutputAfterFailure(t *testing.T) {
 		OutputName:   "Disc.mkv",
 		OutputPath:   finalPath,
 		PlaylistName: "00801.MPLS",
-		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", finalPath),
 	}
 
 	_, _, err := runner.Execute(context.Background(), req, nil)
@@ -251,7 +252,7 @@ func TestJobRunnerExecuteRemovesStaleTemporaryOutputBeforeRun(t *testing.T) {
 		OutputName:   "Disc.mkv",
 		OutputPath:   finalPath,
 		PlaylistName: "00801.MPLS",
-		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", finalPath),
 	}
 
 	_, _, err := runner.Execute(context.Background(), req, nil)
@@ -289,7 +290,7 @@ func TestJobRunnerExecuteRemovesTemporaryOutputWhenFinalizeRenameFails(t *testin
 		OutputName:   "Disc.mkv",
 		OutputPath:   finalPath,
 		PlaylistName: "00801.MPLS",
-		PayloadJSON:  validPayloadJSON("Disc", "/bd_input/Disc", "00801.MPLS", finalPath),
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", finalPath),
 	}
 
 	_, _, err := runner.Execute(context.Background(), req, nil)
@@ -298,6 +299,186 @@ func TestJobRunnerExecuteRemovesTemporaryOutputWhenFinalizeRenameFails(t *testin
 	}
 	if _, err := os.Stat(tempPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected temporary output to be removed, got %v", err)
+	}
+}
+
+func TestMakeMKVSourceArgumentUsesFilePrefixWithoutShellQuoting(t *testing.T) {
+	arg := makeMKVSourceArg("/bd input/Disc")
+	if arg != "file:/bd input/Disc" {
+		t.Fatalf("expected unquoted MakeMKV source arg, got %q", arg)
+	}
+}
+
+func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	intermediateDir := filepath.Join(outputRoot, "makemkv")
+	intermediatePath := filepath.Join(intermediateDir, "title_t00.mkv")
+	calls := make([]string, 0, 4)
+	capturingRunner := fileWritingRunner{
+		run: func(_ context.Context, draft Draft, onOutput func(string)) (string, error) {
+			calls = append(calls, "mkvmerge")
+			if draft.SourcePath != intermediatePath {
+				t.Fatalf("expected second pass to use intermediate mkv %q, got %q", intermediatePath, draft.SourcePath)
+			}
+			if len(draft.Audio) != 1 || draft.Audio[0].ID != "3" {
+				t.Fatalf("expected remapped audio track id 3, got %+v", draft.Audio)
+			}
+			if len(draft.Subtitles) != 1 || draft.Subtitles[0].ID != "7" {
+				t.Fatalf("expected remapped subtitle track id 7, got %+v", draft.Subtitles)
+			}
+			if err := os.WriteFile(draft.OutputPath, []byte("muxed"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			if onOutput != nil {
+				onOutput("second pass")
+			}
+			return "second pass", nil
+		},
+	}
+	jobRunner := NewJobRunner(capturingRunner)
+	jobRunner.tempDir = func() string {
+		return intermediateDir
+	}
+	jobRunner.runMakeMKVInfo = func(_ context.Context, sourcePath string) ([]byte, error) {
+		calls = append(calls, "info")
+		if sourcePath != "/bd_input/Disc" {
+			t.Fatalf("expected MakeMKV info source /bd_input/Disc, got %q", sourcePath)
+		}
+		return []byte(strings.Join([]string{
+			`TINFO:4,16,0,"00801"`,
+			`TINFO:5,16,0,"00001"`,
+		}, "\n")), nil
+	}
+	jobRunner.runMakeMKVMKV = func(_ context.Context, sourcePath string, titleID int, tempDir string, onOutput func(string)) error {
+		calls = append(calls, "makemkv")
+		if sourcePath != "/bd_input/Disc" {
+			t.Fatalf("expected MakeMKV mkv source /bd_input/Disc, got %q", sourcePath)
+		}
+		if titleID != 4 {
+			t.Fatalf("expected MakeMKV title id 4, got %d", titleID)
+		}
+		if tempDir != intermediateDir {
+			t.Fatalf("expected MakeMKV temp dir %q, got %q", intermediateDir, tempDir)
+		}
+		if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll failed: %v", err)
+		}
+		if err := os.WriteFile(intermediatePath, []byte("intermediate"), 0o644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		if onOutput != nil {
+			onOutput("makemkv")
+		}
+		return nil
+	}
+	jobRunner.inspectIntermediateTrackJSON = func(_ context.Context, path string) ([]byte, error) {
+		calls = append(calls, "identify")
+		if path != intermediatePath {
+			t.Fatalf("expected identify path %q, got %q", intermediatePath, path)
+		}
+		return []byte(`{
+			"tracks":[
+				{"id":0,"type":"video","properties":{"number":1}},
+				{"id":3,"type":"audio","properties":{"number":1}},
+				{"id":7,"type":"subtitles","properties":{"number":1}}
+			]
+		}`), nil
+	}
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Disc","path":"/bd_input/Disc","type":"bdmv"},
+			"bdinfo":{"playlistName":"00801.MPLS"},
+			"draft":{
+				"playlistName":"00801.MPLS",
+				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
+				"audio":[{"id":"audio-0","name":"English","language":"eng","selected":true,"sourceIndex":0}],
+				"subtitles":[{"id":"subtitle-0","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
+				"makemkv":{
+					"playlistName":"00801.MPLS",
+					"titleId":4,
+					"audio":[{"id":"A1","sourceIndex":0,"name":"English","language":"eng","selected":true}],
+					"subtitles":[{"id":"S1","sourceIndex":0,"name":"English PGS","language":"eng","selected":true}]
+				}
+			},
+			"outputPath":"` + finalPath + `"
+		}`,
+	}
+
+	_, _, err := jobRunner.Execute(context.Background(), req, nil)
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if strings.Join(calls, ",") != "info,makemkv,identify,mkvmerge" {
+		t.Fatalf("expected call order info,makemkv,identify,mkvmerge, got %v", calls)
+	}
+	if _, err := os.Stat(finalPath); err != nil {
+		t.Fatalf("expected final output to exist: %v", err)
+	}
+}
+
+func TestDefaultRunMakeMKVCommandsUseAbsoluteBinaryPath(t *testing.T) {
+	jobRunner := NewJobRunner(&stubRunner{})
+	root := t.TempDir()
+	stubBinary := filepath.Join(root, "makemkvcon")
+	logPath := filepath.Join(root, "invocations.log")
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		"printf '%s\n' \"$0 $*\" >> \"" + logPath + "\"",
+		"if [ \"$1\" = \"info\" ]; then",
+		"  printf 'TINFO:4,16,0,\"00801\"\\n'",
+		"  exit 0",
+		"fi",
+		"if [ \"$3\" = \"mkv\" ]; then",
+		"  outdir=$6",
+		"  mkdir -p \"$outdir\"",
+		"  : > \"$outdir/title_t00.mkv\"",
+		"  exit 0",
+		"fi",
+		"exit 99",
+	}, "\n")
+	if err := os.WriteFile(stubBinary, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	originalPath := makemkvconBinaryPath
+	makemkvconBinaryPath = stubBinary
+	defer func() {
+		makemkvconBinaryPath = originalPath
+	}()
+
+	infoOutput, err := jobRunner.defaultRunMakeMKVInfo(context.Background(), "/bd_input/Disc")
+	if err != nil {
+		t.Fatalf("defaultRunMakeMKVInfo returned error: %v", err)
+	}
+	if titleID, lookupErr := LookupMakeMKVTitleIDByPlaylist(infoOutput, "00801.MPLS"); lookupErr != nil || titleID != 4 {
+		t.Fatalf("expected robot info for playlist lookup, got titleID=%d err=%v output=%q", titleID, lookupErr, string(infoOutput))
+	}
+	if err := jobRunner.defaultRunMakeMKVMKV(context.Background(), "/bd_input/Disc", 4, t.TempDir(), nil); err != nil {
+		t.Fatalf("defaultRunMakeMKVMKV returned error: %v", err)
+	}
+	contents, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(contents)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 invocations, got %d: %q", len(lines), string(contents))
+	}
+	for _, line := range lines {
+		if !strings.HasPrefix(line, stubBinary+" ") {
+			t.Fatalf("expected absolute binary path %q in invocation, got %q", stubBinary, line)
+		}
+	}
+	if !strings.Contains(lines[0], " info file:/bd_input/Disc --robot") {
+		t.Fatalf("expected info invocation, got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], " --messages=-null --progress=-stdout mkv file:/bd_input/Disc "+strconv.Itoa(4)+" ") {
+		t.Fatalf("expected mkv invocation, got %q", lines[1])
 	}
 }
 
