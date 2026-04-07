@@ -61,6 +61,54 @@ describe('buildFilenamePreview', () => {
   });
 });
 
+describe('createApiClient synthetic track IDs', () => {
+  it('uses zero-based synthetic IDs', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          video: { name: 'Main Video', codec: 'HEVC', resolution: '2160p' },
+          audio: [
+            { id: 'audio-0', name: 'English DTS-HD MA', language: 'eng', default: true, selected: true },
+            { id: 'audio-1', name: 'Japanese DTS-HD MA', language: 'jpn', default: false, selected: true },
+          ],
+          subtitles: [
+            { id: 'subtitle-0', name: 'English PGS', language: 'eng', default: false, selected: true },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient('/api');
+    await expect(
+      client.createDraft(
+        {
+          id: 'disc-1',
+          name: 'Disc',
+          path: '/bd_input/Disc',
+          type: 'bdmv',
+          size: 1,
+          modifiedAt: '2026-04-06T00:00:00Z',
+        },
+        {
+          playlistName: '00801.MPLS',
+          rawText: 'PLAYLIST REPORT',
+          audioLabels: [],
+          subtitleLabels: [],
+        },
+        'session'
+      )
+    ).resolves.toMatchObject({
+      audio: [{ id: 'audio-0' }, { id: 'audio-1' }],
+      subtitles: [{ id: 'subtitle-0' }],
+    });
+  });
+});
+
 describe('createApiClient currentJob', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
