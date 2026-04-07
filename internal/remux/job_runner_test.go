@@ -309,6 +309,13 @@ func TestMakeMKVSourceArgumentUsesFilePrefixWithoutShellQuoting(t *testing.T) {
 	}
 }
 
+func TestMakeMKVSourceArgumentUsesDiscRootForBDMVDirectory(t *testing.T) {
+	arg := makeMKVSourceArg("/bd_input/Disc/BDMV")
+	if arg != "file:/bd_input/Disc" {
+		t.Fatalf("expected BDMV directory to map to disc root, got %q", arg)
+	}
+}
+
 func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 	outputRoot := t.TempDir()
 	finalPath := filepath.Join(outputRoot, "Disc.mkv")
@@ -342,8 +349,8 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 	}
 	jobRunner.runMakeMKVInfo = func(_ context.Context, sourcePath string) ([]byte, error) {
 		calls = append(calls, "info")
-		if sourcePath != "/bd_input/Disc" {
-			t.Fatalf("expected MakeMKV info source /bd_input/Disc, got %q", sourcePath)
+		if sourcePath != "/bd_input/Disc/BDMV" {
+			t.Fatalf("expected raw MakeMKV info source /bd_input/Disc/BDMV, got %q", sourcePath)
 		}
 		return []byte(strings.Join([]string{
 			`TINFO:4,16,0,"00801"`,
@@ -352,8 +359,8 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 	}
 	jobRunner.runMakeMKVMKV = func(_ context.Context, sourcePath string, titleID int, tempDir string, onOutput func(string)) error {
 		calls = append(calls, "makemkv")
-		if sourcePath != "/bd_input/Disc" {
-			t.Fatalf("expected MakeMKV mkv source /bd_input/Disc, got %q", sourcePath)
+		if sourcePath != "/bd_input/Disc/BDMV" {
+			t.Fatalf("expected raw MakeMKV mkv source /bd_input/Disc/BDMV, got %q", sourcePath)
 		}
 		if titleID != 4 {
 			t.Fatalf("expected MakeMKV title id 4, got %d", titleID)
@@ -392,7 +399,7 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 		OutputPath:   finalPath,
 		PlaylistName: "00801.MPLS",
 		PayloadJSON: `{
-			"source":{"name":"Disc","path":"/bd_input/Disc","type":"bdmv"},
+			"source":{"name":"Disc","path":"/bd_input/Disc/BDMV","type":"bdmv"},
 			"bdinfo":{"playlistName":"00801.MPLS"},
 			"draft":{
 				"playlistName":"00801.MPLS",
@@ -451,14 +458,14 @@ func TestDefaultRunMakeMKVCommandsUseAbsoluteBinaryPath(t *testing.T) {
 		makemkvconBinaryPath = originalPath
 	}()
 
-	infoOutput, err := jobRunner.defaultRunMakeMKVInfo(context.Background(), "/bd_input/Disc")
+	infoOutput, err := jobRunner.defaultRunMakeMKVInfo(context.Background(), "/bd_input/Disc/BDMV")
 	if err != nil {
 		t.Fatalf("defaultRunMakeMKVInfo returned error: %v", err)
 	}
 	if titleID, lookupErr := LookupMakeMKVTitleIDByPlaylist(infoOutput, "00801.MPLS"); lookupErr != nil || titleID != 4 {
 		t.Fatalf("expected robot info for playlist lookup, got titleID=%d err=%v output=%q", titleID, lookupErr, string(infoOutput))
 	}
-	if err := jobRunner.defaultRunMakeMKVMKV(context.Background(), "/bd_input/Disc", 4, t.TempDir(), nil); err != nil {
+	if err := jobRunner.defaultRunMakeMKVMKV(context.Background(), "/bd_input/Disc/BDMV", 4, t.TempDir(), nil); err != nil {
 		t.Fatalf("defaultRunMakeMKVMKV returned error: %v", err)
 	}
 	contents, err := os.ReadFile(logPath)

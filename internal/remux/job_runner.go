@@ -271,7 +271,11 @@ func (r *JobRunner) defaultRunMakeMKVMKV(ctx context.Context, sourcePath string,
 }
 
 func makeMKVSourceArg(path string) string {
-	return "file:" + strings.TrimSpace(path)
+	trimmed := strings.TrimSpace(path)
+	if strings.EqualFold(filepath.Base(trimmed), "BDMV") {
+		return "file:" + filepath.Dir(trimmed)
+	}
+	return "file:" + trimmed
 }
 
 func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
