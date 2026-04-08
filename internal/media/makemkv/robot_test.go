@@ -534,6 +534,93 @@ SINFO:19,0,40,0,"mono"`))
 	}
 }
 
+func TestBuildTitleViewNormalizesDDPlusShortName(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:20,16,0,"00822"
+SINFO:20,0,1,6201,"Audio"
+SINFO:20,0,3,0,"eng"
+SINFO:20,0,4,0,"English"
+SINFO:20,0,5,0,"A_EAC3"
+SINFO:20,0,6,0,"DDplus"
+SINFO:20,0,14,0,"2"
+SINFO:20,0,30,0,"English DD+ Stereo"
+SINFO:20,0,40,0,"stereo"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00822")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DDP.2.0" {
+		t.Fatalf("expected DDplus shortname to normalize to DDP.2.0, got %+v", view.Audio)
+	}
+}
+
+func TestBuildTitleViewNormalizesDTSHDShortName(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:21,16,0,"00823"
+SINFO:21,0,1,6201,"Audio"
+SINFO:21,0,3,0,"eng"
+SINFO:21,0,4,0,"English"
+SINFO:21,0,5,0,"A_DTS"
+SINFO:21,0,6,0,"DTS-HD"
+SINFO:21,0,14,0,"8"
+SINFO:21,0,30,0,"English DTS-HD 7.1"
+SINFO:21,0,40,0,"7.1"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00823")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DTS-HD.7.1" {
+		t.Fatalf("expected DTS-HD shortname to normalize to DTS-HD.7.1, got %+v", view.Audio)
+	}
+}
+
+func TestBuildTitleViewDoesNotAppendAtmosSuffix(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:22,16,0,"00824"
+SINFO:22,0,1,6201,"Audio"
+SINFO:22,0,3,0,"eng"
+SINFO:22,0,4,0,"English"
+SINFO:22,0,5,0,"A_TRUEHD"
+SINFO:22,0,6,0,"TrueHD"
+SINFO:22,0,14,0,"8"
+SINFO:22,0,30,0,"English Atmos"
+SINFO:22,0,40,0,"7.1"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00824")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "TrueHD.7.1" {
+		t.Fatalf("expected no Atmos suffix in codec label, got %+v", view.Audio)
+	}
+}
+
 func TestBuildTitleViewFiltersDTSCompatibilityCoreWhenPrimaryShortNameMissing(t *testing.T) {
 	parsed, err := ParseRobotOutput([]byte(`TINFO:14,16,0,"00816"
 SINFO:14,0,1,6201,"Audio"
