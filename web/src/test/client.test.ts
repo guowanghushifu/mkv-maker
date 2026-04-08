@@ -45,6 +45,12 @@ describe('buildFilenamePreview', () => {
       expected: 'Nightcrawler - 2160p.BluRay.HDR.HEVC.DD.5.1.mkv',
     },
     {
+      name: 'preserves plain dts channel layout',
+      title: 'Nightcrawler',
+      codecLabel: 'DTS.5.1(side)',
+      expected: 'Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS.5.1.mkv',
+    },
+    {
       name: 'converts lpcm stereo to channel layout',
       title: 'Nightcrawler',
       codecLabel: 'LPCM stereo',

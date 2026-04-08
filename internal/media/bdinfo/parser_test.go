@@ -379,3 +379,23 @@ DTS-HD MA Audio                 English         2123 kbps       5.1 / 48 kHz / 2
 		t.Fatalf("expected DTS-HD MA alias to normalize to %+v, got %+v", want, got)
 	}
 }
+
+func TestParseNormalizesPlainDTSAudioCodecLabels(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00006.MPLS
+
+AUDIO:
+
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+DTS Audio                       Spanish         1509 kbps       5.1 / 48 kHz / 1509 kbps / 24-bit
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if got, want := parsed.AudioCodecInfo, []string{"DTS.5.1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected plain DTS audio codec info %+v, got %+v", want, got)
+	}
+}

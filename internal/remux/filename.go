@@ -45,7 +45,7 @@ func normalizeFilenameAudioCodecLabel(value string) string {
 }
 
 func hasNormalizedAudioCodecBase(value string) bool {
-	for _, prefix := range []string{"TrueHD", "DTS-HD.MA", "DTS-HD", "DDP", "DD", "LPCM", "AAC"} {
+	for _, prefix := range []string{"TrueHD", "DTS-HD.MA", "DTS-HD", "DTS", "DDP", "DD", "LPCM", "AAC"} {
 		if strings.HasPrefix(value, prefix) {
 			return true
 		}

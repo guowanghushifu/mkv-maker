@@ -78,6 +78,11 @@ func TestBuildFilenameNormalizesAudioCodecLabelsForReleaseStyle(t *testing.T) {
 			codecLabel: "DTS_HD.MA.5.1",
 			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS-HD.MA.5.1.mkv",
 		},
+		{
+			name:       "preserves plain dts channel layout",
+			codecLabel: "DTS.5.1(side)",
+			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS.5.1.mkv",
+		},
 	}
 
 	for _, tt := range tests {

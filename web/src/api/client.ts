@@ -71,7 +71,7 @@ function normalizeReleaseStyleAudioCodecLabel(...parts: string[]): string {
 }
 
 function detectAudioCodecBase(value: string): string {
-  const compact = value.replace(/[ _/:()]/g, '');
+  const compact = value.replace(/[ _./:()-]/g, '');
   if (value.includes('TRUEHD')) {
     return 'TrueHD';
   }
@@ -86,6 +86,9 @@ function detectAudioCodecBase(value: string): string {
   }
   if (value.includes('DTS-HD')) {
     return 'DTS-HD';
+  }
+  if (value.includes('DTS') || compact.includes('ADTS')) {
+    return 'DTS';
   }
   if (
     value.includes('DOLBY DIGITAL PLUS') ||
@@ -133,7 +136,7 @@ function extractChannelLayout(value: string): string {
 }
 
 function hasNormalizedAudioCodecBase(value: string): boolean {
-  return ['TrueHD', 'DTS-HD.MA', 'DTS-HD', 'DDP', 'DD', 'LPCM', 'AAC'].some((prefix) =>
+  return ['TrueHD', 'DTS-HD.MA', 'DTS-HD', 'DTS', 'DDP', 'DD', 'LPCM', 'AAC'].some((prefix) =>
     value.startsWith(prefix)
   );
 }

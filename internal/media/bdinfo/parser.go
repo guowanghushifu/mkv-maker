@@ -457,7 +457,7 @@ func NormalizeAudioCodecLabel(parts ...string) string {
 }
 
 func detectAudioCodecBase(value string) string {
-	compact := strings.NewReplacer(" ", "", "_", "", "/", "", ":", "", "(", "", ")", "").Replace(value)
+	compact := strings.NewReplacer(" ", "", "_", "", "-", "", ".", "", "/", "", ":", "", "(", "", ")", "").Replace(value)
 	switch {
 	case strings.Contains(value, "TRUEHD"):
 		return "TrueHD"
@@ -465,6 +465,8 @@ func detectAudioCodecBase(value string) string {
 		return "DTS-HD.MA"
 	case strings.Contains(value, "DTS-HD"):
 		return "DTS-HD"
+	case strings.Contains(value, "DTS"), strings.Contains(compact, "ADTS"):
+		return "DTS"
 	case strings.Contains(value, "DOLBY DIGITAL PLUS"), strings.Contains(value, "DDPLUS"), strings.Contains(value, "DD+"), strings.Contains(value, "E-AC-3"), strings.Contains(compact, "EAC3"), strings.HasPrefix(value, "DDP"), strings.Contains(value, " DDP"):
 		return "DDP"
 	case strings.Contains(value, "DOLBY DIGITAL"), strings.Contains(value, "AC-3"), strings.Contains(compact, "AC3"), strings.HasPrefix(value, "DD."), value == "DD", strings.Contains(value, " DD"):
