@@ -11,7 +11,7 @@ RUN npm run build
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
 
-FROM --platform=$BUILDPLATFORM debian:12 AS makemkv-build
+FROM --platform=$BUILDPLATFORM debian:13 AS makemkv-build
 ARG TARGETPLATFORM
 ARG MAKEMKV_VERSION=1.18.3
 ARG MAKEMKV_OSS_URL=https://www.makemkv.com/download/makemkv-oss-${MAKEMKV_VERSION}.tar.gz
