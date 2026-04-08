@@ -101,6 +101,12 @@ type streamingRunner struct {
 	release  chan struct{}
 }
 
+type makeMKVSavingRunner struct {
+	started  chan struct{}
+	progress chan struct{}
+	release  chan struct{}
+}
+
 type controlledFileRunner struct {
 	started chan struct{}
 	release chan struct{}
@@ -160,6 +166,39 @@ func (r *streamingRunner) Run(ctx context.Context, draft Draft, args []string, o
 	}
 	if onOutput != nil {
 		onOutput("Progress: 100%\r")
+	}
+	return "", nil
+}
+
+func (r *makeMKVSavingRunner) Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+	_ = args
+	if r.started != nil {
+		select {
+		case <-r.started:
+		default:
+			close(r.started)
+		}
+	}
+	if onOutput != nil {
+		onOutput("Current action: Saving to MKV file\n")
+		onOutput("Current progress - 2%  , Total progress - 2%\n")
+	}
+	if r.progress != nil {
+		select {
+		case <-r.progress:
+		default:
+			close(r.progress)
+		}
+	}
+	if r.release != nil {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	if err := writeSuccessfulTempOutput(draft.OutputPath); err != nil {
+		return "", err
 	}
 	return "", nil
 }
@@ -824,6 +863,47 @@ func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
 	}
 	if current.ProgressPercent != 76 {
 		t.Fatalf("expected carriage-return progress 76 while running, got %d", current.ProgressPercent)
+	}
+
+	close(runner.release)
+	done := waitForTerminalTask(t, manager)
+	if done.ProgressPercent != 100 {
+		t.Fatalf("expected final progress 100, got %d", done.ProgressPercent)
+	}
+}
+
+func TestManagerProgressUpdatesFromSplitMakeMKVSavingChunks(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "Nightcrawler.mkv")
+	runner := &makeMKVSavingRunner{
+		started:  make(chan struct{}),
+		progress: make(chan struct{}),
+		release:  make(chan struct{}),
+	}
+	manager := NewManager(runner)
+	defer manager.Close()
+
+	_, err := manager.Start(StartRequest{
+		SourceName:   "Nightcrawler Disc",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   outputPath,
+		PlaylistName: "00003.MPLS",
+		PayloadJSON:  validIntermediatePayloadJSON("Nightcrawler Disc", "/tmp/Nightcrawler.mkv", "00003.MPLS", outputPath),
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	<-runner.started
+	<-runner.progress
+
+	current, err := manager.Current()
+	if err != nil {
+		t.Fatalf("Current returned error: %v", err)
+	}
+	if current.Status != "running" {
+		t.Fatalf("expected running status before release, got %q", current.Status)
+	}
+	if current.ProgressPercent != 1 {
+		t.Fatalf("expected running MakeMKV progress 1 from split saving chunks, got %d", current.ProgressPercent)
 	}
 
 	close(runner.release)

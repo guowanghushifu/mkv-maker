@@ -42,6 +42,7 @@ type taskState struct {
 	task              Task
 	log               string
 	progressRemainder string
+	makeMKVSaving     bool
 	cancel            context.CancelFunc
 	stopRequested     bool
 }
@@ -318,8 +319,9 @@ func (m *Manager) updateProgressFromOutput(state *taskState, output string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	percents, remainder := extractProgressPercentsFromChunk(state.progressRemainder, output)
+	percents, remainder, saving := extractProgressPercentsFromChunk(state.progressRemainder, output, state.makeMKVSaving)
 	state.progressRemainder = remainder
+	state.makeMKVSaving = saving
 	for _, progress := range percents {
 		state.task.ProgressPercent = progress
 	}
@@ -333,8 +335,9 @@ func (m *Manager) flushProgressRemainder(state *taskState) {
 		return
 	}
 
-	percents, remainder := extractProgressPercentsFromChunk(state.progressRemainder, "\n")
+	percents, remainder, saving := extractProgressPercentsFromChunk(state.progressRemainder, "\n", state.makeMKVSaving)
 	state.progressRemainder = remainder
+	state.makeMKVSaving = saving
 	for _, progress := range percents {
 		state.task.ProgressPercent = progress
 	}

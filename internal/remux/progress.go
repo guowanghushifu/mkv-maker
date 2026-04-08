@@ -43,15 +43,15 @@ func ExtractProgressPercent(line string) (int, bool) {
 	return clampPercentMatch(matches[1])
 }
 
-func extractProgressPercentsFromChunk(remainder, chunk string) ([]int, string) {
+func extractProgressPercentsFromChunk(remainder, chunk string, saving bool) ([]int, string, bool) {
 	combined := remainder + chunk
 	if combined == "" {
-		return nil, ""
+		return nil, "", saving
 	}
 
 	lastTerminator := strings.LastIndexAny(combined, "\r\n")
 	if lastTerminator < 0 {
-		return nil, combined
+		return nil, combined, saving
 	}
 
 	parseable := combined[:lastTerminator+1]
@@ -61,17 +61,17 @@ func extractProgressPercentsFromChunk(remainder, chunk string) ([]int, string) {
 	})
 
 	percents := make([]int, 0, len(parts))
-	makeMKVSaving := false
+	nextSaving := saving
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
 		if trimmed == "" {
 			continue
 		}
 		if strings.EqualFold(trimmed, "Current action: Saving to MKV file") {
-			makeMKVSaving = true
+			nextSaving = true
 			continue
 		}
-		if progress, ok := extractMakeMKVProgressPercent(trimmed, makeMKVSaving); ok {
+		if progress, ok := extractMakeMKVProgressPercent(trimmed, nextSaving); ok {
 			percents = append(percents, progress)
 			continue
 		}
@@ -79,7 +79,7 @@ func extractProgressPercentsFromChunk(remainder, chunk string) ([]int, string) {
 			percents = append(percents, scaleMkvmergeProgress(progress))
 		}
 	}
-	return percents, nextRemainder
+	return percents, nextRemainder, nextSaving
 }
 
 func extractMakeMKVProgressPercent(line string, saving bool) (int, bool) {
