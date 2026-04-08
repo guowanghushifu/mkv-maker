@@ -381,8 +381,8 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if body.Audio[0].Name != "English Dolby TrueHD/Atmos Audio" || body.Audio[1].Name != "普通话" || body.Audio[2].Name != "国配简体特效" {
 		t.Fatalf("expected BDInfo audio labels to override MakeMKV names, got %+v", body.Audio)
 	}
-	if body.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" || body.Audio[1].CodecLabel != "DD.5.1" || body.Audio[2].CodecLabel != "DTS-HD.MA.5.1" {
-		t.Fatalf("expected release-style audio codec labels, got %+v", body.Audio)
+	if body.Audio[0].CodecLabel != "TrueHD.7.1" || body.Audio[1].CodecLabel != "" || body.Audio[2].CodecLabel != "" {
+		t.Fatalf("expected raw MakeMKV audio codec labels, got %+v", body.Audio)
 	}
 	if !body.Subtitles[0].Default || !body.Subtitles[0].Selected {
 		t.Fatalf("expected first subtitle to be default+selected: %+v", body.Subtitles[0])
@@ -399,23 +399,17 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if body.MakeMKV.PlaylistName != "00800.MPLS" || body.MakeMKV.TitleID != 0 {
 		t.Fatalf("expected MakeMKV cache metadata, got %+v", body.MakeMKV)
 	}
-	if len(body.MakeMKV.Audio) != 3 || body.MakeMKV.Audio[0].ID != "A1" || body.MakeMKV.Audio[0].SourceIndex != 0 {
-		t.Fatalf("expected fused MakeMKV cache audio payload, got %+v", body.MakeMKV.Audio)
+	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].ID != "A1" || body.MakeMKV.Audio[0].SourceIndex != 0 {
+		t.Fatalf("expected raw MakeMKV cache audio payload, got %+v", body.MakeMKV.Audio)
 	}
-	if body.MakeMKV.Audio[0].Name != "English Dolby TrueHD/Atmos Audio" || body.MakeMKV.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" || body.MakeMKV.Audio[0].Language != "eng" || !body.MakeMKV.Audio[0].Selected || !body.MakeMKV.Audio[0].Default {
-		t.Fatalf("expected fused MakeMKV cache audio track fields, got %+v", body.MakeMKV.Audio[0])
+	if body.MakeMKV.Audio[0].Name != "English Atmos" || body.MakeMKV.Audio[0].CodecLabel != "TrueHD.7.1" || body.MakeMKV.Audio[0].Language != "eng" || !body.MakeMKV.Audio[0].Selected || !body.MakeMKV.Audio[0].Default {
+		t.Fatalf("expected raw MakeMKV cache audio track fields, got %+v", body.MakeMKV.Audio[0])
 	}
-	if body.MakeMKV.Audio[1].Name != "普通话" || body.MakeMKV.Audio[1].CodecLabel != "DD.5.1" || body.MakeMKV.Audio[1].Language != "chi" || !body.MakeMKV.Audio[1].Selected || body.MakeMKV.Audio[1].Default {
-		t.Fatalf("expected second fused MakeMKV cache audio track fields, got %+v", body.MakeMKV.Audio[1])
-	}
-	if len(body.MakeMKV.Subtitles) != 2 || body.MakeMKV.Subtitles[0].ID != "S1" || body.MakeMKV.Subtitles[0].SourceIndex != 0 {
-		t.Fatalf("expected fused MakeMKV cache subtitle payload, got %+v", body.MakeMKV.Subtitles)
+	if len(body.MakeMKV.Subtitles) != 1 || body.MakeMKV.Subtitles[0].ID != "S1" || body.MakeMKV.Subtitles[0].SourceIndex != 0 {
+		t.Fatalf("expected raw MakeMKV cache subtitle payload, got %+v", body.MakeMKV.Subtitles)
 	}
 	if body.MakeMKV.Subtitles[0].Name != "国配简体特效" || body.MakeMKV.Subtitles[0].Language != "chi" || !body.MakeMKV.Subtitles[0].Selected || !body.MakeMKV.Subtitles[0].Default {
-		t.Fatalf("expected fused MakeMKV cache subtitle track fields, got %+v", body.MakeMKV.Subtitles[0])
-	}
-	if body.MakeMKV.Subtitles[1].Name != "简英特效" || body.MakeMKV.Subtitles[1].Language != "chi" || !body.MakeMKV.Subtitles[1].Selected || body.MakeMKV.Subtitles[1].Default {
-		t.Fatalf("expected second fused MakeMKV cache subtitle track fields, got %+v", body.MakeMKV.Subtitles[1])
+		t.Fatalf("expected raw MakeMKV cache subtitle track fields, got %+v", body.MakeMKV.Subtitles[0])
 	}
 }
 
@@ -461,7 +455,7 @@ func TestSourcesHandlerResolveReturnsMakeMKVAudioCodecLabel(t *testing.T) {
 	}
 }
 
-func TestSourcesHandlerResolveNormalizesFallbackAudioCodecLabelsInResponseAndCache(t *testing.T) {
+func TestSourcesHandlerResolvePreservesEmptyMakeMKVAudioCodecLabelsInResponseAndCache(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "FallbackCodecDisc"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -504,11 +498,11 @@ func TestSourcesHandlerResolveNormalizesFallbackAudioCodecLabelsInResponseAndCac
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	if len(body.Audio) != 1 || body.Audio[0].Name != "English Dolby Digital Plus Audio" || body.Audio[0].CodecLabel != "DDP.2.0" {
-		t.Fatalf("expected normalized fallback audio codec label in resolve response, got %+v", body.Audio)
+	if len(body.Audio) != 1 || body.Audio[0].Name != "English Dolby Digital Plus Audio" || body.Audio[0].CodecLabel != "" {
+		t.Fatalf("expected top-level audio to preserve empty MakeMKV codec label, got %+v", body.Audio)
 	}
-	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].Name != "English Dolby Digital Plus Audio" || body.MakeMKV.Audio[0].CodecLabel != "DDP.2.0" {
-		t.Fatalf("expected normalized fallback audio codec label in makemkv cache, got %+v", body.MakeMKV.Audio)
+	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].Name != "English DD+ Stereo" || body.MakeMKV.Audio[0].CodecLabel != "" {
+		t.Fatalf("expected raw MakeMKV cache audio to preserve empty codec label, got %+v", body.MakeMKV.Audio)
 	}
 }
 
@@ -599,6 +593,73 @@ func TestSourcesHandlerResolveSerializesEmptyTracksAsJSONArrays(t *testing.T) {
 	}
 }
 
+
+func TestSourcesHandlerResolveBuildsRawMakeMKVCacheFromInspectionTracksWhenCacheMissing(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "RawCacheDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{
+			PlaylistName: "00800.MPLS",
+			Audio: []resolveTrack{{ID: "A1", Name: "Raw Audio", Language: "eng", CodecLabel: "DTS.5.1", Selected: true, Default: true, SourceIndex: 2}},
+			Subtitles: []resolveTrack{{ID: "S1", Name: "Raw Subtitle", Language: "eng", Selected: true, Default: false, Forced: true, SourceIndex: 4}},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/RawCacheDisc/resolve", strings.NewReader(`{"sourceId":"RawCacheDisc","bdinfo":{"playlistName":"00800.MPLS","audioLabels":["Overlay Audio"],"subtitleLabels":["Overlay Subtitle"],"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Name string `json:"name"`
+		} `json:"audio"`
+		Subtitles []struct {
+			Name string `json:"name"`
+		} `json:"subtitles"`
+		MakeMKV struct {
+			Audio []struct {
+				Name       string `json:"name"`
+				CodecLabel string `json:"codecLabel"`
+				SourceIndex int   `json:"sourceIndex"`
+			} `json:"audio"`
+			Subtitles []struct {
+				Name        string `json:"name"`
+				Forced      bool   `json:"forced"`
+				SourceIndex int    `json:"sourceIndex"`
+			} `json:"subtitles"`
+		} `json:"makemkv"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if got := body.Audio[0].Name; got != "Overlay Audio" {
+		t.Fatalf("expected top-level audio name overlay, got %q", got)
+	}
+	if got := body.Subtitles[0].Name; got != "Overlay Subtitle" {
+		t.Fatalf("expected top-level subtitle name overlay, got %q", got)
+	}
+	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].Name != "Raw Audio" || body.MakeMKV.Audio[0].CodecLabel != "DTS.5.1" || body.MakeMKV.Audio[0].SourceIndex != 2 {
+		t.Fatalf("expected raw MakeMKV audio synthesized from inspection tracks, got %+v", body.MakeMKV.Audio)
+	}
+	if len(body.MakeMKV.Subtitles) != 1 || body.MakeMKV.Subtitles[0].Name != "Raw Subtitle" || !body.MakeMKV.Subtitles[0].Forced || body.MakeMKV.Subtitles[0].SourceIndex != 4 {
+		t.Fatalf("expected raw MakeMKV subtitles synthesized from inspection tracks, got %+v", body.MakeMKV.Subtitles)
+	}
+}
+
 func TestSourcesHandlerResolvePreservesRequestLabelAlignmentAndForcedSubtitles(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "AlignedDisc"
@@ -667,8 +728,8 @@ func TestSourcesHandlerResolvePreservesRequestLabelAlignmentAndForcedSubtitles(t
 	if got := []string{body.Audio[0].Name, body.Audio[1].Name, body.Audio[2].Name}; !equalStringSlices(got, []string{"English Main", "Track 2", "Commentary"}) {
 		t.Fatalf("expected aligned audio labels, got %+v", got)
 	}
-	if got := []string{body.MakeMKV.Audio[0].Name, body.MakeMKV.Audio[1].Name, body.MakeMKV.Audio[2].Name}; !equalStringSlices(got, []string{"English Main", "Track 2", "Commentary"}) {
-		t.Fatalf("expected aligned makemkv audio labels, got %+v", got)
+	if got := []string{body.MakeMKV.Audio[0].Name, body.MakeMKV.Audio[1].Name, body.MakeMKV.Audio[2].Name}; !equalStringSlices(got, []string{"Track 1", "Track 2", "Track 3"}) {
+		t.Fatalf("expected raw makemkv audio labels, got %+v", got)
 	}
 	if got := []string{body.Subtitles[0].Name, body.Subtitles[1].Name, body.Subtitles[2].Name}; !equalStringSlices(got, []string{"Forced English", "Subtitle 2", "Signs"}) {
 		t.Fatalf("expected aligned subtitle labels, got %+v", got)
@@ -679,8 +740,8 @@ func TestSourcesHandlerResolvePreservesRequestLabelAlignmentAndForcedSubtitles(t
 	if !body.MakeMKV.Subtitles[0].Forced {
 		t.Fatalf("expected forced subtitle to stay forced in makemkv cache, got %+v", body.MakeMKV.Subtitles[0])
 	}
-	if got := []string{body.MakeMKV.Subtitles[0].Name, body.MakeMKV.Subtitles[1].Name, body.MakeMKV.Subtitles[2].Name}; !equalStringSlices(got, []string{"Forced English", "Subtitle 2", "Signs"}) {
-		t.Fatalf("expected aligned makemkv subtitle labels, got %+v", got)
+	if got := []string{body.MakeMKV.Subtitles[0].Name, body.MakeMKV.Subtitles[1].Name, body.MakeMKV.Subtitles[2].Name}; !equalStringSlices(got, []string{"Subtitle 1", "Subtitle 2", "Subtitle 3"}) {
+		t.Fatalf("expected raw makemkv subtitle labels, got %+v", got)
 	}
 }
 

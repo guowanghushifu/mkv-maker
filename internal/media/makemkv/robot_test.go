@@ -383,6 +383,68 @@ SINFO:13,1,30,0,"English DTS Duplicate"`))
 	if len(view.Audio) != 2 {
 		t.Fatalf("expected plain DTS pair to remain visible, got %+v", view.Audio)
 	}
+	if view.Audio[0].CodecLabel != "DTS" || view.Audio[1].CodecLabel != "DTS" {
+		t.Fatalf("expected plain DTS codec labels without layout metadata, got %+v", view.Audio)
+	}
+}
+
+func TestBuildTitleViewNormalizesPlainDTSWithChannelLayout(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:16,16,0,"00818"
+SINFO:16,0,1,6201,"Audio"
+SINFO:16,0,3,0,"eng"
+SINFO:16,0,4,0,"English"
+SINFO:16,0,5,0,"A_DTS"
+SINFO:16,0,6,0,"DTS"
+SINFO:16,0,14,0,"6"
+SINFO:16,0,30,0,"English DTS"
+SINFO:16,0,40,0,"5.1(side)"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00818")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DTS.5.1" {
+		t.Fatalf("expected plain DTS codec label with layout metadata, got %+v", view.Audio)
+	}
+}
+
+func TestBuildTitleViewNormalizesDTSHDMAFromMakeMKVFields(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:15,16,0,"00817"
+SINFO:15,0,1,6201,"Audio"
+SINFO:15,0,3,0,"eng"
+SINFO:15,0,4,0,"English"
+SINFO:15,0,5,0,"A_DTS"
+SINFO:15,0,6,0,"DTS-HD MA"
+SINFO:15,0,7,0,"DTS-HD Master Audio"
+SINFO:15,0,14,0,"8"
+SINFO:15,0,30,0,"DTS-HD MA Surround 7.1 English"
+SINFO:15,0,40,0,"7.1"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00817")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DTS-HD.MA.7.1" {
+		t.Fatalf("expected DTS-HD MA codec label from MakeMKV fields, got %+v", view.Audio)
+	}
 }
 
 func TestBuildTitleViewFiltersDTSCompatibilityCoreWhenPrimaryShortNameMissing(t *testing.T) {

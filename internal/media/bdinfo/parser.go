@@ -17,7 +17,6 @@ type Parsed struct {
 	Duration              string   `json:"duration,omitempty"`
 	AudioLabels           []string `json:"audioLabels"`
 	AudioLanguages        []string `json:"-"`
-	AudioCodecInfo        []string `json:"-"`
 	AudioSourceIndexes    []int    `json:"-"`
 	SubtitleLabels        []string `json:"subtitleLabels"`
 	SubtitleLanguages     []string `json:"-"`
@@ -77,7 +76,6 @@ func Parse(rawText string) (Parsed, error) {
 		RawText:               rawText,
 		AudioLabels:           []string{},
 		AudioLanguages:        []string{},
-		AudioCodecInfo:        []string{},
 		AudioSourceIndexes:    []int{},
 		SubtitleLabels:        []string{},
 		SubtitleLanguages:     []string{},
@@ -208,7 +206,6 @@ func Parse(rawText string) (Parsed, error) {
 			parsed.AudioLabels = append(parsed.AudioLabels, label)
 		}
 		parsed.AudioLanguages = append(parsed.AudioLanguages, row.Language)
-		parsed.AudioCodecInfo = append(parsed.AudioCodecInfo, buildAudioCodecLabel(row))
 		parsed.AudioSourceIndexes = append(parsed.AudioSourceIndexes, i)
 	}
 	for i, row := range subtitleRows {
@@ -461,7 +458,7 @@ func detectAudioCodecBase(value string) string {
 	switch {
 	case strings.Contains(value, "TRUEHD"):
 		return "TrueHD"
-	case strings.Contains(value, "DTS-HD.MA"), strings.Contains(value, "DTS-HD MA"), strings.Contains(value, "DTS-HD MASTER"), strings.Contains(compact, "DTSHDMA"), strings.Contains(compact, "DTSHDMASTER"):
+	case strings.Contains(value, "DTS-HD.MA"), strings.Contains(value, "DTS-HD MA"), strings.Contains(value, "DTS-HD MASTER"), strings.Contains(value, "MASTER AUDIO"), compact == "DTSXMASTERAUDIO", strings.Contains(compact, "DTSHDMA"), strings.Contains(compact, "DTSHDMASTER"):
 		return "DTS-HD.MA"
 	case strings.Contains(value, "DTS-HD"):
 		return "DTS-HD"

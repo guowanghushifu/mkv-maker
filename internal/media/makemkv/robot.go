@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	bdinfo "github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 )
 
 const forcedSubtitleFlag uint64 = 1 << 12
@@ -415,6 +417,10 @@ func trackLanguage(track TrackInfo) string {
 }
 
 func audioCodecLabel(track TrackInfo) string {
+	label := bdinfo.NormalizeAudioCodecLabel(track.CodecShort, track.ChannelLayout)
+	if strings.TrimSpace(label) != "" {
+		return label
+	}
 	base := strings.TrimSpace(track.CodecShort)
 	layout := strings.TrimSpace(track.ChannelLayout)
 	switch {

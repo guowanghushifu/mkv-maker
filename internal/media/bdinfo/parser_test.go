@@ -80,14 +80,6 @@ func TestParseExtractsPlaylistAndFrontendFieldsFromTables(t *testing.T) {
 	if !reflect.DeepEqual(parsed.AudioLabels, expectedAudio) {
 		t.Fatalf("expected audio labels %+v, got %+v", expectedAudio, parsed.AudioLabels)
 	}
-	expectedAudioCodecInfo := []string{
-		"TrueHD.7.1.Atmos",
-		"DD.5.1",
-		"DTS-HD.MA.5.1",
-	}
-	if !reflect.DeepEqual(parsed.AudioCodecInfo, expectedAudioCodecInfo) {
-		t.Fatalf("expected audio codec info %+v, got %+v", expectedAudioCodecInfo, parsed.AudioCodecInfo)
-	}
 
 	expectedSubtitles := []string{
 		"国配简体特效",
@@ -196,9 +188,6 @@ Presentation Graphics           Japanese        30.071 kbps                    �
 	if !reflect.DeepEqual(parsed.AudioSourceIndexes, []int{0, 2}) {
 		t.Fatalf("expected visible audio source indexes [0 2], got %+v", parsed.AudioSourceIndexes)
 	}
-	if !reflect.DeepEqual(parsed.AudioCodecInfo, []string{"TrueHD.7.1.Atmos", "DTS-HD.MA.5.1"}) {
-		t.Fatalf("expected visible audio codec info only, got %+v", parsed.AudioCodecInfo)
-	}
 	if !reflect.DeepEqual(parsed.SubtitleLabels, []string{"English", "日文注释"}) {
 		t.Fatalf("expected hidden subtitle row to be skipped, got %+v", parsed.SubtitleLabels)
 	}
@@ -238,9 +227,6 @@ SUBTITLE: Chinese / 国配简体特效
 	if len(parsed.AudioLabels) != 1 || parsed.AudioLabels[0] == "" {
 		t.Fatalf("expected one parsed audio label, got %+v", parsed.AudioLabels)
 	}
-	if len(parsed.AudioCodecInfo) != 1 || parsed.AudioCodecInfo[0] != "TrueHD.7.1.Atmos" {
-		t.Fatalf("expected legacy codec info to be preserved, got %+v", parsed.AudioCodecInfo)
-	}
 	if len(parsed.SubtitleLabels) != 1 || parsed.SubtitleLabels[0] != "国配简体特效" {
 		t.Fatalf("expected legacy subtitle label to be preserved, got %+v", parsed.SubtitleLabels)
 	}
@@ -266,9 +252,6 @@ Dolby TrueHD/Atmos Audio        English         3886 kbps       7.1 / 48 kHz / 3
 	}
 	if parsed.AudioLabels[0] != "英文次世代全景声" {
 		t.Fatalf("expected cleaned chinese audio suffix, got %+v", parsed.AudioLabels)
-	}
-	if len(parsed.AudioCodecInfo) != 1 || parsed.AudioCodecInfo[0] != "TrueHD.7.1.Atmos" {
-		t.Fatalf("expected codec info TrueHD.7.1.Atmos, got %+v", parsed.AudioCodecInfo)
 	}
 }
 
@@ -338,64 +321,3 @@ Presentation Graphics           Chinese     �
 	}
 }
 
-func TestParseNormalizesReleaseStyleAudioCodecLabels(t *testing.T) {
-	raw := `PLAYLIST REPORT:
-Name: 00004.MPLS
-
-AUDIO:
-
-Codec                           Language        Bitrate         Description
------                           --------        -------         -----------
-Dolby Digital Plus Audio        English         768 kbps        stereo / 48 kHz / 768 kbps
-AC-3 Audio                      English         640 kbps        5.1(side) / 48 kHz / 640 kbps
-Dolby Digital Audio             English         192 kbps        mono / 48 kHz / 192 kbps
-`
-
-	parsed, err := Parse(raw)
-	if err != nil {
-		t.Fatalf("Parse returned error: %v", err)
-	}
-	if got, want := parsed.AudioCodecInfo, []string{"DDP.2.0", "DD.5.1", "DD.1.0"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("expected normalized release-style audio codec info %+v, got %+v", want, got)
-	}
-}
-
-func TestParseNormalizesDTSHDMAAliasAudioCodecLabels(t *testing.T) {
-	raw := `PLAYLIST REPORT:
-Name: 00005.MPLS
-
-AUDIO:
-
-Codec                           Language        Bitrate         Description
------                           --------        -------         -----------
-DTS-HD MA Audio                 English         2123 kbps       5.1 / 48 kHz / 2123 kbps / 24-bit
-`
-
-	parsed, err := Parse(raw)
-	if err != nil {
-		t.Fatalf("Parse returned error: %v", err)
-	}
-	if got, want := parsed.AudioCodecInfo, []string{"DTS-HD.MA.5.1"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("expected DTS-HD MA alias to normalize to %+v, got %+v", want, got)
-	}
-}
-
-func TestParseNormalizesPlainDTSAudioCodecLabels(t *testing.T) {
-	raw := `PLAYLIST REPORT:
-Name: 00006.MPLS
-
-AUDIO:
-
-Codec                           Language        Bitrate         Description
------                           --------        -------         -----------
-DTS Audio                       Spanish         1509 kbps       5.1 / 48 kHz / 1509 kbps / 24-bit
-`
-
-	parsed, err := Parse(raw)
-	if err != nil {
-		t.Fatalf("Parse returned error: %v", err)
-	}
-	if got, want := parsed.AudioCodecInfo, []string{"DTS.5.1"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("expected plain DTS audio codec info %+v, got %+v", want, got)
-	}
-}

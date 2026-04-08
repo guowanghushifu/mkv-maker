@@ -282,7 +282,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		subtitleLabels = req.BDInfo.SubtitleLabels
 	}
 
-	audio := overlayResolveAudioTracks(inspection.Audio, audioLabels, parsed.AudioCodecInfo)
+	audio := overlayResolveTrackNames(inspection.Audio, audioLabels)
 	subtitles := overlayResolveTrackNames(inspection.Subtitles, subtitleLabels)
 
 	response := resolveSourceResponse{
@@ -295,7 +295,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		Video:          video,
 		Audio:          audio,
 		Subtitles:      subtitles,
-		MakeMKV:        buildResolveMakeMKVCache(inspection, playlistName, audio, subtitles),
+		MakeMKV:        buildRawResolveMakeMKVCache(inspection, playlistName),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -602,16 +602,6 @@ func makeResolveSubtitleTracks(tracks []makemkv.VisibleTrack) []resolveTrack {
 	return resolved
 }
 
-func overlayResolveAudioTracks(base []resolveTrack, labels []string, codecLabels []string) []resolveTrack {
-	tracks := overlayResolveTrackNames(base, labels)
-	for i := range tracks {
-		if i < len(codecLabels) && strings.TrimSpace(codecLabels[i]) != "" {
-			tracks[i].CodecLabel = strings.TrimSpace(codecLabels[i])
-		}
-	}
-	return tracks
-}
-
 func overlayResolveTrackNames(base []resolveTrack, labels []string) []resolveTrack {
 	tracks := append([]resolveTrack{}, base...)
 	for i := range tracks {
@@ -622,13 +612,23 @@ func overlayResolveTrackNames(base []resolveTrack, labels []string) []resolveTra
 	return tracks
 }
 
-func buildResolveMakeMKVCache(inspection MakeMKVInspection, playlistName string, audio []resolveTrack, subtitles []resolveTrack) remux.MakeMKVTitleCache {
-	return remux.MakeMKVTitleCache{
-		PlaylistName: firstNonEmpty(inspection.Cache.PlaylistName, inspection.PlaylistName, playlistName),
-		TitleID:      inspection.TitleID,
-		Audio:        makeCacheAudioTracks(audio),
-		Subtitles:    makeCacheSubtitleTracks(subtitles),
+func buildRawResolveMakeMKVCache(inspection MakeMKVInspection, playlistName string) remux.MakeMKVTitleCache {
+	cache := inspection.Cache
+	cache.PlaylistName = firstNonEmpty(cache.PlaylistName, inspection.PlaylistName, playlistName)
+	cache.TitleID = inspection.TitleID
+	if cache.Audio == nil {
+		cache.Audio = makeCacheAudioTracks(inspection.Audio)
 	}
+	if cache.Subtitles == nil {
+		cache.Subtitles = makeCacheSubtitleTracks(inspection.Subtitles)
+	}
+	if cache.Audio == nil {
+		cache.Audio = []remux.AudioTrack{}
+	}
+	if cache.Subtitles == nil {
+		cache.Subtitles = []remux.SubtitleTrack{}
+	}
+	return cache
 }
 
 func makeCacheAudioTracks(tracks []resolveTrack) []remux.AudioTrack {
