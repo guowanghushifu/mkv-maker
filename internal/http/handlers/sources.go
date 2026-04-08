@@ -535,7 +535,9 @@ func (i MakeMKVPlaylistInspector) Inspect(ctx context.Context, sourcePath, playl
 		binary = "/opt/makemkv/bin/makemkvcon"
 	}
 
-	output, err := exec.CommandContext(ctx, binary, "info", makeMKVSourceArg(sourcePath), "--robot").Output()
+	cmd := exec.CommandContext(ctx, binary, "info", makeMKVSourceArg(sourcePath), "--robot")
+	cmd.Env = makemkv.CommandEnv(os.Environ())
+	output, err := cmd.Output()
 	if err != nil {
 		return MakeMKVInspection{}, err
 	}

@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	makemkvruntime "github.com/guowanghushifu/mkv-maker/internal/media/makemkv"
 )
 
 type CommandRunner interface {
@@ -246,7 +248,7 @@ func (r *JobRunner) defaultInspectIntermediateTrackJSON(ctx context.Context, pat
 
 func (r *JobRunner) defaultRunMakeMKVInfo(ctx context.Context, sourcePath string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, makemkvconBinaryPath, "info", makeMKVSourceArg(sourcePath), "--robot")
-	cmd.Env = append(os.Environ(), "HOME=/config")
+	cmd.Env = makemkvruntime.CommandEnv(os.Environ())
 	return cmd.Output()
 }
 
@@ -262,7 +264,7 @@ func (r *JobRunner) defaultRunMakeMKVMKV(ctx context.Context, sourcePath string,
 		tempDir,
 		"--profile=/config/nocore.mmcp.xml",
 	)
-	cmd.Env = append(os.Environ(), "HOME=/config")
+	cmd.Env = makemkvruntime.CommandEnv(os.Environ())
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
