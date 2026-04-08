@@ -454,9 +454,6 @@ func buildResolveTracks(labels []string, languages []string, fallbackLanguages [
 		if i < len(codecLabels) {
 			codecLabel = strings.TrimSpace(codecLabels[i])
 		}
-		if codecLabel == "" && !subtitles {
-			codecLabel = mediabdinfo.NormalizeAudioCodecLabel(label)
-		}
 		language := ""
 		if i < len(languages) {
 			language = normalizeLanguageCode(languages[i])

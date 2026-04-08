@@ -42,46 +42,26 @@ func TestBuildFilenameUsesSelectedAudioWhenNoSelectedDefault(t *testing.T) {
 	}
 }
 
-func TestBuildFilenameNormalizesAudioCodecLabelsForReleaseStyle(t *testing.T) {
+func TestBuildFilenameUsesExistingAudioCodecLabelsWithoutRenormalizing(t *testing.T) {
 	tests := []struct {
 		name       string
 		codecLabel string
 		want       string
 	}{
 		{
-			name:       "preserves already normalized ddp",
-			codecLabel: "DDP.7.1",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DDP.7.1.mkv",
-		},
-		{
-			name:       "strips dolby digital side annotation",
-			codecLabel: "DD.5.1(side)",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DD.5.1.mkv",
-		},
-		{
-			name:       "converts lpcm stereo to channel layout",
-			codecLabel: "LPCM stereo",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.LPCM.2.0.mkv",
-		},
-		{
-			name:       "converts aac mono to channel layout",
-			codecLabel: "AAC mono",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.AAC.1.0.mkv",
-		},
-		{
-			name:       "falls back to original label when codec base cannot be determined",
-			codecLabel: "stereo",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.stereo.mkv",
-		},
-		{
-			name:       "normalizes dts hd ma alias separators",
+			name:       "preserves dts hd ma alias separators exactly as provided",
 			codecLabel: "DTS_HD.MA.5.1",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS-HD.MA.5.1.mkv",
+			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv",
 		},
 		{
-			name:       "preserves plain dts channel layout",
-			codecLabel: "DTS.5.1(side)",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS.5.1.mkv",
+			name:       "preserves side annotation exactly as provided",
+			codecLabel: "DD.5.1(side)",
+			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DD.5.1(side).mkv",
+		},
+		{
+			name:       "falls back to unknown audio when codec label is empty",
+			codecLabel: "",
+			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.UnknownAudio.mkv",
 		},
 	}
 
@@ -94,9 +74,7 @@ func TestBuildFilenameNormalizesAudioCodecLabelsForReleaseStyle(t *testing.T) {
 					Codec:      "HEVC",
 					HDRType:    "HDR",
 				},
-				Audio: []AudioTrack{
-					{CodecLabel: tt.codecLabel, Selected: true, Default: true},
-				},
+				Audio: []AudioTrack{{CodecLabel: tt.codecLabel, Selected: true, Default: true}},
 			}
 
 			got := BuildFilename(draft)
@@ -158,7 +136,7 @@ func TestBuildFilenamePreservesASCIIParenthesesAndRewritesUnderscores(t *testing
 	}
 
 	got := BuildFilename(draft)
-	want := "Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS-HD.MA.5.1.mkv"
+	want := "Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}

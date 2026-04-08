@@ -455,6 +455,24 @@ func TestSourcesHandlerResolveReturnsMakeMKVAudioCodecLabel(t *testing.T) {
 	}
 }
 
+func TestBuildResolveTracksDoesNotInferAudioCodecLabelFromName(t *testing.T) {
+	tracks := buildResolveTracks(
+		[]string{"English Dolby Digital Plus Audio"},
+		[]string{"English"},
+		nil,
+		[]string{""},
+		[]string{"A1"},
+		false,
+	)
+
+	if len(tracks) != 1 {
+		t.Fatalf("expected 1 track, got %d", len(tracks))
+	}
+	if tracks[0].CodecLabel != "" {
+		t.Fatalf("expected empty codec label to remain empty, got %q", tracks[0].CodecLabel)
+	}
+}
+
 func TestSourcesHandlerResolvePreservesEmptyMakeMKVAudioCodecLabelsInResponseAndCache(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "FallbackCodecDisc"

@@ -40,120 +40,6 @@ function normalizeCodecLabel(value: string): string {
     .replace(/^\.+|\.+$/g, '');
 }
 
-function normalizeReleaseStyleAudioCodecLabel(...parts: string[]): string {
-  const combined = parts
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .join(' / ')
-    .toUpperCase();
-  if (!combined) {
-    return '';
-  }
-
-  const resolved: string[] = [];
-  const codec = detectAudioCodecBase(combined);
-  if (codec) {
-    resolved.push(codec);
-  }
-
-  const channels = extractChannelLayout(combined);
-  if (channels) {
-    resolved.push(channels);
-  }
-
-  if (combined.includes('ATMOS')) {
-    resolved.push('Atmos');
-  } else if (combined.includes('DTS:X') || combined.includes('DTS.X')) {
-    resolved.push('DTS.X');
-  }
-
-  return resolved.join('.');
-}
-
-function detectAudioCodecBase(value: string): string {
-  const compact = value.replace(/[ _./:()-]/g, '');
-  if (value.includes('TRUEHD')) {
-    return 'TrueHD';
-  }
-  if (
-    value.includes('DTS-HD.MA') ||
-    value.includes('DTS-HD MA') ||
-    value.includes('DTS-HD MASTER') ||
-    compact.includes('DTSHDMA') ||
-    compact.includes('DTSHDMASTER')
-  ) {
-    return 'DTS-HD.MA';
-  }
-  if (value.includes('DTS-HD')) {
-    return 'DTS-HD';
-  }
-  if (value.includes('DTS') || compact.includes('ADTS')) {
-    return 'DTS';
-  }
-  if (
-    value.includes('DOLBY DIGITAL PLUS') ||
-    value.includes('DDPLUS') ||
-    value.includes('DD+') ||
-    value.includes('E-AC-3') ||
-    compact.includes('EAC3') ||
-    value.startsWith('DDP') ||
-    value.includes(' DDP')
-  ) {
-    return 'DDP';
-  }
-  if (
-    value.includes('DOLBY DIGITAL') ||
-    value.includes('AC-3') ||
-    compact.includes('AC3') ||
-    value.startsWith('DD.') ||
-    value === 'DD' ||
-    value.includes(' DD')
-  ) {
-    return 'DD';
-  }
-  if (value.includes('LPCM')) {
-    return 'LPCM';
-  }
-  if (value.includes('AAC')) {
-    return 'AAC';
-  }
-  return '';
-}
-
-function extractChannelLayout(value: string): string {
-  for (const candidate of ['7.1', '6.1', '5.1', '2.1', '2.0', '1.0']) {
-    if (value.includes(candidate)) {
-      return candidate;
-    }
-  }
-  if (value.includes('STEREO')) {
-    return '2.0';
-  }
-  if (value.includes('MONO')) {
-    return '1.0';
-  }
-  return '';
-}
-
-function hasNormalizedAudioCodecBase(value: string): boolean {
-  return ['TrueHD', 'DTS-HD.MA', 'DTS-HD', 'DTS', 'DDP', 'DD', 'LPCM', 'AAC'].some((prefix) =>
-    value.startsWith(prefix)
-  );
-}
-
-function normalizeFilenameAudioCodecLabel(value: string): string {
-  const normalized = normalizeReleaseStyleAudioCodecLabel(value);
-  if (hasNormalizedAudioCodecBase(normalized)) {
-    return normalized;
-  }
-
-  const aliasNormalized = normalizeReleaseStyleAudioCodecLabel(value.replace(/_/g, '-'));
-  if (hasNormalizedAudioCodecBase(aliasNormalized)) {
-    return aliasNormalized;
-  }
-
-  return value;
-}
 
 function sanitizeFilename(name: string): string {
   return name
@@ -184,7 +70,7 @@ export function buildFilenamePreview(draft: Draft, fallbackTitle: string): strin
     draft.audio.find((track) => track.selected && track.default) ||
     draft.audio.find((track) => track.selected) ||
     draft.audio[0];
-  const defaultAudioCodec = normalizeFilenameAudioCodecLabel(defaultAudio?.codecLabel || 'UnknownAudio');
+  const defaultAudioCodec = (defaultAudio?.codecLabel || 'UnknownAudio').trim() || 'UnknownAudio';
 
   const left = [title, resolution].filter(Boolean).join(' - ');
   const parts = [left, 'BluRay', hdr, videoCodec, defaultAudioCodec].filter(
