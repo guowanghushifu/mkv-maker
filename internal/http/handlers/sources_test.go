@@ -272,7 +272,7 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			"discTitle":"Nightcrawler",
 			"audioLabels":["English Dolby TrueHD/Atmos Audio","普通话","国配简体特效"],
 			"subtitleLabels":["国配简体特效","简英特效"],
-			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer"
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nLength: 1:57:49.645 (h:m:s.ms)\nVIDEO:\nMPEG-H HEVC Video       57999 kbps          2160p / 23.976 fps / 16:9 / Main 10 / HDR10 / BT.2020\n* MPEG-H HEVC Video     2100 kbps           1080p / 23.976 fps / 16:9 / Main 10 / Dolby Vision Enhancement Layer\nAUDIO:\nDolby TrueHD/Atmos Audio        English         3984 kbps       7.1 / 48 kHz / 3984 kbps / 24-bit\nDolby Digital Audio             Chinese         640 kbps        5.1 / 48 kHz / 640 kbps / 普通话\nDTS-HD Master Audio             Chinese         2123 kbps       5.1 / 48 kHz / 2123 kbps / 国配简体特效\nSUBTITLES:\nChinese                         23.123 kbps     国配简体特效\nEnglish                         18.200 kbps     简英特效"
 		}
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/Nightcrawler/resolve", strings.NewReader(reqBody))
@@ -322,10 +322,20 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			Audio        []struct {
 				ID          string `json:"id"`
 				SourceIndex int    `json:"sourceIndex"`
+				Name        string `json:"name"`
+				CodecLabel  string `json:"codecLabel"`
+				Language    string `json:"language"`
+				Selected    bool   `json:"selected"`
+				Default     bool   `json:"default"`
 			} `json:"audio"`
 			Subtitles []struct {
 				ID          string `json:"id"`
 				SourceIndex int    `json:"sourceIndex"`
+				Name        string `json:"name"`
+				Language    string `json:"language"`
+				Selected    bool   `json:"selected"`
+				Default     bool   `json:"default"`
+				Forced      bool   `json:"forced"`
 			} `json:"subtitles"`
 		} `json:"makemkv"`
 	}
@@ -368,6 +378,12 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if body.Audio[0].SourceIndex != 0 || body.Audio[1].SourceIndex != 1 || body.Audio[2].SourceIndex != 2 {
 		t.Fatalf("expected MakeMKV audio source indexes, got %+v", body.Audio)
 	}
+	if body.Audio[0].Name != "English Dolby TrueHD/Atmos Audio" || body.Audio[1].Name != "普通话" || body.Audio[2].Name != "国配简体特效" {
+		t.Fatalf("expected BDInfo audio labels to override MakeMKV names, got %+v", body.Audio)
+	}
+	if body.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" || body.Audio[1].CodecLabel != "DD.5.1" || body.Audio[2].CodecLabel != "DTS-HD.MA.5.1" {
+		t.Fatalf("expected release-style audio codec labels, got %+v", body.Audio)
+	}
 	if !body.Subtitles[0].Default || !body.Subtitles[0].Selected {
 		t.Fatalf("expected first subtitle to be default+selected: %+v", body.Subtitles[0])
 	}
@@ -377,14 +393,29 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 	if body.Subtitles[0].SourceIndex != 0 || body.Subtitles[1].SourceIndex != 1 {
 		t.Fatalf("expected MakeMKV subtitle source indexes, got %+v", body.Subtitles)
 	}
+	if body.Subtitles[0].Name != "国配简体特效" || body.Subtitles[1].Name != "简英特效" {
+		t.Fatalf("expected BDInfo subtitle labels to override MakeMKV names, got %+v", body.Subtitles)
+	}
 	if body.MakeMKV.PlaylistName != "00800.MPLS" || body.MakeMKV.TitleID != 0 {
 		t.Fatalf("expected MakeMKV cache metadata, got %+v", body.MakeMKV)
 	}
-	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].ID != "A1" || body.MakeMKV.Audio[0].SourceIndex != 0 {
-		t.Fatalf("expected MakeMKV cache audio payload, got %+v", body.MakeMKV.Audio)
+	if len(body.MakeMKV.Audio) != 3 || body.MakeMKV.Audio[0].ID != "A1" || body.MakeMKV.Audio[0].SourceIndex != 0 {
+		t.Fatalf("expected fused MakeMKV cache audio payload, got %+v", body.MakeMKV.Audio)
 	}
-	if len(body.MakeMKV.Subtitles) != 1 || body.MakeMKV.Subtitles[0].ID != "S1" || body.MakeMKV.Subtitles[0].SourceIndex != 0 {
-		t.Fatalf("expected MakeMKV cache subtitle payload, got %+v", body.MakeMKV.Subtitles)
+	if body.MakeMKV.Audio[0].Name != "English Dolby TrueHD/Atmos Audio" || body.MakeMKV.Audio[0].CodecLabel != "TrueHD.7.1.Atmos" || body.MakeMKV.Audio[0].Language != "eng" || !body.MakeMKV.Audio[0].Selected || !body.MakeMKV.Audio[0].Default {
+		t.Fatalf("expected fused MakeMKV cache audio track fields, got %+v", body.MakeMKV.Audio[0])
+	}
+	if body.MakeMKV.Audio[1].Name != "普通话" || body.MakeMKV.Audio[1].CodecLabel != "DD.5.1" || body.MakeMKV.Audio[1].Language != "chi" || !body.MakeMKV.Audio[1].Selected || body.MakeMKV.Audio[1].Default {
+		t.Fatalf("expected second fused MakeMKV cache audio track fields, got %+v", body.MakeMKV.Audio[1])
+	}
+	if len(body.MakeMKV.Subtitles) != 2 || body.MakeMKV.Subtitles[0].ID != "S1" || body.MakeMKV.Subtitles[0].SourceIndex != 0 {
+		t.Fatalf("expected fused MakeMKV cache subtitle payload, got %+v", body.MakeMKV.Subtitles)
+	}
+	if body.MakeMKV.Subtitles[0].Name != "国配简体特效" || body.MakeMKV.Subtitles[0].Language != "chi" || !body.MakeMKV.Subtitles[0].Selected || !body.MakeMKV.Subtitles[0].Default {
+		t.Fatalf("expected fused MakeMKV cache subtitle track fields, got %+v", body.MakeMKV.Subtitles[0])
+	}
+	if body.MakeMKV.Subtitles[1].Name != "简英特效" || body.MakeMKV.Subtitles[1].Language != "chi" || !body.MakeMKV.Subtitles[1].Selected || body.MakeMKV.Subtitles[1].Default {
+		t.Fatalf("expected second fused MakeMKV cache subtitle track fields, got %+v", body.MakeMKV.Subtitles[1])
 	}
 }
 
@@ -430,6 +461,57 @@ func TestSourcesHandlerResolveReturnsMakeMKVAudioCodecLabel(t *testing.T) {
 	}
 }
 
+func TestSourcesHandlerResolveNormalizesFallbackAudioCodecLabelsInResponseAndCache(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "FallbackCodecDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/custom/remux", stubSourceScanner{
+		items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}},
+	}, stubPlaylistInspector{
+		result: MakeMKVInspection{Audio: []resolveTrack{{ID: "A1", Name: "English DD+ Stereo", Language: "eng", Selected: true, Default: true, SourceIndex: 0}}},
+	})
+
+	reqBody := `{"sourceId":"FallbackCodecDisc","bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nAUDIO:\nCodec                           Language        Bitrate         Description\n-----                           --------        -------         -----------\nDolby Digital Plus Audio        English         768 kbps        stereo / 48 kHz / 768 kbps"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/FallbackCodecDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Name       string `json:"name"`
+			CodecLabel string `json:"codecLabel"`
+		} `json:"audio"`
+		MakeMKV struct {
+			Audio []struct {
+				Name       string `json:"name"`
+				CodecLabel string `json:"codecLabel"`
+			} `json:"audio"`
+		} `json:"makemkv"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(body.Audio) != 1 || body.Audio[0].Name != "English Dolby Digital Plus Audio" || body.Audio[0].CodecLabel != "DDP.2.0" {
+		t.Fatalf("expected normalized fallback audio codec label in resolve response, got %+v", body.Audio)
+	}
+	if len(body.MakeMKV.Audio) != 1 || body.MakeMKV.Audio[0].Name != "English Dolby Digital Plus Audio" || body.MakeMKV.Audio[0].CodecLabel != "DDP.2.0" {
+		t.Fatalf("expected normalized fallback audio codec label in makemkv cache, got %+v", body.MakeMKV.Audio)
+	}
+}
+
 func TestSourcesHandlerResolveReturnsMakeMKVSubtitleLanguages(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "Zootopia2"
@@ -469,7 +551,7 @@ func TestSourcesHandlerResolveReturnsMakeMKVSubtitleLanguages(t *testing.T) {
 	}
 }
 
-func TestSourcesHandlerResolveAllowsEmptyMakeMKVTracks(t *testing.T) {
+func TestSourcesHandlerResolveSerializesEmptyTracksAsJSONArrays(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "BrokenDisc"
 	sourcePath := filepath.Join(inputRoot, sourceID)
@@ -489,6 +571,116 @@ func TestSourcesHandlerResolveAllowsEmptyMakeMKVTracks(t *testing.T) {
 	h.Resolve(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if string(body["audio"]) != "[]" {
+		t.Fatalf("expected top-level audio to serialize as [], got %s", string(body["audio"]))
+	}
+	if string(body["subtitles"]) != "[]" {
+		t.Fatalf("expected top-level subtitles to serialize as [], got %s", string(body["subtitles"]))
+	}
+
+	var makemkv struct {
+		Audio     json.RawMessage `json:"audio"`
+		Subtitles json.RawMessage `json:"subtitles"`
+	}
+	if err := json.Unmarshal(body["makemkv"], &makemkv); err != nil {
+		t.Fatalf("decode makemkv failed: %v", err)
+	}
+	if string(makemkv.Audio) != "[]" {
+		t.Fatalf("expected makemkv audio to serialize as [], got %s", string(makemkv.Audio))
+	}
+	if string(makemkv.Subtitles) != "[]" {
+		t.Fatalf("expected makemkv subtitles to serialize as [], got %s", string(makemkv.Subtitles))
+	}
+}
+
+func TestSourcesHandlerResolvePreservesRequestLabelAlignmentAndForcedSubtitles(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceID := "AlignedDisc"
+	sourcePath := filepath.Join(inputRoot, sourceID)
+	playlistPath := filepath.Join(sourcePath, "BDMV", "PLAYLIST", "00800.MPLS")
+	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{
+			Audio: []resolveTrack{
+				{ID: "A1", Name: "Track 1", Language: "eng", Selected: true, Default: true, SourceIndex: 0},
+				{ID: "A2", Name: "Track 2", Language: "jpn", Selected: true, Default: false, SourceIndex: 1},
+				{ID: "A3", Name: "Track 3", Language: "eng", Selected: true, Default: false, SourceIndex: 2},
+			},
+			Subtitles: []resolveTrack{
+				{ID: "S1", Name: "Subtitle 1", Language: "eng", Selected: true, Default: true, SourceIndex: 0, Forced: true},
+				{ID: "S2", Name: "Subtitle 2", Language: "spa", Selected: true, Default: false, SourceIndex: 1, Forced: false},
+				{ID: "S3", Name: "Subtitle 3", Language: "eng", Selected: true, Default: false, SourceIndex: 2, Forced: false},
+			},
+		},
+	})
+	reqBody := `{
+		"sourceId":"AlignedDisc",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"audioLabels":["English Main","","Commentary"],
+			"subtitleLabels":["Forced English","","Signs"],
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS\nAUDIO:\nEnglish         1500 kbps       Parsed Audio One\nJapanese        768 kbps        Parsed Audio Two\nEnglish         640 kbps        Parsed Audio Three\nSUBTITLES:\nEnglish                         Parsed Subtitle One\nSpanish                         Parsed Subtitle Two\nEnglish                         Parsed Subtitle Three"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/AlignedDisc/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceID)
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Audio []struct {
+			Name string `json:"name"`
+		} `json:"audio"`
+		Subtitles []struct {
+			Name   string `json:"name"`
+			Forced bool   `json:"forced"`
+		} `json:"subtitles"`
+		MakeMKV struct {
+			Audio []struct {
+				Name string `json:"name"`
+			} `json:"audio"`
+			Subtitles []struct {
+				Name   string `json:"name"`
+				Forced bool   `json:"forced"`
+			} `json:"subtitles"`
+		} `json:"makemkv"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if got := []string{body.Audio[0].Name, body.Audio[1].Name, body.Audio[2].Name}; !equalStringSlices(got, []string{"English Main", "Track 2", "Commentary"}) {
+		t.Fatalf("expected aligned audio labels, got %+v", got)
+	}
+	if got := []string{body.MakeMKV.Audio[0].Name, body.MakeMKV.Audio[1].Name, body.MakeMKV.Audio[2].Name}; !equalStringSlices(got, []string{"English Main", "Track 2", "Commentary"}) {
+		t.Fatalf("expected aligned makemkv audio labels, got %+v", got)
+	}
+	if got := []string{body.Subtitles[0].Name, body.Subtitles[1].Name, body.Subtitles[2].Name}; !equalStringSlices(got, []string{"Forced English", "Subtitle 2", "Signs"}) {
+		t.Fatalf("expected aligned subtitle labels, got %+v", got)
+	}
+	if !body.Subtitles[0].Forced {
+		t.Fatalf("expected forced subtitle to stay forced in resolve response, got %+v", body.Subtitles[0])
+	}
+	if !body.MakeMKV.Subtitles[0].Forced {
+		t.Fatalf("expected forced subtitle to stay forced in makemkv cache, got %+v", body.MakeMKV.Subtitles[0])
+	}
+	if got := []string{body.MakeMKV.Subtitles[0].Name, body.MakeMKV.Subtitles[1].Name, body.MakeMKV.Subtitles[2].Name}; !equalStringSlices(got, []string{"Forced English", "Subtitle 2", "Signs"}) {
+		t.Fatalf("expected aligned makemkv subtitle labels, got %+v", got)
 	}
 }
 

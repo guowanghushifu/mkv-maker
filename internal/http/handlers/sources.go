@@ -273,6 +273,18 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	title := firstNonEmpty(req.BDInfo.DiscTitle, parsed.DiscTitle, source.Name)
 	dvMergeEnabled := parsed.DVMergeEnabled || strings.Contains(strings.ToUpper(parsed.Video.HDRType), "DV")
 
+	audioLabels := parsed.AudioLabels
+	if hasNonEmptyLabels(req.BDInfo.AudioLabels) {
+		audioLabels = req.BDInfo.AudioLabels
+	}
+	subtitleLabels := parsed.SubtitleLabels
+	if hasNonEmptyLabels(req.BDInfo.SubtitleLabels) {
+		subtitleLabels = req.BDInfo.SubtitleLabels
+	}
+
+	audio := overlayResolveAudioTracks(inspection.Audio, audioLabels, parsed.AudioCodecInfo)
+	subtitles := overlayResolveTrackNames(inspection.Subtitles, subtitleLabels)
+
 	response := resolveSourceResponse{
 		SourceID:       source.ID,
 		PlaylistName:   playlistName,
@@ -281,9 +293,9 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		DVMergeEnabled: dvMergeEnabled,
 		SegmentPaths:   segmentPaths,
 		Video:          video,
-		Audio:          inspection.Audio,
-		Subtitles:      inspection.Subtitles,
-		MakeMKV:        inspection.Cache,
+		Audio:          audio,
+		Subtitles:      subtitles,
+		MakeMKV:        buildResolveMakeMKVCache(inspection, playlistName, audio, subtitles),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -404,15 +416,13 @@ func findStreamFilePath(sourcePath, streamName string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-func compactLabels(labels []string) []string {
-	out := make([]string, 0, len(labels))
+func hasNonEmptyLabels(labels []string) bool {
 	for _, label := range labels {
-		label = strings.TrimSpace(label)
-		if label != "" {
-			out = append(out, label)
+		if strings.TrimSpace(label) != "" {
+			return true
 		}
 	}
-	return out
+	return false
 }
 
 func fallbackString(value, fallback string) string {
@@ -445,7 +455,7 @@ func buildResolveTracks(labels []string, languages []string, fallbackLanguages [
 			codecLabel = strings.TrimSpace(codecLabels[i])
 		}
 		if codecLabel == "" && !subtitles {
-			codecLabel = normalizeCodecLabel(label)
+			codecLabel = mediabdinfo.NormalizeAudioCodecLabel(label)
 		}
 		language := ""
 		if i < len(languages) {
@@ -592,6 +602,35 @@ func makeResolveSubtitleTracks(tracks []makemkv.VisibleTrack) []resolveTrack {
 	return resolved
 }
 
+func overlayResolveAudioTracks(base []resolveTrack, labels []string, codecLabels []string) []resolveTrack {
+	tracks := overlayResolveTrackNames(base, labels)
+	for i := range tracks {
+		if i < len(codecLabels) && strings.TrimSpace(codecLabels[i]) != "" {
+			tracks[i].CodecLabel = strings.TrimSpace(codecLabels[i])
+		}
+	}
+	return tracks
+}
+
+func overlayResolveTrackNames(base []resolveTrack, labels []string) []resolveTrack {
+	tracks := append([]resolveTrack{}, base...)
+	for i := range tracks {
+		if i < len(labels) && strings.TrimSpace(labels[i]) != "" {
+			tracks[i].Name = strings.TrimSpace(labels[i])
+		}
+	}
+	return tracks
+}
+
+func buildResolveMakeMKVCache(inspection MakeMKVInspection, playlistName string, audio []resolveTrack, subtitles []resolveTrack) remux.MakeMKVTitleCache {
+	return remux.MakeMKVTitleCache{
+		PlaylistName: firstNonEmpty(inspection.Cache.PlaylistName, inspection.PlaylistName, playlistName),
+		TitleID:      inspection.TitleID,
+		Audio:        makeCacheAudioTracks(audio),
+		Subtitles:    makeCacheSubtitleTracks(subtitles),
+	}
+}
+
 func makeCacheAudioTracks(tracks []resolveTrack) []remux.AudioTrack {
 	resolved := make([]remux.AudioTrack, 0, len(tracks))
 	for _, track := range tracks {
@@ -622,31 +661,6 @@ func makeCacheSubtitleTracks(tracks []resolveTrack) []remux.SubtitleTrack {
 		})
 	}
 	return resolved
-}
-
-func normalizeCodecLabel(label string) string {
-	builder := strings.Builder{}
-	lastDot := false
-	for _, r := range label {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			builder.WriteRune(r)
-			lastDot = false
-		case r == '+' || r == '-' || r == '.':
-			builder.WriteRune(r)
-			lastDot = r == '.'
-		case unicode.IsSpace(r) || r == '/' || r == '_' || r == ':':
-			if !lastDot && builder.Len() > 0 {
-				builder.WriteRune('.')
-				lastDot = true
-			}
-		}
-	}
-	value := strings.Trim(builder.String(), ".")
-	if value == "" {
-		return ""
-	}
-	return value
 }
 
 func inferLanguage(label string) string {

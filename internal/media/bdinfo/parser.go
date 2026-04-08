@@ -431,40 +431,51 @@ func buildAudioLabel(row audioRow) string {
 }
 
 func buildAudioCodecLabel(row audioRow) string {
-	combined := strings.ToUpper(strings.Join(compactLabelParts(row.Codec, row.Description), " / "))
+	return NormalizeAudioCodecLabel(row.Codec, row.Description)
+}
+
+func NormalizeAudioCodecLabel(parts ...string) string {
+	combined := strings.ToUpper(strings.Join(compactLabelParts(parts...), " / "))
 	if combined == "" {
 		return ""
 	}
 
-	parts := make([]string, 0, 3)
-	switch {
-	case strings.Contains(combined, "TRUEHD"):
-		parts = append(parts, "TrueHD")
-	case strings.Contains(combined, "DTS-HD MASTER"):
-		parts = append(parts, "DTS-HD.MA")
-	case strings.Contains(combined, "DTS-HD"):
-		parts = append(parts, "DTS-HD")
-	case strings.Contains(combined, "DOLBY DIGITAL PLUS"):
-		parts = append(parts, "DDP")
-	case strings.Contains(combined, "DOLBY DIGITAL"), strings.Contains(combined, "AC-3"):
-		parts = append(parts, "DD")
-	case strings.Contains(combined, "LPCM"):
-		parts = append(parts, "LPCM")
-	case strings.Contains(combined, "AAC"):
-		parts = append(parts, "AAC")
+	resolved := make([]string, 0, 3)
+	if codec := detectAudioCodecBase(combined); codec != "" {
+		resolved = append(resolved, codec)
 	}
-
 	if channels := extractChannelLayout(combined); channels != "" {
-		parts = append(parts, channels)
+		resolved = append(resolved, channels)
 	}
 	switch {
 	case strings.Contains(combined, "ATMOS"):
-		parts = append(parts, "Atmos")
-	case strings.Contains(combined, "DTS:X"):
-		parts = append(parts, "DTS.X")
+		resolved = append(resolved, "Atmos")
+	case strings.Contains(combined, "DTS:X"), strings.Contains(combined, "DTS.X"):
+		resolved = append(resolved, "DTS.X")
 	}
+	return strings.Join(resolved, ".")
+}
 
-	return strings.Join(parts, ".")
+func detectAudioCodecBase(value string) string {
+	compact := strings.NewReplacer(" ", "", "_", "", "/", "", ":", "", "(", "", ")", "").Replace(value)
+	switch {
+	case strings.Contains(value, "TRUEHD"):
+		return "TrueHD"
+	case strings.Contains(value, "DTS-HD.MA"), strings.Contains(value, "DTS-HD MA"), strings.Contains(value, "DTS-HD MASTER"), strings.Contains(compact, "DTSHDMA"), strings.Contains(compact, "DTSHDMASTER"):
+		return "DTS-HD.MA"
+	case strings.Contains(value, "DTS-HD"):
+		return "DTS-HD"
+	case strings.Contains(value, "DOLBY DIGITAL PLUS"), strings.Contains(value, "DDPLUS"), strings.Contains(value, "DD+"), strings.Contains(value, "E-AC-3"), strings.Contains(compact, "EAC3"), strings.HasPrefix(value, "DDP"), strings.Contains(value, " DDP"):
+		return "DDP"
+	case strings.Contains(value, "DOLBY DIGITAL"), strings.Contains(value, "AC-3"), strings.Contains(compact, "AC3"), strings.HasPrefix(value, "DD."), value == "DD", strings.Contains(value, " DD"):
+		return "DD"
+	case strings.Contains(value, "LPCM"):
+		return "LPCM"
+	case strings.Contains(value, "AAC"):
+		return "AAC"
+	default:
+		return ""
+	}
 }
 
 func extractChannelLayout(value string) string {
@@ -473,7 +484,14 @@ func extractChannelLayout(value string) string {
 			return candidate
 		}
 	}
-	return ""
+	switch {
+	case strings.Contains(value, "STEREO"):
+		return "2.0"
+	case strings.Contains(value, "MONO"):
+		return "1.0"
+	default:
+		return ""
+	}
 }
 
 func buildSubtitleLabel(row subtitleRow) string {

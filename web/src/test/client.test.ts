@@ -31,10 +31,41 @@ describe('buildFilenamePreview', () => {
     expect(filename).toBe('Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.UnknownAudio.mkv');
   });
 
-  it('preserves ascii parentheses and rewrites underscores to dots', () => {
+  it.each([
+    {
+      name: 'normalizes dts hd ma alias separators',
+      title: 'Alien_(1979)',
+      codecLabel: 'DTS_HD.MA.5.1',
+      expected: 'Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS-HD.MA.5.1.mkv',
+    },
+    {
+      name: 'strips dolby digital side annotation',
+      title: 'Nightcrawler',
+      codecLabel: 'DD.5.1(side)',
+      expected: 'Nightcrawler - 2160p.BluRay.HDR.HEVC.DD.5.1.mkv',
+    },
+    {
+      name: 'converts lpcm stereo to channel layout',
+      title: 'Nightcrawler',
+      codecLabel: 'LPCM stereo',
+      expected: 'Nightcrawler - 2160p.BluRay.HDR.HEVC.LPCM.2.0.mkv',
+    },
+    {
+      name: 'converts aac mono to channel layout',
+      title: 'Nightcrawler',
+      codecLabel: 'AAC mono',
+      expected: 'Nightcrawler - 2160p.BluRay.HDR.HEVC.AAC.1.0.mkv',
+    },
+    {
+      name: 'preserves original label when codec base is not recognized',
+      title: 'Nightcrawler',
+      codecLabel: 'stereo',
+      expected: 'Nightcrawler - 2160p.BluRay.HDR.HEVC.stereo.mkv',
+    },
+  ])('$name', ({ title, codecLabel, expected }) => {
     const filename = buildFilenamePreview(
       {
-        title: 'Alien_(1979)',
+        title,
         video: {
           name: 'Main Video',
           codec: 'HEVC',
@@ -47,17 +78,17 @@ describe('buildFilenamePreview', () => {
             sourceIndex: 0,
             name: 'English',
             language: 'eng',
-            codecLabel: 'DTS_HD.MA.5.1',
+            codecLabel,
             selected: true,
             default: true,
           },
         ],
         subtitles: [],
       },
-      'Alien'
+      'Nightcrawler'
     );
 
-    expect(filename).toBe('Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv');
+    expect(filename).toBe(expected);
   });
 });
 

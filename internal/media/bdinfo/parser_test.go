@@ -337,3 +337,45 @@ Presentation Graphics           Chinese     �
 		t.Fatalf("expected normalized subtitle labels, got %+v", parsed.SubtitleLabels)
 	}
 }
+
+func TestParseNormalizesReleaseStyleAudioCodecLabels(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00004.MPLS
+
+AUDIO:
+
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+Dolby Digital Plus Audio        English         768 kbps        stereo / 48 kHz / 768 kbps
+AC-3 Audio                      English         640 kbps        5.1(side) / 48 kHz / 640 kbps
+Dolby Digital Audio             English         192 kbps        mono / 48 kHz / 192 kbps
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if got, want := parsed.AudioCodecInfo, []string{"DDP.2.0", "DD.5.1", "DD.1.0"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected normalized release-style audio codec info %+v, got %+v", want, got)
+	}
+}
+
+func TestParseNormalizesDTSHDMAAliasAudioCodecLabels(t *testing.T) {
+	raw := `PLAYLIST REPORT:
+Name: 00005.MPLS
+
+AUDIO:
+
+Codec                           Language        Bitrate         Description
+-----                           --------        -------         -----------
+DTS-HD MA Audio                 English         2123 kbps       5.1 / 48 kHz / 2123 kbps / 24-bit
+`
+
+	parsed, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if got, want := parsed.AudioCodecInfo, []string{"DTS-HD.MA.5.1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected DTS-HD MA alias to normalize to %+v, got %+v", want, got)
+	}
+}

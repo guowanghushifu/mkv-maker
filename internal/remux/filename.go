@@ -3,12 +3,14 @@ package remux
 import (
 	"strings"
 	"unicode"
+
+	"github.com/guowanghushifu/mkv-maker/internal/media/bdinfo"
 )
 
 func BuildFilename(d Draft) string {
 	audioLabel := "UnknownAudio"
 	if track, ok := d.DefaultSelectedAudio(); ok && strings.TrimSpace(track.CodecLabel) != "" {
-		audioLabel = track.CodecLabel
+		audioLabel = normalizeFilenameAudioCodecLabel(track.CodecLabel)
 	}
 
 	hdrLabel := d.Video.HDRType
@@ -27,6 +29,28 @@ func BuildFilename(d Draft) string {
 		audioLabel,
 	}
 	return sanitizeFilename(strings.Join(compact(parts), ".")) + ".mkv"
+}
+
+func normalizeFilenameAudioCodecLabel(value string) string {
+	normalized := bdinfo.NormalizeAudioCodecLabel(value)
+	if hasNormalizedAudioCodecBase(normalized) {
+		return normalized
+	}
+
+	aliasNormalized := bdinfo.NormalizeAudioCodecLabel(strings.ReplaceAll(value, "_", "-"))
+	if hasNormalizedAudioCodecBase(aliasNormalized) {
+		return aliasNormalized
+	}
+	return value
+}
+
+func hasNormalizedAudioCodecBase(value string) bool {
+	for _, prefix := range []string{"TrueHD", "DTS-HD.MA", "DTS-HD", "DDP", "DD", "LPCM", "AAC"} {
+		if strings.HasPrefix(value, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func compact(in []string) []string {
