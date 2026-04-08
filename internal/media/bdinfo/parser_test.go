@@ -321,3 +321,26 @@ Presentation Graphics           Chinese     �
 	}
 }
 
+
+func TestNormalizeAudioCodecLabelHandlesDolbyAliases(t *testing.T) {
+	tests := []struct {
+		name  string
+		parts []string
+		want  string
+	}{
+		{name: "dd with side layout", parts: []string{"DD", "5.1(side)"}, want: "DD.5.1"},
+		{name: "dd stereo", parts: []string{"DD", "stereo"}, want: "DD.2.0"},
+		{name: "dd mono", parts: []string{"DD", "mono"}, want: "DD.1.0"},
+		{name: "ac3 alias", parts: []string{"AC3", "5.1"}, want: "DD.5.1"},
+		{name: "dd plus alias", parts: []string{"DD+", "7.1"}, want: "DDP.7.1"},
+		{name: "eac3 alias", parts: []string{"E-AC-3", "7.1"}, want: "DDP.7.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NormalizeAudioCodecLabel(tt.parts...); got != tt.want {
+				t.Fatalf("NormalizeAudioCodecLabel(%q) = %q, want %q", tt.parts, got, tt.want)
+			}
+		})
+	}
+}

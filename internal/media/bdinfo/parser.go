@@ -466,7 +466,7 @@ func detectAudioCodecBase(value string) string {
 		return "DTS"
 	case strings.Contains(value, "DOLBY DIGITAL PLUS"), strings.Contains(value, "DDPLUS"), strings.Contains(value, "DD+"), strings.Contains(value, "E-AC-3"), strings.Contains(compact, "EAC3"), strings.HasPrefix(value, "DDP"), strings.Contains(value, " DDP"):
 		return "DDP"
-	case strings.Contains(value, "DOLBY DIGITAL"), strings.Contains(value, "AC-3"), strings.Contains(compact, "AC3"), strings.HasPrefix(value, "DD."), value == "DD", strings.Contains(value, " DD"):
+	case strings.Contains(value, "DOLBY DIGITAL"), strings.Contains(value, "AC-3"), strings.Contains(compact, "AC3"), strings.HasPrefix(value, "DD."), strings.HasPrefix(value, "DD /"), value == "DD", strings.Contains(value, " DD"):
 		return "DD"
 	case strings.Contains(value, "LPCM"):
 		return "LPCM"

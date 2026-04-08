@@ -447,6 +447,93 @@ SINFO:15,0,40,0,"7.1"`))
 	}
 }
 
+func TestBuildTitleViewNormalizesPlainDDWithChannelLayout(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:17,16,0,"00819"
+SINFO:17,0,1,6201,"Audio"
+SINFO:17,0,3,0,"spa"
+SINFO:17,0,4,0,"Spanish"
+SINFO:17,0,5,0,"A_AC3"
+SINFO:17,0,6,0,"DD"
+SINFO:17,0,14,0,"6"
+SINFO:17,0,30,0,"DD Surround 5.1 Spanish"
+SINFO:17,0,40,0,"5.1(side)"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00819")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DD.5.1" {
+		t.Fatalf("expected DD codec label with 5.1 layout metadata, got %+v", view.Audio)
+	}
+}
+
+func TestBuildTitleViewNormalizesPlainDDStereo(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:18,16,0,"00820"
+SINFO:18,0,1,6201,"Audio"
+SINFO:18,0,3,0,"eng"
+SINFO:18,0,4,0,"English"
+SINFO:18,0,5,0,"A_AC3"
+SINFO:18,0,6,0,"DD"
+SINFO:18,0,14,0,"2"
+SINFO:18,0,30,0,"DD Stereo English"
+SINFO:18,0,40,0,"stereo"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00820")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DD.2.0" {
+		t.Fatalf("expected DD codec label with stereo layout metadata, got %+v", view.Audio)
+	}
+}
+
+func TestBuildTitleViewNormalizesPlainDDMono(t *testing.T) {
+	parsed, err := ParseRobotOutput([]byte(`TINFO:19,16,0,"00821"
+SINFO:19,0,1,6201,"Audio"
+SINFO:19,0,3,0,"eng"
+SINFO:19,0,4,0,"English"
+SINFO:19,0,5,0,"A_AC3"
+SINFO:19,0,6,0,"DD"
+SINFO:19,0,14,0,"1"
+SINFO:19,0,30,0,"DD Mono English"
+SINFO:19,0,40,0,"mono"`))
+	if err != nil {
+		t.Fatalf("ParseRobotOutput returned error: %v", err)
+	}
+
+	title, err := parsed.TitleByPlaylist("00821")
+	if err != nil {
+		t.Fatalf("TitleByPlaylist returned error: %v", err)
+	}
+
+	view, err := BuildTitleView(title)
+	if err != nil {
+		t.Fatalf("BuildTitleView returned error: %v", err)
+	}
+
+	if len(view.Audio) != 1 || view.Audio[0].CodecLabel != "DD.1.0" {
+		t.Fatalf("expected DD codec label with mono layout metadata, got %+v", view.Audio)
+	}
+}
+
 func TestBuildTitleViewFiltersDTSCompatibilityCoreWhenPrimaryShortNameMissing(t *testing.T) {
 	parsed, err := ParseRobotOutput([]byte(`TINFO:14,16,0,"00816"
 SINFO:14,0,1,6201,"Audio"
