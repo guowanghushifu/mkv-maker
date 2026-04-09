@@ -103,6 +103,43 @@ func TestBuildExecutionDraftPreservesISOPathForMakeMKVStage(t *testing.T) {
 	}
 }
 
+func TestJobRunnerCommandPreviewLooksUpMakeMKVTitleIDWhenCacheTitleIDIsZeroForISO(t *testing.T) {
+	runner := NewJobRunner(&stubRunner{})
+	runner.runMakeMKVInfo = func(_ context.Context, sourcePath string) ([]byte, error) {
+		if sourcePath != "/bd_input/Nightcrawler.iso" {
+			t.Fatalf("expected ISO source path for MakeMKV info lookup, got %q", sourcePath)
+		}
+		return []byte(`TINFO:4,16,0,"00800"`), nil
+	}
+
+	req := StartRequest{
+		SourceName:   "Nightcrawler",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Nightcrawler","path":"/bd_input/Nightcrawler.iso","type":"iso"},
+			"bdinfo":{"playlistName":"00800.MPLS"},
+			"draft":{
+				"playlistName":"00800.MPLS",
+				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
+				"audio":[],
+				"subtitles":[],
+				"makemkv":{"playlistName":"00800.MPLS","titleId":0,"audio":[],"subtitles":[]}
+			},
+			"outputPath":"/remux/Nightcrawler.mkv"
+		}`,
+	}
+
+	preview, err := runner.CommandPreview(req)
+	if err != nil {
+		t.Fatalf("CommandPreview returned error: %v", err)
+	}
+	if !strings.Contains(preview, "\n  4\n") {
+		t.Fatalf("expected preview to use looked-up MakeMKV title id 4, got %q", preview)
+	}
+}
+
 func TestBuildExecutionDraftPreservesMakeMKVCacheAndSourceIndexes(t *testing.T) {
 	runner := NewJobRunner(&stubRunner{})
 	req := StartRequest{

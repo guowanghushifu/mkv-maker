@@ -288,7 +288,17 @@ func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
 		}
 		titleID := draft.MakeMKV.TitleID
 		if titleID <= 0 {
-			return "", errors.New("makemkv title id is required for stage-one preview")
+			if r == nil || r.runMakeMKVInfo == nil {
+				return "", errors.New("makemkv info runner is not configured")
+			}
+			robotOutput, err := r.runMakeMKVInfo(context.Background(), makeMKVSourcePath(draft))
+			if err != nil {
+				return "", err
+			}
+			titleID, err = LookupMakeMKVTitleIDByPlaylist(robotOutput, draft.Playlist)
+			if err != nil {
+				return "", err
+			}
 		}
 		args := []string{
 			"--messages=-null",
