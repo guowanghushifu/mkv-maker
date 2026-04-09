@@ -45,10 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     cron \
     sed \
-    faketime \
     && rm -rf /var/lib/apt/lists/*
-
-RUN ln -sf /usr/lib/$(uname -m)-linux-gnu/faketime/libfaketime.so.1 /usr/local/lib/libfaketime.so.1
 
 RUN mkdir -p /etc/apt/keyrings && \
     wget -O /etc/apt/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg && \
@@ -73,7 +70,6 @@ COPY --from=web-build /src/web/dist /app/web/dist
 COPY --from=makemkv-build /opt/makemkv /opt/makemkv
 COPY docker/makemkv/bin/makemkv-update-beta-key /opt/makemkv/bin/makemkv-update-beta-key
 COPY docker/makemkv/bin/makemkv-set-key /opt/makemkv/bin/makemkv-set-key
-COPY docker/makemkv/bin/run_makemkvcon.sh /app/run_makemkvcon.sh
 COPY docker/makemkv/defaults/settings.conf /defaults/settings.conf
 COPY docker/makemkv/defaults/nocore.mmcp.xml /defaults/nocore.mmcp.xml
 COPY docker/cron.d/makemkv-beta-key /etc/cron.d/makemkv-beta-key
@@ -82,8 +78,7 @@ COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 755 \
       /usr/local/bin/docker-entrypoint.sh \
       /opt/makemkv/bin/makemkv-update-beta-key \
-      /opt/makemkv/bin/makemkv-set-key \
-      /app/run_makemkvcon.sh && \
+      /opt/makemkv/bin/makemkv-set-key && \
     chmod 644 /etc/cron.d/makemkv-beta-key && \
     mkdir -p /app/data /bd_input /remux /remux_tmp /config /config/data /defaults && \
     touch /var/log/makemkv-beta-key.log
