@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const missingMakeMKVTitleID = -1
+
 type CommandRunner interface {
 	Run(ctx context.Context, draft Draft, args []string, onOutput func(string)) (string, error)
 }
@@ -148,7 +150,7 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 		playlistName = filepath.Base(strings.TrimSpace(draft.SourcePath))
 	}
 	titleID := draft.MakeMKV.TitleID
-	if titleID <= 0 {
+	if titleID < 0 {
 		titleID, err = LookupMakeMKVTitleIDByPlaylist(robotOutput, playlistName)
 		if err != nil {
 			return Draft{}, nil, cleanup, err
@@ -287,7 +289,7 @@ func (r *JobRunner) CommandPreview(req StartRequest) (string, error) {
 			}
 		}
 		titleID := draft.MakeMKV.TitleID
-		if titleID <= 0 {
+		if titleID < 0 {
 			if r == nil || r.runMakeMKVInfo == nil {
 				return "", errors.New("makemkv info runner is not configured")
 			}
@@ -502,9 +504,31 @@ type executionPayload struct {
 		Video        VideoTrack        `json:"video"`
 		Audio        []AudioTrack      `json:"audio"`
 		Subtitles    []SubtitleTrack   `json:"subtitles"`
-		MakeMKV      MakeMKVTitleCache `json:"makemkv"`
+		MakeMKV      json.RawMessage   `json:"makemkv"`
 	} `json:"draft"`
 	OutputPath string `json:"outputPath"`
+}
+
+func decodeMakeMKVTitleCache(raw json.RawMessage) (MakeMKVTitleCache, error) {
+	if len(raw) == 0 {
+		return MakeMKVTitleCache{}, nil
+	}
+
+	var cache MakeMKVTitleCache
+	if err := json.Unmarshal(raw, &cache); err != nil {
+		return MakeMKVTitleCache{}, err
+	}
+
+	var presence struct {
+		TitleID *json.RawMessage `json:"titleId"`
+	}
+	if err := json.Unmarshal(raw, &presence); err != nil {
+		return MakeMKVTitleCache{}, err
+	}
+	if presence.TitleID == nil {
+		cache.TitleID = missingMakeMKVTitleID
+	}
+	return cache, nil
 }
 
 func buildExecutionDraft(req StartRequest) (Draft, error) {
@@ -515,6 +539,11 @@ func buildExecutionDraft(req StartRequest) (Draft, error) {
 
 	var payload executionPayload
 	if err := json.Unmarshal([]byte(payloadJSON), &payload); err != nil {
+		return Draft{}, err
+	}
+
+	makeMKVCache, err := decodeMakeMKVTitleCache(payload.Draft.MakeMKV)
+	if err != nil {
 		return Draft{}, err
 	}
 
@@ -566,7 +595,7 @@ func buildExecutionDraft(req StartRequest) (Draft, error) {
 		Video:             payload.Draft.Video,
 		Audio:             payload.Draft.Audio,
 		Subtitles:         payload.Draft.Subtitles,
-		MakeMKV:           payload.Draft.MakeMKV,
+		MakeMKV:           makeMKVCache,
 	}
 	if err := validateMakeMKVCache(draft, strings.TrimSpace(payload.Source.Type)); err != nil {
 		return Draft{}, err
@@ -587,7 +616,7 @@ func validateMakeMKVCache(draft Draft, sourceType string) error {
 	if !strings.EqualFold(strings.TrimSpace(draft.MakeMKV.PlaylistName), strings.TrimSpace(draft.Playlist)) {
 		return errors.New("makemkv cache playlist does not match draft playlist")
 	}
-	if draft.MakeMKV.TitleID < 0 {
+	if draft.MakeMKV.TitleID < missingMakeMKVTitleID {
 		return errors.New("makemkv cache titleId is invalid")
 	}
 	return nil
