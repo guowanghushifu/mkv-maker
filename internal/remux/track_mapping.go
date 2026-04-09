@@ -129,40 +129,6 @@ func BuildResolvedTrackSelectorsBySourceIndex(draft Draft, identifyJSON []byte) 
 	return audioSelectors, subtitleSelectors, nil
 }
 
-func RemapDraftTrackIDsBySourceIndex(draft Draft, identifyJSON []byte) (Draft, error) {
-	audioSelectors, subtitleSelectors, err := BuildResolvedTrackSelectorsBySourceIndex(draft, identifyJSON)
-	if err != nil {
-		return Draft{}, err
-	}
-
-	remapped := draft
-	resolvedAudio := make(map[int]string, len(audioSelectors))
-	for _, selector := range audioSelectors {
-		resolvedAudio[selector.SourceIndex] = selector.TrackID
-	}
-	resolvedSubtitles := make(map[int]string, len(subtitleSelectors))
-	for _, selector := range subtitleSelectors {
-		resolvedSubtitles[selector.SourceIndex] = selector.TrackID
-	}
-	for i, track := range remapped.Audio {
-		if !usesSyntheticTrackID(track.ID) {
-			continue
-		}
-		if mappedID, ok := resolvedAudio[track.SourceIndex]; ok {
-			remapped.Audio[i].ID = mappedID
-		}
-	}
-	for i, track := range remapped.Subtitles {
-		if !usesSyntheticTrackID(track.ID) {
-			continue
-		}
-		if mappedID, ok := resolvedSubtitles[track.SourceIndex]; ok {
-			remapped.Subtitles[i].ID = mappedID
-		}
-	}
-	return remapped, nil
-}
-
 func collectTracksByType(tracks []mkvmergeTrackJSON, kind string) []mkvmergeTrackJSON {
 	typedTracks := make([]mkvmergeTrackJSON, 0, len(tracks))
 	for _, track := range tracks {
@@ -246,11 +212,6 @@ func explicitTrackOrdinal(track mkvmergeTrackJSON) (int, bool) {
 		return track.Properties.Number, true
 	}
 	return 0, false
-}
-
-func usesSyntheticTrackID(id string) bool {
-	trimmed := strings.TrimSpace(id)
-	return strings.HasPrefix(trimmed, "audio-") || strings.HasPrefix(trimmed, "subtitle-")
 }
 
 func trackIDForSourceIndex(trackIDs []string, sourceIndex int, kind string) (string, error) {

@@ -223,11 +223,11 @@ func TestBuildMKVMergeArgsWithResolvedSelectorsUsesResolvedTrackIDs(t *testing.T
 		SourcePath: "/tmp/intermediate.mkv",
 		Video:      VideoTrack{Name: "Main Video"},
 		Audio: []AudioTrack{
-			{ID: "audio-0", SourceIndex: 0, Name: "English", Language: "eng", Selected: true, Default: true},
-			{ID: "audio-1", SourceIndex: 1, Name: "Commentary", Language: "eng", Selected: true, Default: false},
+			{ID: "A1", SourceIndex: 0, Name: "English", Language: "eng", Selected: true, Default: true},
+			{ID: "A2", SourceIndex: 1, Name: "Commentary", Language: "eng", Selected: true, Default: false},
 		},
 		Subtitles: []SubtitleTrack{
-			{ID: "subtitle-0", SourceIndex: 0, Name: "English PGS", Language: "eng", Selected: true, Forced: true},
+			{ID: "S1", SourceIndex: 0, Name: "English PGS", Language: "eng", Selected: true, Forced: true},
 		},
 	}
 
@@ -262,7 +262,7 @@ func TestBuildMKVMergeArgsWithResolvedSelectorsFailsWhenMappingMissing(t *testin
 	draft := Draft{
 		OutputPath: "/remux/out.mkv",
 		SourcePath: "/tmp/intermediate.mkv",
-		Audio:      []AudioTrack{{ID: "audio-0", SourceIndex: 0, Name: "English", Language: "eng", Selected: true}},
+		Audio:      []AudioTrack{{ID: "A1", SourceIndex: 0, Name: "English", Language: "eng", Selected: true}},
 	}
 
 	_, err := BuildMKVMergeArgsWithResolvedSelectors(draft, nil, nil)

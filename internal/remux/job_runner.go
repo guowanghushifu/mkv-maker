@@ -194,25 +194,8 @@ func (r *JobRunner) BuildExecutionDraft(req StartRequest) (Draft, error) {
 }
 
 func (r *JobRunner) defaultBuildMKVMergeArgs(ctx context.Context, draft Draft) ([]string, error) {
-	if r == nil || r.inspectIntermediateTrackJSON == nil {
-		return BuildMKVMergeArgs(draft), nil
-	}
-	if !strings.EqualFold(filepath.Ext(draft.SourcePath), ".mkv") {
-		return BuildMKVMergeArgs(draft), nil
-	}
-	if !hasSyntheticTrackIDs(draft) {
-		return BuildMKVMergeArgs(draft), nil
-	}
-
-	identifyJSON, err := r.inspectIntermediateTrackJSON(ctx, draft.SourcePath)
-	if err != nil {
-		return nil, err
-	}
-	audioSelectors, subtitleSelectors, err := BuildResolvedTrackSelectorsBySourceIndex(draft, identifyJSON)
-	if err != nil {
-		return nil, err
-	}
-	return BuildMKVMergeArgsWithResolvedSelectors(draft, audioSelectors, subtitleSelectors)
+	_ = ctx
+	return BuildMKVMergeArgs(draft), nil
 }
 
 func (r *JobRunner) emitCommandPreview(preview string) {
@@ -223,20 +206,6 @@ func (r *JobRunner) emitCommandPreview(preview string) {
 		return
 	}
 	r.onCommandPreview(preview)
-}
-
-func hasSyntheticTrackIDs(draft Draft) bool {
-	for _, track := range draft.Audio {
-		if usesSyntheticTrackID(track.ID) {
-			return true
-		}
-	}
-	for _, track := range draft.Subtitles {
-		if usesSyntheticTrackID(track.ID) {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *JobRunner) defaultInspectIntermediateTrackJSON(ctx context.Context, path string) ([]byte, error) {

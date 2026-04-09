@@ -155,6 +155,33 @@ func TestJobRunnerCommandPreviewUsesTemporaryOutputPath(t *testing.T) {
 	}
 }
 
+func TestJobRunnerCommandPreviewForIntermediateMKVDoesNotInspectTracks(t *testing.T) {
+	runner := NewJobRunner(&stubRunner{})
+	called := false
+	runner.inspectIntermediateTrackJSON = func(_ context.Context, path string) ([]byte, error) {
+		called = true
+		return nil, errors.New("unexpected inspect call: " + path)
+	}
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   "/remux/Disc.mkv",
+		PlaylistName: "00801.MPLS",
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", "/remux/Disc.mkv"),
+	}
+
+	preview, err := runner.CommandPreview(req)
+	if err != nil {
+		t.Fatalf("CommandPreview returned error: %v", err)
+	}
+	if called {
+		t.Fatal("expected CommandPreview not to inspect intermediate mkv tracks")
+	}
+	if !strings.HasPrefix(preview, "mkvmerge\n") {
+		t.Fatalf("expected mkvmerge preview, got %q", preview)
+	}
+}
+
 func TestJobRunnerExecuteRenamesTemporaryOutputAfterSuccessfulRun(t *testing.T) {
 	outputRoot := t.TempDir()
 	finalPath := filepath.Join(outputRoot, "Disc.mkv")
@@ -436,8 +463,8 @@ func TestJobRunnerExecuteClearsTempDirContentsButPreservesDirectory(t *testing.T
 			"draft":{
 				"playlistName":"00801.MPLS",
 				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
-				"audio":[{"id":"audio-0","name":"English","language":"eng","selected":true,"sourceIndex":0}],
-				"subtitles":[{"id":"subtitle-0","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
+				"audio":[{"id":"A1","name":"English","language":"eng","selected":true,"sourceIndex":0}],
+				"subtitles":[{"id":"S1","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
 				"makemkv":{
 					"playlistName":"00801.MPLS",
 					"titleId":4,
@@ -470,10 +497,10 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 			if draft.SourcePath != intermediatePath {
 				t.Fatalf("expected second pass to use intermediate mkv %q, got %q", intermediatePath, draft.SourcePath)
 			}
-			if len(draft.Audio) != 1 || draft.Audio[0].ID != "audio-0" {
+			if len(draft.Audio) != 1 || draft.Audio[0].ID != "A1" {
 				t.Fatalf("expected draft audio id to remain edit-state value, got %+v", draft.Audio)
 			}
-			if len(draft.Subtitles) != 1 || draft.Subtitles[0].ID != "subtitle-0" {
+			if len(draft.Subtitles) != 1 || draft.Subtitles[0].ID != "S1" {
 				t.Fatalf("expected draft subtitle id to remain edit-state value, got %+v", draft.Subtitles)
 			}
 			if !slices.Contains(args, "--audio-tracks") || !slices.Contains(args, "3") {
@@ -555,8 +582,8 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 			"draft":{
 				"playlistName":"00801.MPLS",
 				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
-				"audio":[{"id":"audio-0","name":"English","language":"eng","selected":true,"sourceIndex":0}],
-				"subtitles":[{"id":"subtitle-0","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
+				"audio":[{"id":"A1","name":"English","language":"eng","selected":true,"sourceIndex":0}],
+				"subtitles":[{"id":"S1","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
 				"makemkv":{
 					"playlistName":"00801.MPLS",
 					"titleId":4,

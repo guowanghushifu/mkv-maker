@@ -5,11 +5,11 @@ import "testing"
 func TestBuildResolvedTrackSelectorsBySourceIndexSkipsAdjacentDuplicateSubtitleTracks(t *testing.T) {
 	draft := Draft{
 		Audio: []AudioTrack{
-			{ID: "audio-0", SourceIndex: 0, Name: "English", Language: "eng", Selected: true},
+			{ID: "A0", SourceIndex: 0, Name: "English", Language: "eng", Selected: true},
 		},
 		Subtitles: []SubtitleTrack{
-			{ID: "subtitle-0", SourceIndex: 0, Name: "Chinese PGS", Language: "chi", Selected: true},
-			{ID: "subtitle-1", SourceIndex: 1, Name: "Polish PGS", Language: "pol", Selected: true},
+			{ID: "S0", SourceIndex: 0, Name: "Chinese PGS", Language: "chi", Selected: true},
+			{ID: "S1", SourceIndex: 1, Name: "Polish PGS", Language: "pol", Selected: true},
 		},
 	}
 
