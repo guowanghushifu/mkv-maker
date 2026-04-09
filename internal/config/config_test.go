@@ -37,44 +37,6 @@ func TestLoadAllowsEnablingSecureCookieForHTTPS(t *testing.T) {
 	}
 }
 
-func TestLoadDefaultsEnableISOScanToFalse(t *testing.T) {
-	t.Setenv("APP_PASSWORD", "secret")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load returned error: %v", err)
-	}
-	if cfg.EnableISOScan {
-		t.Fatal("expected ISO scanning to be disabled by default")
-	}
-}
-
-func TestLoadAllowsEnablingISOScan(t *testing.T) {
-	t.Setenv("APP_PASSWORD", "secret")
-	t.Setenv("ENABLE_ISO_SCAN", "1")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load returned error: %v", err)
-	}
-	if !cfg.EnableISOScan {
-		t.Fatal("expected ENABLE_ISO_SCAN=1 to enable ISO scanning")
-	}
-}
-
-func TestLoadAllowsDisablingISOScan(t *testing.T) {
-	t.Setenv("APP_PASSWORD", "secret")
-	t.Setenv("ENABLE_ISO_SCAN", "0")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load returned error: %v", err)
-	}
-	if cfg.EnableISOScan {
-		t.Fatal("expected ENABLE_ISO_SCAN=0 to disable ISO scanning")
-	}
-}
-
 func TestLoadDefaultsRemuxTempDir(t *testing.T) {
 	t.Setenv("APP_PASSWORD", "secret")
 

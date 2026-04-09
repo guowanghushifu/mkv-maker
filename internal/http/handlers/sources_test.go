@@ -11,22 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
-
-func TestNewSourcesHandlerStoresISOManager(t *testing.T) {
-	manager := isomount.NewManager(t.TempDir(), time.Hour, nil)
-	h := NewSourcesHandler("/input", "/output", stubSourceScanner{}, stubPlaylistInspector{}, manager)
-
-	if h.ISOManager != manager {
-		t.Fatalf("expected ISO manager to be stored")
-	}
-}
 
 type stubSourceScanner struct {
 	items []media.SourceEntry
@@ -48,22 +37,6 @@ func (s stubPlaylistInspector) Inspect(ctx context.Context, sourcePath, playlist
 		*s.path = playlistPath
 	}
 	return s.result, s.err
-}
-
-type stubISOMountManager struct {
-	ensureMountedFn func(context.Context, string, string) (string, error)
-	touched         []string
-}
-
-func (s *stubISOMountManager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
-	if s.ensureMountedFn != nil {
-		return s.ensureMountedFn(ctx, sourceID, isoPath)
-	}
-	return "", nil
-}
-
-func (s *stubISOMountManager) Touch(sourceID string) {
-	s.touched = append(s.touched, sourceID)
 }
 
 func TestSourcesHandlerListReturnsStructuredNotFoundError(t *testing.T) {
@@ -153,43 +126,20 @@ func TestSourcesHandlerScanReturnsEmptyJSONArrayWhenNoSourcesFound(t *testing.T)
 	}
 }
 
-func TestSourcesHandlerResolveMountsISOSourceBeforeInspection(t *testing.T) {
-	isoPath := filepath.Join(t.TempDir(), "Nightcrawler.iso")
+func TestSourcesHandlerResolveInspectsISOPathDirectly(t *testing.T) {
+	inputRoot := t.TempDir()
+	isoPath := filepath.Join(inputRoot, "Nightcrawler.iso")
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	mountedRoot := filepath.Join(t.TempDir(), "iso_auto_mount", "movies-nightcrawler-iso")
-	playlistPath := filepath.Join(mountedRoot, "BDMV", "PLAYLIST", "00800.MPLS")
-	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(playlistPath, buildTestMPLS([]string{"00005"}), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	streamPath := filepath.Join(mountedRoot, "BDMV", "STREAM", "00005.m2ts")
-	if err := os.MkdirAll(filepath.Dir(streamPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(streamPath, []byte("stream"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	inputRoot := t.TempDir()
-	var inspectedPath string
+	var inspectedPlaylistRef string
 
-	isoManager := &stubISOMountManager{
-		ensureMountedFn: func(_ context.Context, sourceID, sourcePath string) (string, error) {
-			if sourceID != "movies-nightcrawler-iso" || sourcePath != isoPath {
-				t.Fatalf("unexpected source %q %q", sourceID, sourcePath)
-			}
-			return mountedRoot, nil
-		},
-	}
 	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{
 		ID: "movies-nightcrawler-iso", Name: "Nightcrawler", Path: isoPath, Type: media.SourceISO,
 	}}}, stubPlaylistInspector{
 		result: MakeMKVInspection{},
-		path: &inspectedPath,
-	}, isoManager)
+		path:   &inspectedPlaylistRef,
+	})
 	reqBody := `{
 		"sourceId":"movies-nightcrawler-iso",
 		"bdinfo":{
@@ -208,8 +158,8 @@ func TestSourcesHandlerResolveMountsISOSourceBeforeInspection(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
 	}
-	if inspectedPath != playlistPath {
-		t.Fatalf("expected ISO-mounted playlist path %q, got %q", playlistPath, inspectedPath)
+	if inspectedPlaylistRef != "00800.MPLS" {
+		t.Fatalf("expected ISO resolve to inspect playlist name directly, got %q", inspectedPlaylistRef)
 	}
 }
 
@@ -258,8 +208,8 @@ func TestSourcesHandlerResolveBuildsFrontendDraftFromParsedBDInfo(t *testing.T) 
 			Cache: remux.MakeMKVTitleCache{
 				PlaylistName: "00800.MPLS",
 				TitleID:      0,
-				Audio: []remux.AudioTrack{{ID: "A1", Name: "English Atmos", Language: "eng", CodecLabel: "TrueHD.7.1", Default: true, Selected: true, SourceIndex: 0}},
-				Subtitles: []remux.SubtitleTrack{{ID: "S1", Name: "国配简体特效", Language: "chi", Default: true, Selected: true, SourceIndex: 0}},
+				Audio:        []remux.AudioTrack{{ID: "A1", Name: "English Atmos", Language: "eng", CodecLabel: "TrueHD.7.1", Default: true, Selected: true, SourceIndex: 0}},
+				Subtitles:    []remux.SubtitleTrack{{ID: "S1", Name: "国配简体特效", Language: "chi", Default: true, Selected: true, SourceIndex: 0}},
 			},
 		},
 		path: &inspectedPath,
@@ -611,7 +561,6 @@ func TestSourcesHandlerResolveSerializesEmptyTracksAsJSONArrays(t *testing.T) {
 	}
 }
 
-
 func TestSourcesHandlerResolveBuildsRawMakeMKVCacheFromInspectionTracksWhenCacheMissing(t *testing.T) {
 	inputRoot := t.TempDir()
 	sourceID := "RawCacheDisc"
@@ -627,8 +576,8 @@ func TestSourcesHandlerResolveBuildsRawMakeMKVCacheFromInspectionTracksWhenCache
 	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{ID: sourceID, Name: sourceID, Path: sourcePath, Type: media.SourceBDMV}}}, stubPlaylistInspector{
 		result: MakeMKVInspection{
 			PlaylistName: "00800.MPLS",
-			Audio: []resolveTrack{{ID: "A1", Name: "Raw Audio", Language: "eng", CodecLabel: "DTS.5.1", Selected: true, Default: true, SourceIndex: 2}},
-			Subtitles: []resolveTrack{{ID: "S1", Name: "Raw Subtitle", Language: "eng", Selected: true, Default: false, Forced: true, SourceIndex: 4}},
+			Audio:        []resolveTrack{{ID: "A1", Name: "Raw Audio", Language: "eng", CodecLabel: "DTS.5.1", Selected: true, Default: true, SourceIndex: 2}},
+			Subtitles:    []resolveTrack{{ID: "S1", Name: "Raw Subtitle", Language: "eng", Selected: true, Default: false, Forced: true, SourceIndex: 4}},
 		},
 	})
 
@@ -650,9 +599,9 @@ func TestSourcesHandlerResolveBuildsRawMakeMKVCacheFromInspectionTracksWhenCache
 		} `json:"subtitles"`
 		MakeMKV struct {
 			Audio []struct {
-				Name       string `json:"name"`
-				CodecLabel string `json:"codecLabel"`
-				SourceIndex int   `json:"sourceIndex"`
+				Name        string `json:"name"`
+				CodecLabel  string `json:"codecLabel"`
+				SourceIndex int    `json:"sourceIndex"`
 			} `json:"audio"`
 			Subtitles []struct {
 				Name        string `json:"name"`
@@ -789,7 +738,9 @@ func TestSourcesHandlerResolveReturnsMakeMKVTrackLanguages(t *testing.T) {
 	}
 
 	var body struct {
-		Audio []struct{ Language string `json:"language"` } `json:"audio"`
+		Audio []struct {
+			Language string `json:"language"`
+		} `json:"audio"`
 		Subtitles []struct {
 			Name     string `json:"name"`
 			Language string `json:"language"`
@@ -1042,7 +993,6 @@ func buildTestMPLS(clipNames []string) []byte {
 	}
 	return data
 }
-
 
 func equalStringSlices(left, right []string) bool {
 	if len(left) != len(right) {

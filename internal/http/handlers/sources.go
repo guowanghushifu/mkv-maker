@@ -26,17 +26,11 @@ type SourceScanner interface {
 	Scan(root string) ([]media.SourceEntry, error)
 }
 
-type ISOMountResolver interface {
-	EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error)
-	Touch(sourceID string)
-}
-
 type SourcesHandler struct {
-	InputDir   string
-	OutputDir  string
-	Scanner    SourceScanner
-	Inspector  PlaylistInspector
-	ISOManager ISOMountResolver
+	InputDir  string
+	OutputDir string
+	Scanner   SourceScanner
+	Inspector PlaylistInspector
 }
 
 type sourcesErrorResponse struct {
@@ -109,23 +103,18 @@ var playlistNamePattern = regexp.MustCompile(`(?i)^\d{5}\.MPLS$`)
 
 const resolveSourceBodyLimit = 2 << 20
 
-func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector, isoManager ...ISOMountResolver) *SourcesHandler {
+func NewSourcesHandler(inputDir, outputDir string, scanner SourceScanner, inspector PlaylistInspector) *SourcesHandler {
 	if scanner == nil {
-		scanner = media.NewScanner(filepath.Join(inputDir, "iso_auto_mount"), true)
+		scanner = media.NewScanner()
 	}
 	if inspector == nil {
 		inspector = MakeMKVPlaylistInspector{}
 	}
-	var manager ISOMountResolver
-	if len(isoManager) > 0 {
-		manager = isoManager[0]
-	}
 	return &SourcesHandler{
-		InputDir:   inputDir,
-		OutputDir:  outputDir,
-		Scanner:    scanner,
-		Inspector:  inspector,
-		ISOManager: manager,
+		InputDir:  inputDir,
+		OutputDir: outputDir,
+		Scanner:   scanner,
+		Inspector: inspector,
 	}
 }
 
@@ -180,7 +169,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "source not found", http.StatusNotFound)
 		return
 	}
-	if source.Type != media.SourceISO && !isPathWithinRoot(h.InputDir, source.Path) {
+	if !isPathWithinRoot(h.InputDir, source.Path) {
 		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "source path is outside input root path=%s inputRoot=%s", source.Path, h.InputDir)
 		http.Error(w, "source path is outside input root", http.StatusBadRequest)
 		return
@@ -188,24 +177,12 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	sourcePath := source.Path
 	switch source.Type {
 	case media.SourceISO:
-		if h.ISOManager == nil {
-			logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "iso manager is not configured")
-			http.Error(w, "iso manager is not configured", http.StatusInternalServerError)
-			return
-		}
-		mountedRoot, err := h.ISOManager.EnsureMounted(r.Context(), source.ID, source.Path)
-		if err != nil {
-			logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "failed to mount iso source path=%s: %v", source.Path, err)
-			http.Error(w, "failed to mount iso source", http.StatusBadRequest)
-			return
-		}
-		h.ISOManager.Touch(source.ID)
-		sourcePath = mountedRoot
+		// ISO sources are inspected directly through MakeMKV.
 	case media.SourceBDMV:
 		// already rooted at the BDMV source directory
 	default:
 		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "unsupported source type=%s", source.Type)
-		http.Error(w, "only bdmv sources are supported", http.StatusBadRequest)
+		http.Error(w, "only bdmv and iso sources are supported", http.StatusBadRequest)
 		return
 	}
 
@@ -228,35 +205,40 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid playlist name", http.StatusBadRequest)
 		return
 	}
-	playlistPath, err := findPlaylistFilePath(sourcePath, playlistName)
-	if err != nil {
-		log.Printf("resolve source=%s playlist=%s: playlist lookup failed: %v", sourcePath, playlistName, err)
-		if errors.Is(err, os.ErrNotExist) {
-			http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
+	playlistRef := playlistName
+	segmentPaths := []string{}
+	if source.Type == media.SourceBDMV {
+		playlistPath, err := findPlaylistFilePath(sourcePath, playlistName)
+		if err != nil {
+			log.Printf("resolve source=%s playlist=%s: playlist lookup failed: %v", sourcePath, playlistName, err)
+			if errors.Is(err, os.ErrNotExist) {
+				http.Error(w, "playlist does not exist in selected source", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "failed to validate playlist", http.StatusInternalServerError)
 			return
 		}
-		http.Error(w, "failed to validate playlist", http.StatusInternalServerError)
-		return
+		playlistRef = playlistPath
+		clipNames, err := mediampls.ParseClipNames(playlistPath)
+		if err != nil {
+			log.Printf("resolve source=%s playlist=%s playlistPath=%s: mpls parse failed: %v", sourcePath, playlistName, playlistPath, err)
+		}
+		if len(clipNames) == 0 {
+			clipNames = parsed.StreamFiles
+		}
+		segmentPaths = buildSegmentPaths(sourcePath, clipNames)
 	}
-	clipNames, err := mediampls.ParseClipNames(playlistPath)
-	if err != nil {
-		log.Printf("resolve source=%s playlist=%s playlistPath=%s: mpls parse failed: %v", sourcePath, playlistName, playlistPath, err)
-	}
-	if len(clipNames) == 0 {
-		clipNames = parsed.StreamFiles
-	}
-	segmentPaths := buildSegmentPaths(sourcePath, clipNames)
-	inspection, err := h.Inspector.Inspect(r.Context(), sourcePath, playlistPath)
+	inspection, err := h.Inspector.Inspect(r.Context(), sourcePath, playlistRef)
 	if err != nil {
 		log.Printf(
-			"resolve source=%s playlist=%s playlistPath=%s segments=%q: playlist inspection failed: %v",
+			"resolve source=%s playlist=%s playlistRef=%s segments=%q: playlist inspection failed: %v",
 			sourcePath,
 			playlistName,
-			playlistPath,
+			playlistRef,
 			segmentPaths,
 			err,
 		)
-		if len(segmentPaths) == 0 {
+		if source.Type == media.SourceBDMV && len(segmentPaths) == 0 {
 			http.Error(w, "failed to inspect playlist tracks: no stream files resolved from playlist", http.StatusInternalServerError)
 			return
 		}

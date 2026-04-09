@@ -299,28 +299,3 @@ describe('createApiClient bdinfo error handling', () => {
     ).rejects.toThrow('playlist does not exist in selected source');
   });
 });
-
-describe('createApiClient releaseMountedISOs', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('posts to release mounted ISOs and returns the cleanup summary', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toMatch(/\/api\/iso\/release-mounted$/);
-      expect(init?.method).toBe('POST');
-      return new Response(JSON.stringify({ released: 2, skippedInUse: 1, failed: 0 }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const client = createApiClient('/api');
-    await expect(client.releaseMountedISOs('session')).resolves.toEqual({
-      released: 2,
-      skippedInUse: 1,
-      failed: 0,
-    });
-  });
-});

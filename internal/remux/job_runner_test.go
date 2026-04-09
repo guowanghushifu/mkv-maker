@@ -59,6 +59,50 @@ func TestBuildExecutionDraftUsesExistingPlaylistPathCaseInsensitive(t *testing.T
 	}
 }
 
+func TestBuildExecutionDraftPreservesISOPathForMakeMKVStage(t *testing.T) {
+	runner := NewJobRunner(&stubRunner{})
+	req := StartRequest{
+		SourceName:   "Nightcrawler",
+		OutputName:   "Nightcrawler.mkv",
+		OutputPath:   "/remux/Nightcrawler.mkv",
+		PlaylistName: "00800.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Nightcrawler","path":"/bd_input/Nightcrawler.iso","type":"iso"},
+			"bdinfo":{"playlistName":"00800.MPLS"},
+			"draft":{
+				"playlistName":"00800.MPLS",
+				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
+				"audio":[],
+				"subtitles":[],
+				"makemkv":{"playlistName":"00800.MPLS","titleId":4,"audio":[],"subtitles":[]}
+			},
+			"outputPath":"/remux/Nightcrawler.mkv"
+		}`,
+	}
+
+	draft, err := runner.BuildExecutionDraft(req)
+	if err != nil {
+		t.Fatalf("BuildExecutionDraft returned error: %v", err)
+	}
+	if draft.SourcePath != "/bd_input/Nightcrawler.iso" {
+		t.Fatalf("expected ISO SourcePath to be preserved, got %q", draft.SourcePath)
+	}
+	if draft.MakeMKVSourcePath != "/bd_input/Nightcrawler.iso" {
+		t.Fatalf("expected MakeMKVSourcePath to preserve ISO path, got %q", draft.MakeMKVSourcePath)
+	}
+
+	preview, err := runner.CommandPreview(req)
+	if err != nil {
+		t.Fatalf("CommandPreview returned error: %v", err)
+	}
+	if !strings.HasPrefix(preview, "makemkvcon\n") {
+		t.Fatalf("expected stage-one MakeMKV preview, got %q", preview)
+	}
+	if !strings.Contains(preview, "file:/bd_input/Nightcrawler.iso") {
+		t.Fatalf("expected preview to contain ISO MakeMKV source, got %q", preview)
+	}
+}
+
 func TestBuildExecutionDraftPreservesMakeMKVCacheAndSourceIndexes(t *testing.T) {
 	runner := NewJobRunner(&stubRunner{})
 	req := StartRequest{

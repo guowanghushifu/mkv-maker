@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"io"
 	"log"
@@ -9,7 +8,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -18,20 +16,15 @@ import (
 	httpapi "github.com/guowanghushifu/mkv-maker/internal/http"
 	"github.com/guowanghushifu/mkv-maker/internal/http/handlers"
 	"github.com/guowanghushifu/mkv-maker/internal/http/middleware"
-	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
 
-var runtimeGOOS = runtime.GOOS
-
 type App struct {
-	Config         config.Config
-	Handler        http.Handler
-	logFile        *os.File
-	remuxManager   *remux.Manager
-	isoManager     *isomount.Manager
-	cancelLifetime context.CancelFunc
+	Config       config.Config
+	Handler      http.Handler
+	logFile      *os.File
+	remuxManager *remux.Manager
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -43,19 +36,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 
-	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
-	enableISOScan := cfg.EnableISOScan && runtimeGOOS == "linux"
-
-	var isoManager *isomount.Manager
-	if enableISOScan {
-		isoManager = isomount.NewManager(filepath.Join(cfg.InputDir, "iso_auto_mount"), time.Hour, nil)
-		startupCleanup := isoManager.CleanupResidualMountDirs(context.Background())
-		if startupCleanup.Failed > 0 {
-			log.Printf("iso startup cleanup completed with %d failures", startupCleanup.Failed)
-		}
-		go isoManager.RunJanitor(lifetimeCtx, time.Minute)
-	}
-	scanner := media.NewScanner(filepath.Join(cfg.InputDir, "iso_auto_mount"), enableISOScan)
+	scanner := media.NewScanner()
 
 	cookieAuth := auth.NewCookieAuth(cfg.AppPassword, time.Duration(cfg.SessionMaxAge)*time.Second)
 	authHandler := &handlers.AuthHandler{
@@ -73,22 +54,11 @@ func New(cfg config.Config) (*App, error) {
 		cfg.OutputDir,
 		scanner,
 		handlers.MakeMKVPlaylistInspector{},
-		isoManager,
 	)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	remuxManager := remux.NewManagerWithTempDir(nil, cfg.RemuxTempDir)
-	remuxManager.SetOnTaskFinished(func(req remux.StartRequest, _ remux.Task) {
-		if isoManager == nil {
-			return
-		}
-		if !strings.EqualFold(strings.TrimSpace(req.SourceType), "iso") || strings.TrimSpace(req.SourceID) == "" || req.SourceLeaseGeneration == 0 {
-			return
-		}
-		_, _ = isoManager.ReleaseSourceIfLeaseGeneration(context.Background(), req.SourceID, req.SourceLeaseGeneration)
-	})
-	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, scanner, handlers.NewISOJobManagerAdapter(isoManager))
-	isoHandler := handlers.NewISOMountsHandler(isoManager)
+	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, scanner)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		RequireAuth:     middleware.RequireAuth(cookieAuth),
@@ -100,7 +70,6 @@ func New(cfg config.Config) (*App, error) {
 		SourcesResolve:  sourcesHandler.Resolve,
 		BDInfoParse:     bdinfoHandler.Parse,
 		DraftsPreview:   draftsHandler.PreviewFilename,
-		ISOMountRelease: isoHandler.ReleaseMounted,
 		JobsCreate:      jobsHandler.Create,
 		JobsCurrent:     jobsHandler.Current,
 		JobsCurrentStop: jobsHandler.StopCurrent,
@@ -110,12 +79,10 @@ func New(cfg config.Config) (*App, error) {
 	handler := withFrontend(router, filepath.Join("web", "dist"))
 
 	return &App{
-		Config:         cfg,
-		Handler:        handler,
-		logFile:        logFile,
-		remuxManager:   remuxManager,
-		isoManager:     isoManager,
-		cancelLifetime: cancelLifetime,
+		Config:       cfg,
+		Handler:      handler,
+		logFile:      logFile,
+		remuxManager: remuxManager,
 	}, nil
 }
 
@@ -123,14 +90,8 @@ func (a *App) Close() error {
 	if a == nil {
 		return nil
 	}
-	if a.cancelLifetime != nil {
-		a.cancelLifetime()
-	}
 	if a.remuxManager != nil {
 		a.remuxManager.Close()
-	}
-	if a.isoManager != nil {
-		a.isoManager.CleanupAll(context.Background())
 	}
 	if a.logFile != nil {
 		return a.logFile.Close()

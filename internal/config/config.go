@@ -15,7 +15,6 @@ type Config struct {
 	RemuxTempDir        string
 	SessionMaxAge       int
 	SessionCookieSecure bool
-	EnableISOScan       bool
 }
 
 func Load() (Config, error) {
@@ -28,7 +27,6 @@ func Load() (Config, error) {
 		RemuxTempDir:        getenvDefault("REMUX_TMP_DIR", "/remux_tmp"),
 		SessionMaxAge:       86400,
 		SessionCookieSecure: getenvBoolDefault("SESSION_COOKIE_SECURE", false),
-		EnableISOScan:       getenvBoolDefault("ENABLE_ISO_SCAN", false),
 	}
 	if cfg.AppPassword == "" {
 		return Config{}, errors.New("APP_PASSWORD is required")

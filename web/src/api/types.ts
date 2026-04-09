@@ -1,11 +1,5 @@
 export type SourceType = 'bdmv' | 'iso';
 
-export type ReleaseMountedISOsResult = {
-  released: number;
-  skippedInUse: number;
-  failed: number;
-};
-
 export type SourceEntry = {
   id: string;
   name: string;

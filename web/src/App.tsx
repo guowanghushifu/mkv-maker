@@ -36,11 +36,9 @@ function App() {
         <ScanPage
           locale={workflow.locale}
           loading={workflow.scanning}
-          releasingMountedISOs={workflow.releasingMountedISOs}
           error={workflow.scanError}
           sources={workflow.sources}
           selectedSourceId={workflow.selectedSourceId}
-          onReleaseMountedISOs={workflow.handleReleaseMountedISOs}
           onScan={workflow.handleScan}
           onSelectSource={workflow.handleSourceSelect}
           onNext={() => workflow.goToStep('bdinfo')}

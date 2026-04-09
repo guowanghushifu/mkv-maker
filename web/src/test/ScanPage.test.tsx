@@ -35,7 +35,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -55,7 +54,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -77,7 +75,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -95,7 +92,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -115,7 +111,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -135,7 +130,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource]}
         selectedSourceId={longPathSource.id}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -155,7 +149,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={onSelectSource}
         onNext={onNext}
@@ -176,7 +169,6 @@ describe('ScanPage', () => {
         error={null}
         sources={[longPathSource, secondSource]}
         selectedSourceId={secondSource.id}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={onSelectSource}
         onNext={onNext}
@@ -189,16 +181,14 @@ describe('ScanPage', () => {
     expect(onNext).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the release button before scan sources and shows the ISO badge', () => {
+  it('renders the scan and next buttons and shows the ISO badge', () => {
     render(
       <ScanPage
         locale="en"
         loading={false}
-        releasingMountedISOs={false}
         error={null}
         sources={[isoSource]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
@@ -206,11 +196,10 @@ describe('ScanPage', () => {
     );
 
     expect(Array.from(document.querySelectorAll('.workspace-toolbar button')).map((node) => node.textContent?.trim())).toEqual([
-      'Release Mounted ISOs',
       'Scan Sources',
       'Continue to BDInfo',
     ]);
-    expect(screen.getByText(/ISO File/i)).toBeInTheDocument();
+    expect(document.querySelector('.source-card-badge')?.textContent).toBe('ISO File');
   });
 
   it('updates the scan copy to mention ISO input support', () => {
@@ -221,14 +210,13 @@ describe('ScanPage', () => {
         error={null}
         sources={[]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
       />,
     );
 
-    expect(screen.getByText(/BDMV folders and mounted ISO images/i)).toBeInTheDocument();
+    expect(screen.getByText(/BDMV folders and ISO files/i)).toBeInTheDocument();
 
     rerender(
       <ScanPage
@@ -237,13 +225,12 @@ describe('ScanPage', () => {
         error={null}
         sources={[]}
         selectedSourceId={null}
-        onReleaseMountedISOs={vi.fn()}
         onScan={vi.fn()}
         onSelectSource={vi.fn()}
         onNext={vi.fn()}
       />,
     );
 
-    expect(screen.getByText(/BDMV 目录和已挂载的 ISO 镜像/i)).toBeInTheDocument();
+    expect(screen.getByText(/BDMV 目录和 ISO 文件/i)).toBeInTheDocument();
   });
 });

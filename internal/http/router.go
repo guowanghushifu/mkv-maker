@@ -16,7 +16,6 @@ type Dependencies struct {
 	SourcesResolve  http.HandlerFunc
 	BDInfoParse     http.HandlerFunc
 	DraftsPreview   http.HandlerFunc
-	ISOMountRelease http.HandlerFunc
 	JobsCreate      http.HandlerFunc
 	JobsCurrent     http.HandlerFunc
 	JobsCurrentStop http.HandlerFunc
@@ -37,7 +36,6 @@ func NewRouter(deps Dependencies) http.Handler {
 		protected.Post("/api/sources/{id}/resolve", deps.SourcesResolve)
 		protected.Post("/api/bdinfo/parse", deps.BDInfoParse)
 		protected.Post("/api/drafts/preview-filename", deps.DraftsPreview)
-		protected.Post("/api/iso/release-mounted", deps.ISOMountRelease)
 		protected.Post("/api/jobs", deps.JobsCreate)
 		protected.Get("/api/jobs/current", deps.JobsCurrent)
 		protected.Post("/api/jobs/current/stop", deps.JobsCurrentStop)

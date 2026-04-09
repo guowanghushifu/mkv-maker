@@ -19,7 +19,7 @@ func TestScannerFindsBDMVFoldersOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("", true)
+	scanner := NewScanner()
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -56,7 +56,7 @@ func TestScannerFindsBDMVFoldersInNestedSubdirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("", true)
+	scanner := NewScanner()
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -96,7 +96,7 @@ func TestScannerDoesNotReturnNestedBDMVInsideRecognizedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("", true)
+	scanner := NewScanner()
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -109,7 +109,7 @@ func TestScannerDoesNotReturnNestedBDMVInsideRecognizedRoot(t *testing.T) {
 	}
 }
 
-func TestScannerFindsISOFilesWhenEnabled(t *testing.T) {
+func TestScannerFindsISOFiles(t *testing.T) {
 	root := t.TempDir()
 	isoPath := filepath.Join(root, "movies", "Nightcrawler.iso")
 	if err := os.MkdirAll(filepath.Dir(isoPath), 0o755); err != nil {
@@ -119,7 +119,7 @@ func TestScannerFindsISOFilesWhenEnabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner(filepath.Join(root, "iso_auto_mount"), true)
+	scanner := NewScanner()
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
@@ -132,26 +132,19 @@ func TestScannerFindsISOFilesWhenEnabled(t *testing.T) {
 	}
 }
 
-func TestScannerSkipsAutoMountRootAndOmitsISOWhenDisabled(t *testing.T) {
+func TestScannerIncludesISOFilesWithoutFeatureFlags(t *testing.T) {
 	root := t.TempDir()
-	autoMountRoot := filepath.Join(root, "iso_auto_mount")
-	if err := os.MkdirAll(filepath.Join(autoMountRoot, "old-disc", "BDMV", "PLAYLIST"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(autoMountRoot, "old-disc", "BDMV", "index.bdmv"), []byte("index"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.WriteFile(filepath.Join(root, "DiscA.iso"), []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner(autoMountRoot, false)
+	scanner := NewScanner()
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)
 	}
-	if len(items) != 0 {
-		t.Fatalf("expected no items when ISO scanning disabled and auto-mount root skipped, got %+v", items)
+	if len(items) != 1 || items[0].Type != SourceISO {
+		t.Fatalf("expected ISO item without feature flags, got %+v", items)
 	}
 }
 
@@ -168,7 +161,7 @@ func TestScannerGivesDistinctIDsToISOFilesWithSameBasename(t *testing.T) {
 		}
 	}
 
-	scanner := NewScanner("", true)
+	scanner := NewScanner()
 	items, err := scanner.Scan(root)
 	if err != nil {
 		t.Fatalf("Scan returned error: %v", err)

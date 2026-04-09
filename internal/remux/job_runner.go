@@ -508,8 +508,9 @@ func buildExecutionDraft(req StartRequest) (Draft, error) {
 		return Draft{}, err
 	}
 
-	if sourceType := strings.TrimSpace(payload.Source.Type); sourceType != "" && !strings.EqualFold(sourceType, "bdmv") {
-		return Draft{}, errors.New("only bdmv source payloads are supported")
+	sourceType := strings.TrimSpace(payload.Source.Type)
+	if sourceType != "" && !strings.EqualFold(sourceType, "bdmv") && !strings.EqualFold(sourceType, "iso") {
+		return Draft{}, errors.New("only bdmv and iso source payloads are supported")
 	}
 
 	playlistName := strings.ToUpper(strings.TrimSpace(payload.BDInfo.PlaylistName))
@@ -529,7 +530,9 @@ func buildExecutionDraft(req StartRequest) (Draft, error) {
 	}
 	makeMKVSourcePath := sourcePath
 	if !strings.EqualFold(filepath.Ext(sourcePath), ".mkv") {
-		sourcePath = resolvePlaylistPath(sourcePath, playlistName)
+		if !strings.EqualFold(sourceType, "iso") && !strings.EqualFold(filepath.Ext(sourcePath), ".iso") {
+			sourcePath = resolvePlaylistPath(sourcePath, playlistName)
+		}
 	} else {
 		makeMKVSourcePath = ""
 	}
@@ -565,11 +568,11 @@ func validateMakeMKVCache(draft Draft, sourceType string) error {
 	if strings.EqualFold(filepath.Ext(strings.TrimSpace(draft.SourcePath)), ".mkv") {
 		return nil
 	}
-	if sourceType != "" && !strings.EqualFold(sourceType, "bdmv") {
+	if sourceType != "" && !strings.EqualFold(sourceType, "bdmv") && !strings.EqualFold(sourceType, "iso") {
 		return nil
 	}
 	if strings.TrimSpace(draft.MakeMKV.PlaylistName) == "" && draft.MakeMKV.TitleID == 0 && len(draft.MakeMKV.Audio) == 0 && len(draft.MakeMKV.Subtitles) == 0 {
-		return errors.New("makemkv cache is required for bdmv remux")
+		return errors.New("makemkv cache is required for bdmv/iso remux")
 	}
 	if !strings.EqualFold(strings.TrimSpace(draft.MakeMKV.PlaylistName), strings.TrimSpace(draft.Playlist)) {
 		return errors.New("makemkv cache playlist does not match draft playlist")

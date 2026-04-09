@@ -26,19 +26,10 @@ type SourceEntry struct {
 }
 
 type Scanner struct {
-	AutoMountRoot string
-	EnableISOScan bool
 }
 
-func NewScanner(autoMountRoot string, enableISOScan bool) *Scanner {
-	autoMountRoot = strings.TrimSpace(autoMountRoot)
-	if autoMountRoot != "" {
-		autoMountRoot = filepath.Clean(autoMountRoot)
-	}
-	return &Scanner{
-		AutoMountRoot: autoMountRoot,
-		EnableISOScan: enableISOScan,
-	}
+func NewScanner() *Scanner {
+	return &Scanner{}
 }
 
 func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
@@ -47,11 +38,8 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 		if err != nil {
 			return err
 		}
-		if s.isReservedAutoMountPath(path) {
-			return filepath.SkipDir
-		}
 		if !d.IsDir() {
-			if !s.EnableISOScan || !strings.EqualFold(filepath.Ext(path), ".iso") {
+			if !strings.EqualFold(filepath.Ext(path), ".iso") {
 				return nil
 			}
 			info, err := d.Info()
@@ -111,17 +99,6 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 	})
 
 	return out, nil
-}
-
-func (s *Scanner) isReservedAutoMountPath(path string) bool {
-	if s.AutoMountRoot == "" {
-		return false
-	}
-	cleanedPath := filepath.Clean(path)
-	if cleanedPath == s.AutoMountRoot {
-		return true
-	}
-	return strings.HasPrefix(cleanedPath, s.AutoMountRoot+string(filepath.Separator))
 }
 
 func stableISOID(root, path string) string {

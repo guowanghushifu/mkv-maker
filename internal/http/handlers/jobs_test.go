@@ -12,20 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guowanghushifu/mkv-maker/internal/isomount"
 	"github.com/guowanghushifu/mkv-maker/internal/media"
 	"github.com/guowanghushifu/mkv-maker/internal/remux"
 )
-
-func TestNewJobsHandlerStoresISOManager(t *testing.T) {
-	manager := isomount.NewManager(t.TempDir(), time.Hour, nil)
-	isoManager := NewISOJobManagerAdapter(manager)
-	h := NewJobsHandler(&stubTasksManager{}, "/input", "/output", isoManager)
-
-	if h.ISOManager != isoManager {
-		t.Fatalf("expected ISO manager to be stored")
-	}
-}
 
 type stubTasksManager struct {
 	startReq     remux.StartRequest
@@ -66,42 +55,6 @@ func (s *stubTasksManager) StopCurrent() error {
 		return s.stopFn()
 	}
 	return nil
-}
-
-type stubISOJobManager struct {
-	ensureMountedFn                  func(context.Context, string, string) (string, error)
-	ensureMountedAndAcquireLeaseFn   func(context.Context, string, string) (string, uint64, error)
-	ensureMountedAndAcquireLeaseSeen bool
-	released                         []string
-}
-
-func (s *stubISOJobManager) EnsureMounted(ctx context.Context, sourceID, isoPath string) (string, error) {
-	if s.ensureMountedFn != nil {
-		return s.ensureMountedFn(ctx, sourceID, isoPath)
-	}
-	return "", nil
-}
-
-func (s *stubISOJobManager) EnsureMountedAndAcquireLease(ctx context.Context, sourceID, isoPath string) (string, uint64, error) {
-	s.ensureMountedAndAcquireLeaseSeen = true
-	if s.ensureMountedAndAcquireLeaseFn != nil {
-		return s.ensureMountedAndAcquireLeaseFn(ctx, sourceID, isoPath)
-	}
-	if s.ensureMountedFn != nil {
-		mountPath, err := s.ensureMountedFn(ctx, sourceID, isoPath)
-		return mountPath, 1, err
-	}
-	return "", 0, nil
-}
-
-func (s *stubISOJobManager) ReleaseSource(ctx context.Context, sourceID string) error {
-	s.released = append(s.released, sourceID)
-	return nil
-}
-
-func (s *stubISOJobManager) ReleaseSourceIfLeaseGeneration(ctx context.Context, sourceID string, generation uint64) (bool, error) {
-	s.released = append(s.released, sourceID)
-	return true, nil
 }
 
 type stubRunner struct {
@@ -240,21 +193,13 @@ func TestJobsHandlerCreateReturnsAcceptedTask(t *testing.T) {
 	}
 }
 
-func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
+func TestJobsHandlerCreateUsesCanonicalISOPathDirectly(t *testing.T) {
 	inputRoot := t.TempDir()
 	isoPath := filepath.Join(inputRoot, "library", "Nightcrawler.iso")
 	if err := os.MkdirAll(filepath.Dir(isoPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mountedRoot := filepath.Join(t.TempDir(), "iso_auto_mount", "movies-nightcrawler-iso")
-	playlistPath := filepath.Join(mountedRoot, "BDMV", "PLAYLIST", "00800.MPLS")
-	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	outputRoot := t.TempDir()
@@ -264,14 +209,6 @@ func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
 		Path: isoPath,
 		Type: media.SourceISO,
 	}}}
-	isoManager := &stubISOJobManager{
-		ensureMountedFn: func(_ context.Context, sourceID, sourcePath string) (string, error) {
-			if sourceID != "movies-nightcrawler-iso" || sourcePath != isoPath {
-				t.Fatalf("unexpected source %q %q", sourceID, sourcePath)
-			}
-			return mountedRoot, nil
-		},
-	}
 	manager := &stubTasksManager{
 		startFn: func(_ remux.StartRequest) (remux.Task, error) {
 			return remux.Task{
@@ -285,9 +222,10 @@ func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewJobsHandler(manager, inputRoot, outputRoot, scanner, isoManager)
+	h := NewJobsHandler(manager, inputRoot, outputRoot, scanner)
+	forgedPath := filepath.Join(t.TempDir(), "wrong.iso")
 	reqBody := `{
-		"source":{"id":"movies-nightcrawler-iso","name":"Nightcrawler","path":"` + filepath.Join(t.TempDir(), "wrong.iso") + `","type":"iso"},
+		"source":{"id":"movies-nightcrawler-iso","name":"Nightcrawler","path":"` + forgedPath + `","type":"iso"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
 		"draft":{"playlistName":"00800.MPLS","makemkv":{"playlistName":"00800.MPLS","titleId":4,"audio":[],"subtitles":[]}},
 		"outputFilename":"Nightcrawler.mkv",
@@ -300,17 +238,20 @@ func TestJobsHandlerCreateMountsISOSourceAndMarksItInUse(t *testing.T) {
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
 	}
-	if !isoManager.ensureMountedAndAcquireLeaseSeen {
-		t.Fatal("expected ISO source lease to be acquired with the mount")
-	}
 	if manager.startReq.SourceType != "iso" || manager.startReq.SourceID != "movies-nightcrawler-iso" {
 		t.Fatalf("unexpected start request %+v", manager.startReq)
 	}
-	if manager.startReq.SourceLeaseGeneration != 1 {
-		t.Fatalf("expected lease generation 1, got %d", manager.startReq.SourceLeaseGeneration)
+	if manager.startReq.SourceLeaseGeneration != 0 {
+		t.Fatalf("expected no ISO lease generation, got %d", manager.startReq.SourceLeaseGeneration)
 	}
-	if !strings.Contains(manager.startReq.PayloadJSON, mountedRoot) {
-		t.Fatalf("expected payload JSON to reference mounted root, got %q", manager.startReq.PayloadJSON)
+	if !strings.Contains(manager.startReq.PayloadJSON, isoPath) {
+		t.Fatalf("expected payload JSON to reference canonical ISO path, got %q", manager.startReq.PayloadJSON)
+	}
+	if strings.Contains(manager.startReq.PayloadJSON, forgedPath) {
+		t.Fatalf("expected forged request path to be ignored, got %q", manager.startReq.PayloadJSON)
+	}
+	if strings.Contains(manager.startReq.PayloadJSON, `"type":"bdmv"`) {
+		t.Fatalf("expected payload JSON to keep source type iso, got %q", manager.startReq.PayloadJSON)
 	}
 }
 
@@ -323,14 +264,6 @@ func TestJobsHandlerCreateUsesCanonicalISOScanData(t *testing.T) {
 	if err := os.WriteFile(canonicalPath, []byte("iso"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	mountedRoot := filepath.Join(t.TempDir(), "iso_auto_mount", "movies-nightcrawler-iso")
-	playlistPath := filepath.Join(mountedRoot, "BDMV", "PLAYLIST", "00800.MPLS")
-	if err := os.MkdirAll(filepath.Dir(playlistPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(playlistPath, []byte("playlist"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	outputRoot := t.TempDir()
 	forgedPath := filepath.Join(t.TempDir(), "forged.iso")
 	scanner := stubSourceScanner{items: []media.SourceEntry{{
@@ -339,23 +272,12 @@ func TestJobsHandlerCreateUsesCanonicalISOScanData(t *testing.T) {
 		Path: canonicalPath,
 		Type: media.SourceISO,
 	}}}
-	isoManager := &stubISOJobManager{
-		ensureMountedFn: func(_ context.Context, sourceID, sourcePath string) (string, error) {
-			if sourceID != "movies-nightcrawler-iso" {
-				t.Fatalf("unexpected source id %q", sourceID)
-			}
-			if sourcePath != canonicalPath {
-				t.Fatalf("expected canonical source path %q, got %q", canonicalPath, sourcePath)
-			}
-			return mountedRoot, nil
-		},
-	}
 	manager := &stubTasksManager{
 		startFn: func(_ remux.StartRequest) (remux.Task, error) {
 			return remux.Task{ID: "task-123", Status: "running"}, nil
 		},
 	}
-	h := NewJobsHandler(manager, inputRoot, outputRoot, scanner, isoManager)
+	h := NewJobsHandler(manager, inputRoot, outputRoot, scanner)
 	reqBody := `{
 		"source":{"id":"movies-nightcrawler-iso","name":"Sneaky","path":"` + forgedPath + `","type":"iso"},
 		"bdinfo":{"playlistName":"00800.MPLS","rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"},
@@ -371,8 +293,8 @@ func TestJobsHandlerCreateUsesCanonicalISOScanData(t *testing.T) {
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
 	}
-	if !strings.Contains(manager.startReq.PayloadJSON, mountedRoot) {
-		t.Fatalf("expected mounted root in payload, got %q", manager.startReq.PayloadJSON)
+	if !strings.Contains(manager.startReq.PayloadJSON, canonicalPath) {
+		t.Fatalf("expected canonical ISO path in payload, got %q", manager.startReq.PayloadJSON)
 	}
 	if strings.Contains(manager.startReq.PayloadJSON, forgedPath) {
 		t.Fatalf("expected forged request path to be ignored, got %q", manager.startReq.PayloadJSON)
