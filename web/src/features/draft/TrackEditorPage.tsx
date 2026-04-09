@@ -4,7 +4,12 @@ import type { Draft, DraftTrack } from '../../api/types';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { getMessages, type Locale } from '../../i18n';
-import { moveTrackRow, setExclusiveDefault, toggleTrackSelected } from './trackTable';
+import {
+  applyRecommendedTrackSelection,
+  moveTrackRow,
+  setExclusiveDefault,
+  toggleTrackSelected,
+} from './trackTable';
 
 type TrackEditorPageProps = {
   locale?: Locale;
@@ -315,6 +320,16 @@ export function TrackEditorPage({
       <section className="editor-track-section editor-section-card">
         <div className="section-heading">
           <h3>{text.editor.audioHeading}</h3>
+          <div className="section-heading-actions">
+            <Button
+              variant="subtle"
+              className="section-heading-button"
+              aria-label={text.editor.recommendAudio}
+              onClick={() => updateAudio(applyRecommendedTrackSelection(draft.audio))}
+            >
+              {text.editor.recommendButton}
+            </Button>
+          </div>
         </div>
         {renderTrackTable('audio', draft.audio)}
       </section>
@@ -322,6 +337,18 @@ export function TrackEditorPage({
       <section className="editor-track-section editor-section-card">
         <div className="section-heading">
           <h3>{text.editor.subtitlesHeading}</h3>
+          {draft.subtitles.length > 0 ? (
+            <div className="section-heading-actions">
+              <Button
+                variant="subtle"
+                className="section-heading-button"
+                aria-label={text.editor.recommendSubtitles}
+                onClick={() => updateSubtitles(applyRecommendedTrackSelection(draft.subtitles))}
+              >
+                {text.editor.recommendButton}
+              </Button>
+            </div>
+          ) : null}
         </div>
         {draft.subtitles.length === 0 ? (
           <p className="muted-text">{text.editor.noSubtitles}</p>

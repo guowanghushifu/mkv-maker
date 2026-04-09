@@ -33,3 +33,34 @@ export function toggleTrackSelected(tracks: DraftTrack[], trackId: string): Draf
     };
   });
 }
+
+export function isChineseLanguageCode(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'chi' || normalized === 'zho' || normalized === 'zh' || normalized.startsWith('zh-');
+}
+
+export function applyRecommendedTrackSelection(tracks: DraftTrack[]): DraftTrack[] {
+  if (tracks.length === 0) {
+    return tracks;
+  }
+
+  const selectedIndexes = new Set<number>([0]);
+  tracks.forEach((track, index) => {
+    if (isChineseLanguageCode(track.language)) {
+      selectedIndexes.add(index);
+    }
+  });
+
+  const selectedDefaultIndex = tracks.findIndex((track, index) => selectedIndexes.has(index) && track.default);
+  const firstSelectedIndex = tracks.findIndex((_track, index) => selectedIndexes.has(index));
+  const defaultIndex = selectedDefaultIndex >= 0 ? selectedDefaultIndex : firstSelectedIndex;
+
+  return tracks.map((track, index) => {
+    const selected = selectedIndexes.has(index);
+    return {
+      ...track,
+      selected,
+      default: selected && index === defaultIndex,
+    };
+  });
+}

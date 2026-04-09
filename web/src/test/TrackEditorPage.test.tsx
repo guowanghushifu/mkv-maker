@@ -61,6 +61,56 @@ function createDraft() {
   };
 }
 
+function createRecommendationDraft() {
+  return {
+    ...createDraft(),
+    audio: [
+      {
+        id: 'A1',
+        sourceIndex: 0,
+        name: 'English Atmos',
+        language: 'eng',
+        codecLabel: 'TrueHD.7.1.Atmos',
+        selected: false,
+        default: false,
+      },
+      {
+        id: 'A2',
+        sourceIndex: 1,
+        name: 'Mandarin',
+        language: 'zho',
+        codecLabel: 'DTS-HD.MA.5.1',
+        selected: false,
+        default: false,
+      },
+      {
+        id: 'A3',
+        sourceIndex: 2,
+        name: 'French',
+        language: 'fra',
+        codecLabel: 'AC3.5.1',
+        selected: true,
+        default: true,
+      },
+      {
+        id: 'A4',
+        sourceIndex: 3,
+        name: 'Cantonese',
+        language: 'zh-Hans',
+        codecLabel: 'AAC.2.0',
+        selected: false,
+        default: false,
+      },
+    ],
+    subtitles: [
+      { id: 'S1', sourceIndex: 0, name: 'English PGS', language: 'eng', selected: false, default: false },
+      { id: 'S2', sourceIndex: 1, name: 'Chinese PGS', language: 'chi', selected: false, default: false },
+      { id: 'S3', sourceIndex: 2, name: 'French PGS', language: 'fra', selected: true, default: true },
+      { id: 'S4', sourceIndex: 3, name: 'Commentary', language: 'zh-cn', selected: false, default: false },
+    ],
+  };
+}
+
 describe('TrackEditorPage', () => {
   it('renders the editor inside workspace and table cards', () => {
     const { container } = render(<TrackEditorPage locale="en" draft={createDraft()} onChange={vi.fn()} />);
@@ -115,7 +165,7 @@ describe('TrackEditorPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: /track editor/i }).closest('.page-panel')).not.toBeNull();
-    expect(screen.getByLabelText(/title/i).closest('.editor-field-full')).not.toBeNull();
+    expect(screen.getByLabelText(/^title$/i).closest('.editor-field-full')).not.toBeNull();
     expect(screen.getByLabelText(/video track name/i).closest('.editor-field-full')).not.toBeNull();
     expect(screen.getByLabelText(/output filename/i).closest('.editor-overview-card-wide')).not.toBeNull();
     expect(screen.getByText(/video source attributes: hevc \/ 2160p \/ dv\.hdr/i).closest('.editor-overview-card')).not.toBeNull();
@@ -311,6 +361,44 @@ describe('TrackEditorPage', () => {
     fireEvent.change(screen.getByLabelText('Language English Atmos'), { target: { value: 'jpn' } });
 
     expect(onChange).toHaveBeenCalled();
+  });
+
+  it('resets audio selection from the recommendation button', () => {
+    const onChange = vi.fn();
+    render(<TrackEditorPage locale="zh" draft={createRecommendationDraft()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '猜你喜欢音频' }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        audio: [
+          expect.objectContaining({ id: 'A1', selected: true, default: true }),
+          expect.objectContaining({ id: 'A2', selected: true, default: false }),
+          expect.objectContaining({ id: 'A3', selected: false, default: false }),
+          expect.objectContaining({ id: 'A4', selected: true, default: false }),
+        ],
+      }),
+    );
+  });
+
+  it('resets subtitle selection from the recommendation button', () => {
+    const onChange = vi.fn();
+    render(<TrackEditorPage locale="zh" draft={createRecommendationDraft()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '猜你喜欢字幕' }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        subtitles: [
+          expect.objectContaining({ id: 'S1', selected: true, default: true }),
+          expect.objectContaining({ id: 'S2', selected: true, default: false }),
+          expect.objectContaining({ id: 'S3', selected: false, default: false }),
+          expect.objectContaining({ id: 'S4', selected: true, default: false }),
+        ],
+      }),
+    );
   });
 
   it('renders the bottom editor actions in a dedicated spaced container', () => {

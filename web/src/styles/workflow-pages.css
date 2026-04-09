@@ -684,6 +684,29 @@ textarea:focus {
   margin-bottom: 0.6rem;
 }
 
+.section-heading-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: auto;
+}
+
+.section-heading-button {
+  padding: 0.42rem 0.72rem;
+}
+
+@media (max-width: 560px) {
+  .section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .section-heading-actions {
+    width: 100%;
+  }
+}
+
 .ordered-track-list {
   margin: 0;
   padding-left: 1.25rem;
