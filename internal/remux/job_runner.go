@@ -59,6 +59,12 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 	if r == nil || r.runner == nil {
 		return "", false, errors.New("runner is not configured")
 	}
+	emitDiagnostic := func(format string, args ...any) {
+		if onOutput == nil {
+			return
+		}
+		onOutput(fmt.Sprintf(format, args...) + "\n")
+	}
 
 	draft, err := r.BuildExecutionDraft(req)
 	if err != nil {
@@ -68,6 +74,7 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 	executionDraft := withTemporaryOutputPath(draft)
 	tempPath := executionDraft.OutputPath
 	if err := removeTemporaryOutput(tempPath); err != nil {
+		emitDiagnostic("cleanup stale temporary output failed path=%s err=%v", tempPath, err)
 		return "", false, err
 	}
 
@@ -79,15 +86,56 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		return "", false, err
 	}
 
+	emitDiagnostic(
+		"mkvmerge stage start sourcePath=%s tempOutput=%s finalOutput=%s args=%d",
+		executionDraft.SourcePath,
+		tempPath,
+		draft.OutputPath,
+		len(executionArgs),
+	)
 	output, streamed, runErr := r.runCommand(ctx, executionDraft, executionArgs, onOutput)
 	if runErr != nil {
-		_ = removeTemporaryOutput(tempPath)
+		emitDiagnostic(
+			"mkvmerge stage failed tempOutput=%s state=%s err=%v",
+			tempPath,
+			describeFileState(tempPath),
+			runErr,
+		)
+		removeTemporaryOutputWithDiagnostics(tempPath, "mkvmerge error", emitDiagnostic)
 		return output, streamed, runErr
 	}
+	emitDiagnostic(
+		"mkvmerge stage completed tempOutput=%s state=%s streamed=%t",
+		tempPath,
+		describeFileState(tempPath),
+		streamed,
+	)
+	emitDiagnostic(
+		"finalize output start tempOutput=%s finalOutput=%s tempState=%s finalState=%s",
+		tempPath,
+		draft.OutputPath,
+		describeFileState(tempPath),
+		describeFileState(draft.OutputPath),
+	)
 	if err := r.finalizeOutput(tempPath, draft.OutputPath); err != nil {
-		_ = removeTemporaryOutput(tempPath)
+		emitDiagnostic(
+			"finalize output failed tempOutput=%s finalOutput=%s tempState=%s finalState=%s err=%v",
+			tempPath,
+			draft.OutputPath,
+			describeFileState(tempPath),
+			describeFileState(draft.OutputPath),
+			err,
+		)
+		removeTemporaryOutputWithDiagnostics(tempPath, "finalize error", emitDiagnostic)
 		return output, streamed, err
 	}
+	emitDiagnostic(
+		"finalize output completed tempOutput=%s finalOutput=%s tempState=%s finalState=%s",
+		tempPath,
+		draft.OutputPath,
+		describeFileState(tempPath),
+		describeFileState(draft.OutputPath),
+	)
 	return output, streamed, nil
 }
 
@@ -129,7 +177,7 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 		if onOutput == nil {
 			return
 		}
-		onOutput(fmt.Sprintf(format, args...))
+		onOutput(fmt.Sprintf(format, args...) + "\n")
 	}
 	cleanup := func() {
 		emitDiagnostic(
@@ -454,6 +502,48 @@ func describeDirEntries(path string) string {
 		items = append(items, entry.Name()+suffix)
 	}
 	return "[" + strings.Join(items, ", ") + "]"
+}
+
+func describeFileState(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "empty_path"
+	}
+	info, err := os.Stat(trimmed)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "missing"
+		}
+		return fmt.Sprintf("stat_error:%v", err)
+	}
+	if info.IsDir() {
+		return fmt.Sprintf("dir(size=%d)", info.Size())
+	}
+	return fmt.Sprintf("file(size=%d)", info.Size())
+}
+
+func removeTemporaryOutputWithDiagnostics(path, reason string, emitDiagnostic func(format string, args ...any)) {
+	if emitDiagnostic != nil {
+		emitDiagnostic(
+			"cleanup temporary output after %s path=%s stateBefore=%s",
+			reason,
+			path,
+			describeFileState(path),
+		)
+	}
+	if err := removeTemporaryOutput(path); err != nil {
+		if emitDiagnostic != nil {
+			emitDiagnostic("cleanup temporary output failed path=%s err=%v", path, err)
+		}
+		return
+	}
+	if emitDiagnostic != nil {
+		emitDiagnostic(
+			"cleanup temporary output finished path=%s stateAfter=%s",
+			path,
+			describeFileState(path),
+		)
+	}
 }
 
 func makeMKVSourcePath(draft Draft) string {

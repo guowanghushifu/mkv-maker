@@ -484,6 +484,109 @@ func TestJobRunnerExecuteRemovesTemporaryOutputWhenFinalizeRenameFails(t *testin
 	}
 }
 
+func TestJobRunnerExecuteLogsSecondPassDiagnosticsOnSuccess(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	tempPath := finalPath + ".tmp"
+
+	runner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
+			if err := os.WriteFile(draft.OutputPath, []byte("muxed"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			if onOutput != nil {
+				onOutput("Progress: 100%")
+			}
+			return "Progress: 100%", nil
+		},
+	})
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", finalPath),
+	}
+
+	var taskLog bytes.Buffer
+	_, _, err := runner.Execute(context.Background(), req, func(chunk string) {
+		taskLog.WriteString(chunk)
+		taskLog.WriteString("\n")
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	logs := taskLog.String()
+	if !strings.Contains(logs, "mkvmerge stage start") {
+		t.Fatalf("expected logs to include mkvmerge start diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "mkvmerge stage completed") {
+		t.Fatalf("expected logs to include mkvmerge completion diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "finalize output start") {
+		t.Fatalf("expected logs to include finalize start diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "finalize output completed") {
+		t.Fatalf("expected logs to include finalize completion diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, tempPath) || !strings.Contains(logs, finalPath) {
+		t.Fatalf("expected logs to mention temp and final output paths, got %q", logs)
+	}
+}
+
+func TestJobRunnerExecuteLogsSecondPassDiagnosticsOnFailure(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	tempPath := finalPath + ".tmp"
+
+	runner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
+			if err := os.WriteFile(draft.OutputPath, []byte("partial"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			return "", errors.New("runner exploded")
+		},
+	})
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON:  validIntermediatePayloadJSON("Disc", "/tmp/intermediate.mkv", "00801.MPLS", finalPath),
+	}
+
+	var taskLog bytes.Buffer
+	_, _, err := runner.Execute(context.Background(), req, func(chunk string) {
+		taskLog.WriteString(chunk)
+		taskLog.WriteString("\n")
+	})
+	if err == nil || !strings.Contains(err.Error(), "runner exploded") {
+		t.Fatalf("expected runner error, got %v", err)
+	}
+
+	logs := taskLog.String()
+	if !strings.Contains(logs, "mkvmerge stage start") {
+		t.Fatalf("expected logs to include mkvmerge start diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "mkvmerge stage failed") {
+		t.Fatalf("expected logs to include mkvmerge failure diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "cleanup temporary output after mkvmerge error") {
+		t.Fatalf("expected logs to include temp output cleanup diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "cleanup temporary output finished") {
+		t.Fatalf("expected logs to include temp output cleanup completion, got %q", logs)
+	}
+	if !strings.Contains(logs, tempPath) {
+		t.Fatalf("expected logs to mention temp output path, got %q", logs)
+	}
+}
+
 func TestClearDirectoryContentsIfPresentPreservesRootDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	childFile := filepath.Join(tempDir, "stale.mkv")
