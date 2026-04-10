@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net/url"
 	"net/http"
 	"os"
 	"os/exec"
@@ -146,12 +147,13 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing source id", http.StatusBadRequest)
 		return
 	}
+	normalizedPathSourceID := normalizeSourceID(pathSourceID)
 
 	var req resolveSourceRequest
 	if !decodeJSONBodyLimited(w, r, resolveSourceBodyLimit, &req) {
 		return
 	}
-	if strings.TrimSpace(req.SourceID) != "" && req.SourceID != pathSourceID {
+	if normalizedBodySourceID := normalizeSourceID(req.SourceID); normalizedBodySourceID != "" && normalizedBodySourceID != normalizedPathSourceID {
 		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "source id mismatch bodySourceID=%s", req.SourceID)
 		http.Error(w, "source id mismatch", http.StatusBadRequest)
 		return
@@ -163,7 +165,7 @@ func (h *SourcesHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		h.writeScanError(w, err)
 		return
 	}
-	source, ok := findSourceByID(sources, pathSourceID)
+	source, ok := findSourceByID(sources, normalizedPathSourceID)
 	if !ok {
 		logResolveFailure(pathSourceID, req.BDInfo.PlaylistName, "source not found")
 		http.Error(w, "source not found", http.StatusNotFound)
@@ -342,12 +344,25 @@ func (h *SourcesHandler) writeScanError(w http.ResponseWriter, err error) {
 }
 
 func findSourceByID(sources []media.SourceEntry, id string) (media.SourceEntry, bool) {
+	normalizedID := normalizeSourceID(id)
 	for _, source := range sources {
-		if source.ID == id {
+		if normalizeSourceID(source.ID) == normalizedID {
 			return source, true
 		}
 	}
 	return media.SourceEntry{}, false
+}
+
+func normalizeSourceID(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	decoded, err := url.PathUnescape(trimmed)
+	if err != nil {
+		return trimmed
+	}
+	return decoded
 }
 
 func findPlaylistFilePath(sourcePath, playlistName string) (string, error) {

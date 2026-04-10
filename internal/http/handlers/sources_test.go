@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,6 +154,45 @@ func TestSourcesHandlerResolveInspectsISOPathDirectly(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/sources/movies-nightcrawler-iso/resolve", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req = withRouteParam(req, "id", "movies-nightcrawler-iso")
+	w := httptest.NewRecorder()
+	h.Resolve(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+	if inspectedPlaylistRef != "00800.MPLS" {
+		t.Fatalf("expected ISO resolve to inspect playlist name directly, got %q", inspectedPlaylistRef)
+	}
+}
+
+func TestSourcesHandlerResolveAllowsDecodedRouteParamForEncodedRootISOID(t *testing.T) {
+	inputRoot := t.TempDir()
+	sourceName := "029.星际穿越.SGNB第29部UHD原盘DIY  双次世代国语 AC3 国配简繁双语特效四字幕.Interstellar.2014.ULTRAHD.Blu-ray.2160p.HEVC.DTS-HD.MA.5.1-sGnB@CHDBits.iso"
+	sourceID := url.PathEscape(sourceName)
+	isoPath := filepath.Join(inputRoot, sourceName)
+	if err := os.WriteFile(isoPath, []byte("iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var inspectedPlaylistRef string
+
+	h := NewSourcesHandler(inputRoot, "/remux", stubSourceScanner{items: []media.SourceEntry{{
+		ID: sourceID, Name: strings.TrimSuffix(sourceName, filepath.Ext(sourceName)), Path: isoPath, Type: media.SourceISO,
+	}}}, stubPlaylistInspector{
+		result: MakeMKVInspection{},
+		path:   &inspectedPlaylistRef,
+	})
+	reqBody := `{
+		"sourceId":"` + sourceID + `",
+		"bdinfo":{
+			"playlistName":"00800.MPLS",
+			"discTitle":"Interstellar",
+			"audioLabels":["English DTS-HD MA"],
+			"subtitleLabels":["Chinese PGS"],
+			"rawText":"PLAYLIST REPORT:\nName: 00800.MPLS"
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sources/"+sourceID+"/resolve", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = withRouteParam(req, "id", sourceName)
 	w := httptest.NewRecorder()
 	h.Resolve(w, req)
 	if w.Code != http.StatusOK {
