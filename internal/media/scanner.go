@@ -34,55 +34,7 @@ func NewScanner() *Scanner {
 
 func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 	var out []SourceEntry
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			if !strings.EqualFold(filepath.Ext(path), ".iso") {
-				return nil
-			}
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			out = append(out, SourceEntry{
-				ID:         stableISOID(root, path),
-				Name:       strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
-				Path:       path,
-				Type:       SourceISO,
-				Size:       info.Size(),
-				ModifiedAt: info.ModTime(),
-			})
-			return nil
-		}
-		if path == root {
-			return nil
-		}
-		if !isBDMVRoot(path) {
-			return nil
-		}
-
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		size, err := directorySize(path)
-		if err != nil {
-			return err
-		}
-
-		out = append(out, SourceEntry{
-			ID:         filepath.Base(path),
-			Name:       filepath.Base(path),
-			Path:       path,
-			Type:       SourceBDMV,
-			Size:       size,
-			ModifiedAt: info.ModTime(),
-		})
-
-		return filepath.SkipDir
-	})
+	err := s.scanDir(root, root, &out)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +51,61 @@ func (s *Scanner) Scan(root string) ([]SourceEntry, error) {
 	})
 
 	return out, nil
+}
+
+func (s *Scanner) scanDir(root, dir string, out *[]SourceEntry) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			if isBDMVRoot(path) {
+				info, err := entry.Info()
+				if err != nil {
+					return err
+				}
+				size, err := directorySize(path)
+				if err != nil {
+					return err
+				}
+
+				*out = append(*out, SourceEntry{
+					ID:         filepath.Base(path),
+					Name:       filepath.Base(path),
+					Path:       path,
+					Type:       SourceBDMV,
+					Size:       size,
+					ModifiedAt: info.ModTime(),
+				})
+				continue
+			}
+			if err := s.scanDir(root, path, out); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if !strings.EqualFold(filepath.Ext(path), ".iso") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		*out = append(*out, SourceEntry{
+			ID:         stableISOID(root, path),
+			Name:       strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+			Path:       path,
+			Type:       SourceISO,
+			Size:       info.Size(),
+			ModifiedAt: info.ModTime(),
+		})
+	}
+
+	return nil
 }
 
 func stableISOID(root, path string) string {

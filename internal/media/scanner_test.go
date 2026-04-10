@@ -191,3 +191,51 @@ func TestScannerGivesDistinctIDsToISOFilesWithSameBasename(t *testing.T) {
 		t.Fatalf("missing expected ISO IDs, got %+v", items)
 	}
 }
+
+func TestScannerFindsRootAndNestedISOFilesInSameInputTree(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "bd_input")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	rootISO := filepath.Join(root, "Batman.Begins.2005.V4.2160p.UHD-Athena@HDSky.iso")
+	nestedISO := filepath.Join(
+		root,
+		"蝙蝠侠：侠影之谜.Batman.Begins.2005.V4.2160p.UHD.Blu-ray.HDR10.HEVC.DTS-HD.MA5.1-Athena@HDSky",
+		"Batman.Begins.2005.V4.2160p.UHD-Athena@HDSky.iso",
+	)
+	if err := os.WriteFile(rootISO, []byte("root iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(nestedISO), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(nestedISO, []byte("nested iso"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner()
+	items, err := scanner.Scan(root)
+	if err != nil {
+		t.Fatalf("Scan returned error: %v", err)
+	}
+
+	found := map[string]bool{}
+	for _, item := range items {
+		if item.Type != SourceISO {
+			continue
+		}
+		found[item.Path] = true
+	}
+
+	if len(found) != 2 {
+		t.Fatalf("expected 2 ISO items, got %+v", items)
+	}
+	if !found[rootISO] {
+		t.Fatalf("expected root-level ISO path %q in scan results, got %+v", rootISO, items)
+	}
+	if !found[nestedISO] {
+		t.Fatalf("expected nested ISO path %q in scan results, got %+v", nestedISO, items)
+	}
+}
