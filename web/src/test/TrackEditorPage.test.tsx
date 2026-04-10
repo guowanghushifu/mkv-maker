@@ -363,7 +363,7 @@ describe('TrackEditorPage', () => {
     expect(onChange).toHaveBeenCalled();
   });
 
-  it('resets audio selection from the recommendation button', () => {
+  it('resets audio selection from the recommendation button and moves selected tracks to the front', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage locale="zh" draft={createRecommendationDraft()} onChange={onChange} />);
 
@@ -375,14 +375,14 @@ describe('TrackEditorPage', () => {
         audio: [
           expect.objectContaining({ id: 'A1', selected: true, default: true }),
           expect.objectContaining({ id: 'A2', selected: true, default: false }),
-          expect.objectContaining({ id: 'A3', selected: false, default: false }),
           expect.objectContaining({ id: 'A4', selected: true, default: false }),
+          expect.objectContaining({ id: 'A3', selected: false, default: false }),
         ],
       }),
     );
   });
 
-  it('resets subtitle selection from the recommendation button', () => {
+  it('resets subtitle selection from the recommendation button and moves selected tracks to the front', () => {
     const onChange = vi.fn();
     render(<TrackEditorPage locale="zh" draft={createRecommendationDraft()} onChange={onChange} />);
 
@@ -394,8 +394,8 @@ describe('TrackEditorPage', () => {
         subtitles: [
           expect.objectContaining({ id: 'S1', selected: true, default: true }),
           expect.objectContaining({ id: 'S2', selected: true, default: false }),
-          expect.objectContaining({ id: 'S3', selected: false, default: false }),
           expect.objectContaining({ id: 'S4', selected: true, default: false }),
+          expect.objectContaining({ id: 'S3', selected: false, default: false }),
         ],
       }),
     );

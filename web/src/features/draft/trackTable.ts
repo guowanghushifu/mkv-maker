@@ -55,7 +55,7 @@ export function applyRecommendedTrackSelection(tracks: DraftTrack[]): DraftTrack
   const firstSelectedIndex = tracks.findIndex((_track, index) => selectedIndexes.has(index));
   const defaultIndex = selectedDefaultIndex >= 0 ? selectedDefaultIndex : firstSelectedIndex;
 
-  return tracks.map((track, index) => {
+  const recommended = tracks.map((track, index) => {
     const selected = selectedIndexes.has(index);
     return {
       ...track,
@@ -63,4 +63,9 @@ export function applyRecommendedTrackSelection(tracks: DraftTrack[]): DraftTrack
       default: selected && index === defaultIndex,
     };
   });
+
+  return [
+    ...recommended.filter((track) => track.selected),
+    ...recommended.filter((track) => !track.selected),
+  ];
 }

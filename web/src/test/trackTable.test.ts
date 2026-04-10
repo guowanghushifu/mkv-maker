@@ -71,11 +71,12 @@ describe('trackTable helpers', () => {
       { id: 'A4', sourceIndex: 3, name: 'Cantonese', language: 'zh-Hant', selected: false, default: false },
     ]);
 
+    expect(next.map((track) => track.id)).toEqual(['A1', 'A2', 'A4', 'A3']);
     expect(next).toEqual([
       expect.objectContaining({ id: 'A1', selected: true, default: true }),
       expect.objectContaining({ id: 'A2', selected: true, default: false }),
-      expect.objectContaining({ id: 'A3', selected: false, default: false }),
       expect.objectContaining({ id: 'A4', selected: true, default: false }),
+      expect.objectContaining({ id: 'A3', selected: false, default: false }),
     ]);
   });
 
@@ -84,11 +85,14 @@ describe('trackTable helpers', () => {
       { id: 'S1', sourceIndex: 0, name: 'English', language: 'eng', selected: true, default: false },
       { id: 'S2', sourceIndex: 1, name: 'Chinese', language: 'chi', selected: true, default: true },
       { id: 'S3', sourceIndex: 2, name: 'French', language: 'fra', selected: true, default: false },
+      { id: 'S4', sourceIndex: 3, name: 'Commentary', language: 'zh-cn', selected: false, default: false },
     ]);
 
+    expect(next.map((track) => track.id)).toEqual(['S1', 'S2', 'S4', 'S3']);
     expect(next).toEqual([
       expect.objectContaining({ id: 'S1', selected: true, default: false }),
       expect.objectContaining({ id: 'S2', selected: true, default: true }),
+      expect.objectContaining({ id: 'S4', selected: true, default: false }),
       expect.objectContaining({ id: 'S3', selected: false, default: false }),
     ]);
   });
