@@ -79,8 +79,11 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 	}
 
 	executionDraft, executionArgs, cleanupIntermediate, err := r.prepareExecutionDraft(ctx, executionDraft, onOutput)
+	cleanupIntermediateReason := "error"
 	if cleanupIntermediate != nil {
-		defer cleanupIntermediate()
+		defer func() {
+			cleanupIntermediate(cleanupIntermediateReason)
+		}()
 	}
 	if err != nil {
 		return "", false, err
@@ -136,6 +139,7 @@ func (r *JobRunner) Execute(ctx context.Context, req StartRequest, onOutput func
 		describeFileState(tempPath),
 		describeFileState(draft.OutputPath),
 	)
+	cleanupIntermediateReason = "success"
 	return output, streamed, nil
 }
 
@@ -157,7 +161,7 @@ func (r *JobRunner) runCommand(ctx context.Context, draft Draft, args []string, 
 	return output, streamed.Load(), runErr
 }
 
-func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOutput func(string)) (Draft, []string, func(), error) {
+func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOutput func(string)) (Draft, []string, func(string), error) {
 	if strings.EqualFold(filepath.Ext(draft.SourcePath), ".mkv") {
 		args, err := r.defaultBuildMKVMergeArgs(ctx, draft)
 		return draft, args, nil, err
@@ -179,9 +183,14 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 		}
 		onOutput(fmt.Sprintf(format, args...) + "\n")
 	}
-	cleanup := func() {
+	cleanup := func(reason string) {
+		label := "after error"
+		if strings.EqualFold(strings.TrimSpace(reason), "success") {
+			label = "after success"
+		}
 		emitDiagnostic(
-			"cleanup intermediate artifacts after error tempDir=%s entriesBefore=%s",
+			"cleanup intermediate artifacts %s tempDir=%s entriesBefore=%s",
+			label,
 			workingDir,
 			describeDirEntries(workingDir),
 		)

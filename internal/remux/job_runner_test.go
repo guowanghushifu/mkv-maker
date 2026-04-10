@@ -937,6 +937,88 @@ func TestJobRunnerExecuteLogsIntermediateMKVDiagnosticsAndCleanupOnMissingFile(t
 	}
 }
 
+func TestJobRunnerExecuteLogsIntermediateCleanupAfterSuccessForTwoStageRemux(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	intermediateDir := filepath.Join(outputRoot, "makemkv")
+	intermediatePath := filepath.Join(intermediateDir, "title_t00.mkv")
+
+	jobRunner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			_ = args
+			if err := os.WriteFile(draft.OutputPath, []byte("muxed"), 0o644); err != nil {
+				t.Fatalf("WriteFile failed: %v", err)
+			}
+			return "", nil
+		},
+	})
+	jobRunner.tempDir = func() string {
+		return intermediateDir
+	}
+	jobRunner.runMakeMKVInfo = func(_ context.Context, sourcePath string) ([]byte, error) {
+		return []byte(`TINFO:4,16,0,"00801"`), nil
+	}
+	jobRunner.runMakeMKVMKV = func(_ context.Context, sourcePath string, titleID int, tempDir string, onOutput func(string)) error {
+		if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll failed: %v", err)
+		}
+		if err := os.WriteFile(intermediatePath, []byte("intermediate"), 0o644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		return nil
+	}
+	jobRunner.inspectIntermediateTrackJSON = func(_ context.Context, path string) ([]byte, error) {
+		return []byte(`{
+			"tracks":[
+				{"id":0,"type":"video","properties":{"number":1}},
+				{"id":3,"type":"audio","properties":{"number":1}},
+				{"id":7,"type":"subtitles","properties":{"number":1}}
+			]
+		}`), nil
+	}
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Disc","path":"/bd_input/Disc/BDMV","type":"bdmv"},
+			"bdinfo":{"playlistName":"00801.MPLS"},
+			"draft":{
+				"playlistName":"00801.MPLS",
+				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
+				"audio":[{"id":"A1","name":"English","language":"eng","selected":true,"sourceIndex":0}],
+				"subtitles":[{"id":"S1","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
+				"makemkv":{
+					"playlistName":"00801.MPLS",
+					"titleId":4,
+					"audio":[{"id":"A1","sourceIndex":0,"name":"English","language":"eng","selected":true}],
+					"subtitles":[{"id":"S1","sourceIndex":0,"name":"English PGS","language":"eng","selected":true}]
+				}
+			},
+			"outputPath":"` + finalPath + `"
+		}`,
+	}
+
+	var taskLog bytes.Buffer
+	_, _, err := jobRunner.Execute(context.Background(), req, func(chunk string) {
+		taskLog.WriteString(chunk)
+		taskLog.WriteString("\n")
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	logs := taskLog.String()
+	if !strings.Contains(logs, "cleanup intermediate artifacts after success") {
+		t.Fatalf("expected logs to include cleanup after success, got %q", logs)
+	}
+	if strings.Contains(logs, "cleanup intermediate artifacts after error") {
+		t.Fatalf("did not expect cleanup after error on success path, got %q", logs)
+	}
+}
+
 func TestDefaultRunMakeMKVCommandsUseAbsoluteBinaryPath(t *testing.T) {
 	jobRunner := NewJobRunner(&stubRunner{})
 	root := t.TempDir()
