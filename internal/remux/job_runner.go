@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -124,10 +125,29 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 	if workingDir == "" {
 		workingDir = defaultMakeMKVTempDir()
 	}
-	cleanup := func() {
-		if r.cleanTempDir != nil {
-			_ = r.cleanTempDir(workingDir)
+	emitDiagnostic := func(format string, args ...any) {
+		if onOutput == nil {
+			return
 		}
+		onOutput(fmt.Sprintf(format, args...))
+	}
+	cleanup := func() {
+		emitDiagnostic(
+			"cleanup intermediate artifacts after error tempDir=%s entriesBefore=%s",
+			workingDir,
+			describeDirEntries(workingDir),
+		)
+		if r.cleanTempDir != nil {
+			if err := r.cleanTempDir(workingDir); err != nil {
+				emitDiagnostic("cleanup intermediate artifacts failed tempDir=%s err=%v", workingDir, err)
+				return
+			}
+		}
+		emitDiagnostic(
+			"cleanup intermediate artifacts finished tempDir=%s entriesAfter=%s",
+			workingDir,
+			describeDirEntries(workingDir),
+		)
 	}
 	if r.cleanTempDir != nil {
 		if err := r.cleanTempDir(workingDir); err != nil {
@@ -156,17 +176,36 @@ func (r *JobRunner) prepareExecutionDraft(ctx context.Context, draft Draft, onOu
 			return Draft{}, nil, cleanup, err
 		}
 	}
+	emitDiagnostic(
+		"makemkv stage start sourcePath=%s makeMKVSource=%s playlist=%s titleID=%d tempDir=%s",
+		makeMKVSourcePath(draft),
+		makeMKVSourceArg(makeMKVSourcePath(draft)),
+		playlistName,
+		titleID,
+		workingDir,
+	)
 	if r.runMakeMKVMKV == nil {
 		return Draft{}, nil, cleanup, errors.New("makemkv mkv runner is not configured")
 	}
 	if err := r.runMakeMKVMKV(ctx, makeMKVSourcePath(draft), titleID, workingDir, onOutput); err != nil {
 		return Draft{}, nil, cleanup, err
 	}
+	emitDiagnostic(
+		"makemkv stage completed tempDir=%s entries=%s",
+		workingDir,
+		describeDirEntries(workingDir),
+	)
 	if r.locateIntermediateMKV == nil {
 		return Draft{}, nil, cleanup, errors.New("intermediate mkv locator is not configured")
 	}
 	intermediatePath, err := r.locateIntermediateMKV(workingDir)
 	if err != nil {
+		emitDiagnostic(
+			"intermediate mkv locate failed tempDir=%s entries=%s err=%v",
+			workingDir,
+			describeDirEntries(workingDir),
+			err,
+		)
 		return Draft{}, nil, cleanup, err
 	}
 	if r.inspectIntermediateTrackJSON == nil {
@@ -396,6 +435,25 @@ func defaultLocateIntermediateMKV(tempDir string) (string, error) {
 	default:
 		return "", errors.New("multiple intermediate mkv files found")
 	}
+}
+
+func describeDirEntries(path string) string {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return fmt.Sprintf("read_error:%v", err)
+	}
+	if len(entries) == 0 {
+		return "[]"
+	}
+	items := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		suffix := ""
+		if entry.IsDir() {
+			suffix = "/"
+		}
+		items = append(items, entry.Name()+suffix)
+	}
+	return "[" + strings.Join(items, ", ") + "]"
 }
 
 func makeMKVSourcePath(draft Draft) string {

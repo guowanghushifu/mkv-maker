@@ -1,6 +1,7 @@
 package remux
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -750,6 +751,86 @@ func TestJobRunnerExecuteRunsMakeMKVTwoStageFlowForBDMVSource(t *testing.T) {
 	}
 	if _, err := os.Stat(finalPath); err != nil {
 		t.Fatalf("expected final output to exist: %v", err)
+	}
+}
+
+func TestJobRunnerExecuteLogsIntermediateMKVDiagnosticsAndCleanupOnMissingFile(t *testing.T) {
+	outputRoot := t.TempDir()
+	finalPath := filepath.Join(outputRoot, "Disc.mkv")
+	intermediateDir := filepath.Join(outputRoot, "makemkv")
+	strayFile := filepath.Join(intermediateDir, "makemkv.log")
+
+	jobRunner := NewJobRunner(fileWritingRunner{
+		run: func(_ context.Context, draft Draft, args []string, onOutput func(string)) (string, error) {
+			t.Fatalf("expected second-pass mkvmerge not to run, got draft=%+v args=%v", draft, args)
+			return "", nil
+		},
+	})
+	jobRunner.tempDir = func() string {
+		return intermediateDir
+	}
+	jobRunner.runMakeMKVInfo = func(_ context.Context, sourcePath string) ([]byte, error) {
+		return []byte(`TINFO:4,16,0,"00801"`), nil
+	}
+	jobRunner.runMakeMKVMKV = func(_ context.Context, sourcePath string, titleID int, tempDir string, onOutput func(string)) error {
+		if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll failed: %v", err)
+		}
+		if err := os.WriteFile(strayFile, []byte("no mkv"), 0o644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		if onOutput != nil {
+			onOutput("Current action: Saving to MKV file")
+			onOutput("Total progress - 100%")
+		}
+		return nil
+	}
+
+	req := StartRequest{
+		SourceName:   "Disc",
+		OutputName:   "Disc.mkv",
+		OutputPath:   finalPath,
+		PlaylistName: "00801.MPLS",
+		PayloadJSON: `{
+			"source":{"name":"Disc","path":"/bd_input/Disc/BDMV","type":"bdmv"},
+			"bdinfo":{"playlistName":"00801.MPLS"},
+			"draft":{
+				"playlistName":"00801.MPLS",
+				"video":{"name":"Main Video","codec":"HEVC","resolution":"2160p"},
+				"audio":[{"id":"A1","name":"English","language":"eng","selected":true,"sourceIndex":0}],
+				"subtitles":[{"id":"S1","name":"English PGS","language":"eng","selected":true,"sourceIndex":0}],
+				"makemkv":{
+					"playlistName":"00801.MPLS",
+					"titleId":4,
+					"audio":[{"id":"A1","sourceIndex":0,"name":"English","language":"eng","selected":true}],
+					"subtitles":[{"id":"S1","sourceIndex":0,"name":"English PGS","language":"eng","selected":true}]
+				}
+			},
+			"outputPath":"` + finalPath + `"
+		}`,
+	}
+
+	var taskLog bytes.Buffer
+	_, _, err := jobRunner.Execute(context.Background(), req, func(chunk string) {
+		taskLog.WriteString(chunk)
+		taskLog.WriteString("\n")
+	})
+	if err == nil || !strings.Contains(err.Error(), "intermediate mkv not found") {
+		t.Fatalf("expected intermediate mkv not found error, got %v", err)
+	}
+
+	logs := taskLog.String()
+	if !strings.Contains(logs, "makemkv stage completed") {
+		t.Fatalf("expected logs to include makemkv completion diagnostics, got %q", logs)
+	}
+	if !strings.Contains(logs, "makemkv.log") {
+		t.Fatalf("expected logs to include temp dir contents, got %q", logs)
+	}
+	if !strings.Contains(logs, "cleanup intermediate artifacts after error") {
+		t.Fatalf("expected logs to include cleanup on error, got %q", logs)
+	}
+	if !strings.Contains(logs, intermediateDir) {
+		t.Fatalf("expected logs to include working dir path, got %q", logs)
 	}
 }
 
