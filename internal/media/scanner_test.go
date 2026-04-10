@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -237,5 +238,42 @@ func TestScannerFindsRootAndNestedISOFilesInSameInputTree(t *testing.T) {
 	}
 	if !found[nestedISO] {
 		t.Fatalf("expected nested ISO path %q in scan results, got %+v", nestedISO, items)
+	}
+}
+
+func TestScannerFindsMultipleRootLevelISOFiles(t *testing.T) {
+	root := t.TempDir()
+	isoPaths := []string{
+		filepath.Join(root, "SGNB170.iso"),
+		filepath.Join(root, "SGNB171.iso"),
+		filepath.Join(root, "SGNB172.iso"),
+	}
+	for _, path := range isoPaths {
+		if err := os.WriteFile(path, []byte("iso"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	scanner := NewScanner()
+	items, err := scanner.Scan(root)
+	if err != nil {
+		t.Fatalf("Scan returned error: %v", err)
+	}
+	if len(items) != len(isoPaths) {
+		t.Fatalf("expected %d ISO items, got %+v", len(isoPaths), items)
+	}
+
+	found := make(map[string]string, len(items))
+	for _, item := range items {
+		if item.Type != SourceISO {
+			t.Fatalf("expected ISO source, got %+v", item)
+		}
+		found[item.Path] = item.Name
+	}
+	for _, path := range isoPaths {
+		name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		if found[path] != name {
+			t.Fatalf("expected ISO path %q to map to name %q, got %+v", path, name, items)
+		}
 	}
 }
