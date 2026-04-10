@@ -20,8 +20,8 @@ func TestNewHTTPServerSetsHardenedTimeouts(t *testing.T) {
 	if srv.ReadTimeout != 15*time.Second {
 		t.Fatalf("expected ReadTimeout 15s, got %v", srv.ReadTimeout)
 	}
-	if srv.WriteTimeout != 30*time.Second {
-		t.Fatalf("expected WriteTimeout 30s, got %v", srv.WriteTimeout)
+	if srv.WriteTimeout != 60*time.Second {
+		t.Fatalf("expected WriteTimeout 60s, got %v", srv.WriteTimeout)
 	}
 	if srv.IdleTimeout != 60*time.Second {
 		t.Fatalf("expected IdleTimeout 60s, got %v", srv.IdleTimeout)
