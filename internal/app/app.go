@@ -53,11 +53,12 @@ func New(cfg config.Config) (*App, error) {
 		cfg.InputDir,
 		cfg.OutputDir,
 		scanner,
-		handlers.MakeMKVPlaylistInspector{},
+		handlers.MakeMKVPlaylistInspector{ExpireDate: cfg.MakeMKVExpireDate},
 	)
 	bdinfoHandler := handlers.NewBDInfoHandler()
 	draftsHandler := handlers.NewDraftsHandler()
 	remuxManager := remux.NewManagerWithTempDir(nil, cfg.RemuxTempDir)
+	remuxManager.SetMakeMKVExpireDate(cfg.MakeMKVExpireDate)
 	jobsHandler := handlers.NewJobsHandler(remuxManager, cfg.InputDir, cfg.OutputDir, scanner)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{

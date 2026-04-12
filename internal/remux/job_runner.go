@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	makemkv "github.com/guowanghushifu/mkv-maker/internal/media/makemkv"
 )
 
 const missingMakeMKVTitleID = -1
@@ -33,6 +35,7 @@ type JobRunner struct {
 	locateIntermediateMKV        func(tempDir string) (string, error)
 	onCommandPreview             func(string)
 	buildMKVMergeArgs            func(ctx context.Context, draft Draft) ([]string, error)
+	makeMKVDateOverride          makemkv.CommandDateOverride
 }
 
 var makemkvconBinaryPath = "/opt/makemkv/bin/makemkvcon"
@@ -47,6 +50,7 @@ func NewJobRunner(runner CommandRunner) *JobRunner {
 		tempDir:      defaultMakeMKVTempDir,
 		cleanTempDir: clearDirectoryContentsIfPresent,
 	}
+	jr.makeMKVDateOverride = makemkv.NewCommandDateOverride(nil)
 	jr.inspectIntermediateTrackJSON = jr.defaultInspectIntermediateTrackJSON
 	jr.runMakeMKVInfo = jr.defaultRunMakeMKVInfo
 	jr.runMakeMKVMKV = jr.defaultRunMakeMKVMKV
@@ -312,53 +316,58 @@ func (r *JobRunner) defaultInspectIntermediateTrackJSON(ctx context.Context, pat
 }
 
 func (r *JobRunner) defaultRunMakeMKVInfo(ctx context.Context, sourcePath string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, makemkvconBinaryPath, "info", makeMKVSourceArg(sourcePath), "--robot")
-	cmd.Env = append(os.Environ(), "HOME=/config")
-	return cmd.Output()
+	return makemkv.RunWithCommandDateOverride(r.makeMKVDateOverride, ctx, func(runCtx context.Context) ([]byte, error) {
+		cmd := exec.CommandContext(runCtx, makemkvconBinaryPath, "info", makeMKVSourceArg(sourcePath), "--robot")
+		cmd.Env = append(os.Environ(), "HOME=/config")
+		return cmd.Output()
+	})
 }
 
 func (r *JobRunner) defaultRunMakeMKVMKV(ctx context.Context, sourcePath string, titleID int, tempDir string, onOutput func(string)) error {
-	cmd := exec.CommandContext(
-		ctx,
-		makemkvconBinaryPath,
-		"--messages=-null",
-		"--progress=-stdout",
-		"mkv",
-		makeMKVSourceArg(sourcePath),
-		strconv.Itoa(titleID),
-		tempDir,
-		"--profile=/config/nocore.mmcp.xml",
-	)
-	cmd.Env = append(os.Environ(), "HOME=/config")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	forward := func(chunk string) {
-		if onOutput != nil {
-			onOutput(chunk)
+	_, err := makemkv.RunWithCommandDateOverride(r.makeMKVDateOverride, ctx, func(runCtx context.Context) (struct{}, error) {
+		cmd := exec.CommandContext(
+			runCtx,
+			makemkvconBinaryPath,
+			"--messages=-null",
+			"--progress=-stdout",
+			"mkv",
+			makeMKVSourceArg(sourcePath),
+			strconv.Itoa(titleID),
+			tempDir,
+			"--profile=/config/nocore.mmcp.xml",
+		)
+		cmd.Env = append(os.Environ(), "HOME=/config")
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return struct{}{}, err
 		}
-	}
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		streamOutput(stdout, forward)
-	}()
-	go func() {
-		defer wg.Done()
-		streamOutput(stderr, forward)
-	}()
-	waitErr := cmd.Wait()
-	wg.Wait()
-	return waitErr
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return struct{}{}, err
+		}
+		if err := cmd.Start(); err != nil {
+			return struct{}{}, err
+		}
+		forward := func(chunk string) {
+			if onOutput != nil {
+				onOutput(chunk)
+			}
+		}
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			streamOutput(stdout, forward)
+		}()
+		go func() {
+			defer wg.Done()
+			streamOutput(stderr, forward)
+		}()
+		waitErr := cmd.Wait()
+		wg.Wait()
+		return struct{}{}, waitErr
+	})
+	return err
 }
 
 func makeMKVSourceArg(path string) string {
@@ -654,14 +663,14 @@ type executionPayload struct {
 		PlaylistName string `json:"playlistName"`
 	} `json:"bdinfo"`
 	Draft struct {
-		Title        string            `json:"title"`
-		PlaylistName string            `json:"playlistName"`
-		EnableDV     bool              `json:"dvMergeEnabled"`
-		SegmentPaths []string          `json:"segmentPaths"`
-		Video        VideoTrack        `json:"video"`
-		Audio        []AudioTrack      `json:"audio"`
-		Subtitles    []SubtitleTrack   `json:"subtitles"`
-		MakeMKV      json.RawMessage   `json:"makemkv"`
+		Title        string          `json:"title"`
+		PlaylistName string          `json:"playlistName"`
+		EnableDV     bool            `json:"dvMergeEnabled"`
+		SegmentPaths []string        `json:"segmentPaths"`
+		Video        VideoTrack      `json:"video"`
+		Audio        []AudioTrack    `json:"audio"`
+		Subtitles    []SubtitleTrack `json:"subtitles"`
+		MakeMKV      json.RawMessage `json:"makemkv"`
 	} `json:"draft"`
 	OutputPath string `json:"outputPath"`
 }

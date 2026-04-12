@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	makemkv "github.com/guowanghushifu/mkv-maker/internal/media/makemkv"
 )
 
 type fileWritingRunner struct {
@@ -1047,6 +1050,18 @@ func TestDefaultRunMakeMKVCommandsUseAbsoluteBinaryPath(t *testing.T) {
 	defer func() {
 		makemkvconBinaryPath = originalPath
 	}()
+	expireDate := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
+	jobRunner.makeMKVDateOverride = makemkv.NewCommandDateOverride(&expireDate)
+	jobRunner.makeMKVDateOverride = jobRunner.makeMKVDateOverride.WithNow(func() time.Time {
+		return time.Date(2026, 4, 12, 10, 20, 30, 0, time.UTC)
+	})
+	jobRunner.makeMKVDateOverride = jobRunner.makeMKVDateOverride.WithSince(func(time.Time) time.Duration { return 1 * time.Second })
+	jobRunner.makeMKVDateOverride = jobRunner.makeMKVDateOverride.WithAfter(func(time.Duration) <-chan time.Time { return make(chan time.Time) })
+	var dateChanges []time.Time
+	jobRunner.makeMKVDateOverride = jobRunner.makeMKVDateOverride.WithSetSystemDate(func(_ context.Context, target time.Time) error {
+		dateChanges = append(dateChanges, target)
+		return nil
+	})
 
 	infoOutput, err := jobRunner.defaultRunMakeMKVInfo(context.Background(), "/bd_input/Disc/BDMV")
 	if err != nil {
@@ -1076,6 +1091,9 @@ func TestDefaultRunMakeMKVCommandsUseAbsoluteBinaryPath(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], " --messages=-null --progress=-stdout mkv file:/bd_input/Disc "+strconv.Itoa(4)+" ") {
 		t.Fatalf("expected mkv invocation, got %q", lines[1])
+	}
+	if len(dateChanges) != 4 {
+		t.Fatalf("expected rollback and restore for both info and mkv commands, got %d date changes", len(dateChanges))
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	makemkv "github.com/guowanghushifu/mkv-maker/internal/media/makemkv"
 )
 
 var ErrTaskAlreadyRunning = errors.New("task already running")
@@ -48,15 +50,15 @@ type taskState struct {
 }
 
 type Manager struct {
-	mu             sync.RWMutex
-	current        *taskState
-	latest         *taskState
-	executor       *JobRunner
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
-	closed         bool
-	onTaskFinished func(StartRequest, Task)
+	mu                    sync.RWMutex
+	current               *taskState
+	latest                *taskState
+	executor              *JobRunner
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	wg                    sync.WaitGroup
+	closed                bool
+	onTaskFinished        func(StartRequest, Task)
 	beforeSuccessFinalize func()
 }
 
@@ -89,6 +91,13 @@ func (m *Manager) SetOnTaskFinished(fn func(StartRequest, Task)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onTaskFinished = fn
+}
+
+func (m *Manager) SetMakeMKVExpireDate(expireDate *time.Time) {
+	if m == nil || m.executor == nil {
+		return
+	}
+	m.executor.makeMKVDateOverride = makemkv.NewCommandDateOverride(expireDate)
 }
 
 func (m *Manager) Start(req StartRequest) (Task, error) {

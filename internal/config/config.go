@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -13,6 +14,7 @@ type Config struct {
 	DataDir             string
 	ListenAddr          string
 	RemuxTempDir        string
+	MakeMKVExpireDate   *time.Time
 	SessionMaxAge       int
 	SessionCookieSecure bool
 }
@@ -25,6 +27,7 @@ func Load() (Config, error) {
 		DataDir:             getenvDefault("APP_DATA_DIR", "/app/data"),
 		ListenAddr:          getenvDefault("LISTEN_ADDR", ":8080"),
 		RemuxTempDir:        getenvDefault("REMUX_TMP_DIR", "/remux_tmp"),
+		MakeMKVExpireDate:   getenvDate("MAKEMKV_EXPIRE_DATE"),
 		SessionMaxAge:       86400,
 		SessionCookieSecure: getenvBoolDefault("SESSION_COOKIE_SECURE", false),
 	}
@@ -54,4 +57,16 @@ func getenvBoolDefault(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func getenvDate(key string) *time.Time {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil
+	}
+	parsed, err := time.ParseInLocation("2006-01-02", value, time.Local)
+	if err != nil {
+		return nil
+	}
+	return &parsed
 }

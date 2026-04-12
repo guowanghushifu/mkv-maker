@@ -11,6 +11,7 @@
 
 服务端使用以下环境变量：
 - `APP_PASSWORD`（必填）：Web 应用登录密码
+- `MAKEMKV_EXPIRE_DATE`（可选）：如果设置为有效的 `YYYY-MM-DD`，且当前日期晚于该日期，则在执行 `makemkvcon info` / `makemkvcon mkv` 前，临时把系统日期调到该日期前一个月；命令运行满 3 秒后会恢复正常日期，如果命令提前结束则立刻恢复。日期修改失败会被忽略。
 - `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie；通过 HTTPS 或反向代理访问时可显式设为 `1`
 
 Docker Compose 示例：BDMV / ISO 通用场景：
@@ -25,6 +26,11 @@ services:
       - "38080:8080"
     environment:
       APP_PASSWORD: "你的登录密码"
+      MAKEMKV_EXPIRE_DATE: "2026-05-21" # 可选，非法格式会被忽略
+    cap_add:
+      - SYS_TIME                         # 允许容器修改宿主机系统时间
+    security_opt:
+      - seccomp=unconfined              # 某些 Docker 默认 seccomp 会拦截 date/settimeofday
     volumes:
       - ./data:/app/data           # 日志目录
       - ./config:/config           # MakeMKV 配置目录，包含 /config/settings.conf

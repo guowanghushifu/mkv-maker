@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"net/url"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/go-chi/chi/v5"
@@ -520,7 +521,9 @@ func makeMKVSourceArg(sourcePath string) string {
 }
 
 type MakeMKVPlaylistInspector struct {
-	Binary string
+	Binary       string
+	ExpireDate   *time.Time
+	dateOverride makemkv.CommandDateOverride
 }
 
 func (i MakeMKVPlaylistInspector) Inspect(ctx context.Context, sourcePath, playlistPath string) (MakeMKVInspection, error) {
@@ -528,8 +531,14 @@ func (i MakeMKVPlaylistInspector) Inspect(ctx context.Context, sourcePath, playl
 	if binary == "" {
 		binary = "/opt/makemkv/bin/makemkvcon"
 	}
+	override := i.dateOverride
+	if !override.IsConfigured() {
+		override = makemkv.NewCommandDateOverride(i.ExpireDate)
+	}
 
-	output, err := exec.CommandContext(ctx, binary, "info", makeMKVSourceArg(sourcePath), "--robot").Output()
+	output, err := makemkv.RunWithCommandDateOverride(override, ctx, func(runCtx context.Context) ([]byte, error) {
+		return exec.CommandContext(runCtx, binary, "info", makeMKVSourceArg(sourcePath), "--robot").Output()
+	})
 	if err != nil {
 		return MakeMKVInspection{}, err
 	}

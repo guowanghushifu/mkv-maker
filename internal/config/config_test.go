@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 )
 
 func TestLoadRejectsEmptyPassword(t *testing.T) {
@@ -59,5 +60,34 @@ func TestLoadAllowsOverridingRemuxTempDir(t *testing.T) {
 	}
 	if cfg.RemuxTempDir != "/custom/remux-tmp" {
 		t.Fatalf("expected overridden remux temp dir, got %q", cfg.RemuxTempDir)
+	}
+}
+
+func TestLoadParsesMakeMKVExpireDate(t *testing.T) {
+	t.Setenv("APP_PASSWORD", "secret")
+	t.Setenv("MAKEMKV_EXPIRE_DATE", "2026-04-11")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.MakeMKVExpireDate == nil {
+		t.Fatal("expected valid MAKEMKV_EXPIRE_DATE to be parsed")
+	}
+	if got := cfg.MakeMKVExpireDate.Format("2006-01-02"); got != "2026-04-11" {
+		t.Fatalf("expected parsed expire date 2026-04-11, got %s", got)
+	}
+}
+
+func TestLoadIgnoresInvalidMakeMKVExpireDate(t *testing.T) {
+	t.Setenv("APP_PASSWORD", "secret")
+	t.Setenv("MAKEMKV_EXPIRE_DATE", "2026/04/11")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.MakeMKVExpireDate != nil {
+		t.Fatalf("expected invalid MAKEMKV_EXPIRE_DATE to be ignored, got %s", cfg.MakeMKVExpireDate.Format(time.RFC3339))
 	}
 }
