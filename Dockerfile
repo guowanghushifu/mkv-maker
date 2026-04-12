@@ -60,6 +60,7 @@ ENV APP_DATA_DIR=/app/data \
     BD_INPUT_DIR=/bd_input \
     REMUX_OUTPUT_DIR=/remux \
     REMUX_TMP_DIR=/remux_tmp \
+    MAKEMKV_EXPIRE_DATE=2026-05-21 \
     LISTEN_ADDR=:8080 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
