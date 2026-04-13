@@ -11,7 +11,7 @@
 
 服务端使用以下环境变量：
 - `APP_PASSWORD`（必填）：Web 应用登录密码
-- `MAKEMKV_EXPIRE_DATE`（默认：`Dockerfile中指定`）：如果设置为有效的 `YYYY-MM-DD`，且当前日期晚于该日期，则在执行 `makemkvcon info` / `makemkvcon mkv` 前，临时把系统日期调到该日期前一个月；命令运行满 3 秒后会恢复正常日期。此环境变量主要是为了解决Makemkv版本和Beta Key过期的问题，一般情况你不需要设置，如果你不需要这个功能，你可以设置为2099-01-O1，这样不会触发调整日期。
+- `MAKEMKV_EXPIRE_DATE`（默认：`Dockerfile中指定`）：如果设置为有效的 `YYYY-MM-DD`，且当前日期晚于该日期，则在执行 `makemkvcon info` / `makemkvcon mkv` 前，临时把系统日期调到该日期前一个月；命令运行满 3 秒后会恢复正常日期。此环境变量主要是为了解决Makemkv版本和Beta Key过期的问题，一般情况你不需要设置，如果你不需要这个功能，你可以设置为2099-01-01，这样不会触发调整日期。
 - `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie；通过 HTTPS 或反向代理访问时可显式设为 `1`
 
 Docker Compose 示例：BDMV / ISO 通用场景：
