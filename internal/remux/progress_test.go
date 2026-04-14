@@ -70,8 +70,8 @@ func TestExtractProgressPercentsFromChunkParsesCarriageReturnAndSplitTokens(t *t
 	}
 
 	percents, remainder, saving = extractProgressPercentsFromChunk(remainder, "2%\r#GUI#progress 77%\r", saving)
-	if len(percents) != 2 || percents[0] != 82 || percents[1] != 93 {
-		t.Fatalf("expected parsed percents [82 93], got %v", percents)
+	if len(percents) != 2 || percents[0] != 88 || percents[1] != 95 {
+		t.Fatalf("expected parsed percents [88 95], got %v", percents)
 	}
 	if remainder != "" {
 		t.Fatalf("expected empty remainder, got %q", remainder)
@@ -123,10 +123,10 @@ func TestExtractProgressPercentsFromChunkIgnoresMakeMKVProgressBeforeSavingPhase
 	}
 }
 
-func TestExtractProgressPercentsFromChunkMapsMakeMKVSavingPhaseToFirstSeventyPercent(t *testing.T) {
+func TestExtractProgressPercentsFromChunkMapsMakeMKVSavingPhaseToFirstEightyPercent(t *testing.T) {
 	percents, remainder, saving := extractProgressPercentsFromChunk("", "Current action: Saving to MKV file\nTotal progress - 50%\n", false)
-	if len(percents) != 1 || percents[0] != 35 {
-		t.Fatalf("expected mapped MakeMKV progress [35], got %v", percents)
+	if len(percents) != 1 || percents[0] != 40 {
+		t.Fatalf("expected mapped MakeMKV progress [40], got %v", percents)
 	}
 	if remainder != "" {
 		t.Fatalf("expected empty remainder, got %q", remainder)
@@ -142,8 +142,8 @@ func TestExtractProgressPercentsFromChunkParsesMakeMKVCompositeSavingLine(t *tes
 		"Current action: Saving to MKV file\nCurrent progress - 97%  , Total progress - 96%\n",
 		false,
 	)
-	if len(percents) != 1 || percents[0] != 67 {
-		t.Fatalf("expected mapped MakeMKV composite progress [67], got %v", percents)
+	if len(percents) != 1 || percents[0] != 76 {
+		t.Fatalf("expected mapped MakeMKV composite progress [76], got %v", percents)
 	}
 	if remainder != "" {
 		t.Fatalf("expected empty remainder, got %q", remainder)
@@ -226,10 +226,10 @@ func TestFormatCommandPreviewUsesProvidedBinaryName(t *testing.T) {
 	}
 }
 
-func TestExtractProgressPercentsFromChunkMapsMkvmergeToLastThirtyPercent(t *testing.T) {
+func TestExtractProgressPercentsFromChunkMapsMkvmergeToLastTwentyPercent(t *testing.T) {
 	percents, remainder, saving := extractProgressPercentsFromChunk("", "Progress: 50%\n", false)
-	if len(percents) != 1 || percents[0] != 85 {
-		t.Fatalf("expected mapped mkvmerge progress [85], got %v", percents)
+	if len(percents) != 1 || percents[0] != 90 {
+		t.Fatalf("expected mapped mkvmerge progress [90], got %v", percents)
 	}
 	if remainder != "" {
 		t.Fatalf("expected empty remainder, got %q", remainder)

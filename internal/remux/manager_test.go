@@ -788,8 +788,8 @@ func TestManagerFailureKeepsLastKnownProgressPercent(t *testing.T) {
 	if done.Status != "failed" {
 		t.Fatalf("expected failed status, got %q", done.Status)
 	}
-	if done.ProgressPercent != 88 {
-		t.Fatalf("expected last known progress 88, got %d", done.ProgressPercent)
+	if done.ProgressPercent != 92 {
+		t.Fatalf("expected last known progress 92, got %d", done.ProgressPercent)
 	}
 }
 
@@ -823,8 +823,8 @@ func TestManagerProgressUpdatesBeforeTerminalCompletion(t *testing.T) {
 	if current.Status != "running" {
 		t.Fatalf("expected running status before release, got %q", current.Status)
 	}
-	if current.ProgressPercent != 82 {
-		t.Fatalf("expected running progress 82 before release, got %d", current.ProgressPercent)
+	if current.ProgressPercent != 88 {
+		t.Fatalf("expected running progress 88 before release, got %d", current.ProgressPercent)
 	}
 
 	close(runner.release)
@@ -861,8 +861,8 @@ func TestManagerProgressUpdatesFromCarriageReturnChunks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Current returned error: %v", err)
 	}
-	if current.ProgressPercent != 82 {
-		t.Fatalf("expected carriage-return progress 82 while running, got %d", current.ProgressPercent)
+	if current.ProgressPercent != 88 {
+		t.Fatalf("expected carriage-return progress 88 while running, got %d", current.ProgressPercent)
 	}
 
 	close(runner.release)
