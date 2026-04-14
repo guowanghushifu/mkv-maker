@@ -4,14 +4,14 @@
 
 # 注意事项
 - 必须提供 **BDInfo 文本** 来判断播放列表和音轨、字幕轨道名称。
-- ISO 会直接交给 `makemkvcon` 处理，不再需要挂载。
+- 本软件使用了Makemkv来处理蓝光盘，但Makemkv隔段时间就会更新版本，老版本会过期，Beta Key也会过期，我会尽量跟随官方更新
 - remux输出目录空间约束：如果处理UHD蓝光盘，建议预留200GB空间；需要先用makemkv生成一个临时中间文件，再二次裁剪为目标文件，过程中需要占用两份空间。
 
 ## Docker运行
 
 服务端使用以下环境变量：
 - `APP_PASSWORD`（必填）：Web 应用登录密码
-- `MAKEMKV_EXPIRE_DATE`（默认：`Dockerfile中指定`）：如果设置为有效的 `YYYY-MM-DD`，且当前日期晚于该日期，则在执行 `makemkvcon info` / `makemkvcon mkv` 前，临时把系统日期调到该日期前一个月；命令运行满 3 秒后会恢复正常日期。此环境变量主要是为了解决Makemkv版本和Beta Key过期的问题，一般情况你不需要设置，如果你不需要这个功能，你可以设置为2099-01-01，这样不会触发调整日期。
+- `MAKEMKV_EXPIRE_DATE`（默认：`Dockerfile中指定`）：如果设置为有效的 `YYYY-MM-DD`，且当前系统日期晚于该日期，在执行 `makemkvcon info` / `makemkvcon mkv` 前，临时把系统日期调整到过期日期前30天；命令运行满 3 秒后会恢复正常日期。此环境变量主要是为了解决Makemkv版本和Beta Key过期的问题，如果你不需要这个功能，你可以设置为2099-01-01，这样不会触发调整日期。
 - `SESSION_COOKIE_SECURE`（默认：`0`）：是否为登录会话写入 `Secure` Cookie；通过 HTTPS 或反向代理访问时可显式设为 `1`
 
 Docker Compose 示例：BDMV / ISO 通用场景：
