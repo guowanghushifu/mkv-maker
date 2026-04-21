@@ -1625,4 +1625,51 @@ describe('useRemuxWorkflow', () => {
     });
   });
 
+  it('clears the previous completed task snapshot when selecting a source for the next remux', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source, isoSource],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      }),
+    );
+    installFetchMock({
+      currentJob: {
+        id: 'job-123',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+        progressPercent: 100,
+      },
+      currentLog: '[2026-03-29T12:10:00Z] remux finished',
+    });
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await waitFor(() => {
+      expect(result.current.currentJob?.status).toBe('succeeded');
+      expect(result.current.currentJobLog).toContain('remux finished');
+    });
+
+    act(() => {
+      result.current.handleSourceSelect(isoSource.id);
+    });
+
+    expect(result.current.selectedSourceId).toBe(isoSource.id);
+    expect(result.current.currentJob).toBeNull();
+    expect(result.current.currentJobLog).toBe('');
+  });
+
 });

@@ -110,9 +110,19 @@ export function useRemuxWorkflow() {
     });
   }, [token, step, sources, selectedSourceId, bdinfoText, parsedBDInfo, draft, filenamePreview, outputFilename, filenameEdited]);
 
-  const resetWorkflowState = () => {
+  const clearInactiveCurrentJobSnapshot = (force = false) => {
+    if (!force && currentJob?.status === 'running') {
+      return;
+    }
     invalidateCurrentJobSnapshots();
     resetCompletionAlertState();
+    setCurrentJob(null);
+    setCurrentJobLog('');
+    setSubmitError(null);
+  };
+
+  const resetWorkflowState = () => {
+    clearInactiveCurrentJobSnapshot(true);
     setSelectedSourceId(null);
     setBdinfoText('');
     setParsedBDInfo(null);
@@ -123,9 +133,6 @@ export function useRemuxWorkflow() {
     setFilenameEdited(false);
     setSubmittingJob(false);
     setStoppingJob(false);
-    setSubmitError(null);
-    setCurrentJob(null);
-    setCurrentJobLog('');
     setScanError(null);
   };
 
@@ -219,6 +226,7 @@ export function useRemuxWorkflow() {
   };
 
   const handleSourceSelect = (sourceId: string) => {
+    clearInactiveCurrentJobSnapshot();
     setSelectedSourceId(sourceId);
     setParsedBDInfo(null);
     setBdinfoText('');
