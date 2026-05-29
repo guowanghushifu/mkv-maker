@@ -59,8 +59,13 @@ func TestCommandDateOverrideRestoresAfterWindowEvenWhenCommandKeepsRunning(t *te
 
 	override := NewCommandDateOverride(&expireDate)
 	override = override.WithNow(func() time.Time { return now })
-	override = override.WithSince(func(time.Time) time.Duration { return 3 * time.Second })
-	override = override.WithAfter(func(time.Duration) <-chan time.Time { return restoreSignal })
+	override = override.WithSince(func(time.Time) time.Duration { return 10 * time.Second })
+	override = override.WithAfter(func(d time.Duration) <-chan time.Time {
+		if d != 10*time.Second {
+			t.Errorf("expected timer-based restore after 10 seconds, got %s", d)
+		}
+		return restoreSignal
+	})
 
 	var mu sync.Mutex
 	var calls []time.Time
@@ -94,8 +99,8 @@ func TestCommandDateOverrideRestoresAfterWindowEvenWhenCommandKeepsRunning(t *te
 	if len(calls) != 2 {
 		t.Fatalf("expected restore to happen before command exit, got %d date changes", len(calls))
 	}
-	if got := calls[1].Format("2006-01-02 15:04:05"); got != "2026-04-12 10:20:33" {
-		t.Fatalf("expected timer-based restore after 3 seconds, got %s", got)
+	if got := calls[1].Format("2006-01-02 15:04:05"); got != "2026-04-12 10:20:40" {
+		t.Fatalf("expected timer-based restore after 10 seconds, got %s", got)
 	}
 	mu.Unlock()
 

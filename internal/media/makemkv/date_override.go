@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const commandDateOverrideWindow = 3 * time.Second
+const commandDateOverrideWindow = 10 * time.Second
 const systemDateLayout = "2006-01-02 15:04:05"
 
 type CommandDateOverride struct {
