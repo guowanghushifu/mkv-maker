@@ -13,7 +13,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
 
 FROM --platform=$BUILDPLATFORM debian:13 AS makemkv-build
 ARG TARGETPLATFORM
-ARG MAKEMKV_VERSION=1.18.3
+ARG MAKEMKV_VERSION=1.18.4
 ARG MAKEMKV_OSS_URL=https://www.makemkv.com/download/makemkv-oss-${MAKEMKV_VERSION}.tar.gz
 ARG MAKEMKV_BIN_URL=https://www.makemkv.com/download/makemkv-bin-${MAKEMKV_VERSION}.tar.gz
 COPY --from=xx / /
@@ -60,7 +60,7 @@ ENV APP_DATA_DIR=/app/data \
     BD_INPUT_DIR=/bd_input \
     REMUX_OUTPUT_DIR=/remux \
     REMUX_TMP_DIR=/remux_tmp \
-    MAKEMKV_EXPIRE_DATE=2026-05-21 \
+    MAKEMKV_EXPIRE_DATE=2026-07-31 \
     LISTEN_ADDR=:8080 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
