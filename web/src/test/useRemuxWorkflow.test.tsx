@@ -169,9 +169,95 @@ describe('useRemuxWorkflow', () => {
       expect(result.current.currentJob?.status).toBe('running');
       expect(result.current.layoutContext.task).toBe('Running');
     });
+    expect(JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').currentJobId).toBe(
+      'job-123',
+    );
   });
 
-  it('does not alert for a historical succeeded job restored on load', async () => {
+  it('does not let a delayed running snapshot overwrite newer persisted workflow edits', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler Original - 2160p.mkv',
+        outputFilename: 'Nightcrawler Original - 2160p.mkv',
+        filenameEdited: true,
+        currentJobId: 'job-123',
+      }),
+    );
+    let resolveCurrentJob: ((response: Response) => void) | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs/current') && method === 'GET') {
+        return new Promise<Response>((resolve) => {
+          resolveCurrentJob = resolve;
+        });
+      }
+      if (url.endsWith('/api/jobs/current/log') && method === 'GET') {
+        return Promise.resolve(new Response('[2026-03-29T12:00:00Z] remux started', { status: 200 }));
+      }
+      if (url.endsWith('/api/drafts/preview-filename') && method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ filename: 'Nightcrawler Original - 2160p.mkv' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('', { status: 500 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+    await waitFor(() => {
+      expect(resolveCurrentJob).not.toBeNull();
+    });
+
+    act(() => {
+      result.current.updateOutputFilename('Nightcrawler Edited - 2160p.mkv');
+    });
+    await waitFor(() => {
+      expect(
+        JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').outputFilename,
+      ).toBe('Nightcrawler Edited - 2160p.mkv');
+    });
+
+    await act(async () => {
+      resolveCurrentJob?.(
+        new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler Original - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler Original - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-03-29T12:00:00Z',
+            status: 'running',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(result.current.currentJob?.status).toBe('running');
+    });
+
+    expect(JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').outputFilename).toBe(
+      'Nightcrawler Edited - 2160p.mkv',
+    );
+  });
+
+  it('ignores an untracked historical succeeded job on workflow restore', async () => {
     window.localStorage.setItem(tokenStorageKey, 'session');
     window.localStorage.setItem(localeStorageKey, 'en');
     window.localStorage.setItem(
@@ -200,15 +286,182 @@ describe('useRemuxWorkflow', () => {
       },
       currentLog: '[2026-03-29T12:10:00Z] remux finished',
     });
+    const fetchMock = vi.mocked(fetch);
 
     const { result } = renderHook(() => useRemuxWorkflow());
 
     await waitFor(() => {
-      expect(result.current.currentJob?.status).toBe('succeeded');
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/jobs/current/log')),
+      ).toBe(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.currentJob).toBeNull();
+    expect(result.current.currentJobLog).toBe('');
+    expect(result.current.layoutContext.task).toBe('Ready');
+
+    expect(remuxCompletionAlertMock.playRemuxCompletionChime).not.toHaveBeenCalled();
+    expect(remuxCompletionAlertMock.showRemuxCompletionNotification).not.toHaveBeenCalled();
+  });
+
+  it('clears a persisted job id that does not match the latest terminal job', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+        currentJobId: 'job-old',
+      }),
+    );
+    installFetchMock({
+      currentJob: {
+        id: 'job-123',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+      },
+      currentLog: '[2026-03-29T12:10:00Z] remux finished',
+    });
+    const fetchMock = vi.mocked(fetch);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/jobs/current/log')),
+      ).toBe(true);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.currentJob).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').currentJobId).toBeNull();
+  });
+
+  it('restores a succeeded job tracked by the persisted workflow', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+        currentJobId: 'job-123',
+      }),
+    );
+    installFetchMock({
+      currentJob: {
+        id: 'job-123',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+      },
+      currentLog: '[2026-03-29T12:10:00Z] remux finished',
+    });
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+
+    await waitFor(() => {
+      expect(result.current.currentJob?.id).toBe('job-123');
+      expect(result.current.currentJobLog).toContain('remux finished');
     });
 
     expect(remuxCompletionAlertMock.playRemuxCompletionChime).not.toHaveBeenCalled();
     expect(remuxCompletionAlertMock.showRemuxCompletionNotification).not.toHaveBeenCalled();
+  });
+
+  it('persists the submitted job id before a current-job snapshot is available', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+      }),
+    );
+    let submitted = false;
+    let persistedJobIdAtSnapshotRequest: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+
+      if (url.endsWith('/api/jobs') && method === 'POST') {
+        submitted = true;
+        return new Response(
+          JSON.stringify({
+            id: 'job-123',
+            sourceName: 'Nightcrawler Disc',
+            outputName: 'Nightcrawler - 2160p.mkv',
+            outputPath: '/remux/Nightcrawler - 2160p.mkv',
+            playlistName: '00800.MPLS',
+            createdAt: '2026-04-03T00:00:00Z',
+            status: 'running',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.endsWith('/api/jobs/current') && method === 'GET') {
+        if (submitted) {
+          persistedJobIdAtSnapshotRequest = JSON.parse(
+            window.localStorage.getItem(workflowStorageKey) ?? '{}',
+          ).currentJobId;
+        }
+        return new Response('', { status: 404 });
+      }
+
+      return new Response('', { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRemuxWorkflow());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.handleSubmitJob();
+    });
+
+    expect(result.current.currentJob?.id).toBe('job-123');
+    expect(persistedJobIdAtSnapshotRequest).toBe('job-123');
+    expect(JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').currentJobId).toBe(
+      'job-123',
+    );
   });
 
   it('alerts once when the started remux changes from running to succeeded', async () => {
@@ -299,6 +552,9 @@ describe('useRemuxWorkflow', () => {
 
     expect(remuxCompletionAlertMock.prepareRemuxCompletionAlerts).toHaveBeenCalledTimes(1);
     expect(result.current.currentJob?.status).toBe('running');
+    expect(JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').currentJobId).toBe(
+      'job-123',
+    );
 
     currentStatus = 'succeeded';
 
@@ -1604,6 +1860,7 @@ describe('useRemuxWorkflow', () => {
         filenamePreview: 'Nightcrawler - 2160p.mkv',
         outputFilename: 'Nightcrawler - 2160p.mkv',
         filenameEdited: true,
+        currentJobId: 'job-123',
       }),
     );
     installFetchMock({});
@@ -1622,6 +1879,7 @@ describe('useRemuxWorkflow', () => {
       expect(result.current.parsedBDInfo).toBeNull();
       expect(result.current.draft).toBeNull();
       expect(result.current.outputFilename).toBe('');
+      expect(JSON.parse(window.localStorage.getItem(workflowStorageKey) ?? '{}').currentJobId).toBeNull();
     });
   });
 
@@ -1640,6 +1898,7 @@ describe('useRemuxWorkflow', () => {
         filenamePreview: 'Nightcrawler - 2160p.mkv',
         outputFilename: 'Nightcrawler - 2160p.mkv',
         filenameEdited: false,
+        currentJobId: 'job-123',
       }),
     );
     installFetchMock({

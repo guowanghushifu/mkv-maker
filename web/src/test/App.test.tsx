@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { localeStorageKey, tokenStorageKey } from '../i18n';
@@ -443,6 +443,23 @@ describe('App', () => {
     const submitDelay = new Promise<void>((resolve) => {
       releaseSubmit = resolve;
     });
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'review',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler - 2160p.mkv',
+        outputFilename: 'Nightcrawler - 2160p.mkv',
+        filenameEdited: false,
+        currentJobId: 'job-old',
+      }),
+    );
 
     installFetchMock({
       currentJob: {
@@ -469,8 +486,8 @@ describe('App', () => {
     });
     render(<App />);
 
-    await goToReviewStep();
-    expect(screen.getByText(/old log line/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^review$/i, level: 2 })).toBeInTheDocument();
+    expect(await screen.findByText(/old log line/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /start remux/i }));
 
@@ -480,6 +497,57 @@ describe('App', () => {
     });
 
     releaseSubmit();
+  });
+
+  it('does not show a previous completed remux in a restored second workflow', async () => {
+    window.localStorage.setItem(tokenStorageKey, 'session');
+    window.localStorage.setItem(localeStorageKey, 'en');
+    window.localStorage.setItem(
+      workflowStorageKey,
+      JSON.stringify({
+        step: 'editor',
+        sources: [source],
+        selectedSourceId: source.id,
+        bdinfoText: 'PLAYLIST REPORT',
+        parsedBDInfo,
+        draft,
+        filenamePreview: 'Nightcrawler Second - 2160p.mkv',
+        outputFilename: 'Nightcrawler Second - 2160p.mkv',
+        filenameEdited: true,
+      }),
+    );
+    const fetchMock = installFetchMock({
+      currentJob: {
+        id: 'job-old',
+        sourceName: 'Nightcrawler Disc',
+        outputName: 'Nightcrawler First - 2160p.mkv',
+        outputPath: '/remux/Nightcrawler First - 2160p.mkv',
+        playlistName: '00800.MPLS',
+        createdAt: '2026-03-29T12:00:00Z',
+        status: 'succeeded',
+        progressPercent: 100,
+      },
+      currentLog: '[2026-03-29T12:00:01Z] old log line',
+    });
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /track editor/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.filter(([input]) =>
+          String(input).endsWith('/api/jobs/current/log'),
+        ),
+      ).toHaveLength(2);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /continue to review/i }));
+    expect(await screen.findByRole('heading', { name: /^review$/i, level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText(/current remux/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/old log line/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('hydrates current job log immediately after submit for terminal tasks', async () => {

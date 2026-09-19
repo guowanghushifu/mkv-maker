@@ -11,6 +11,7 @@ export type PersistedWorkflowState = {
   filenamePreview: string;
   outputFilename: string;
   filenameEdited: boolean;
+  currentJobId?: string | null;
 };
 
 export const workflowStorageKey = 'mkv-maker-workflow';

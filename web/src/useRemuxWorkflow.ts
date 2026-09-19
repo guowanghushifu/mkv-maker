@@ -15,7 +15,11 @@ import {
   prepareRemuxCompletionAlerts,
   showRemuxCompletionNotification,
 } from './remuxCompletionAlert';
-import { loadStoredWorkflowState, saveStoredWorkflowState } from './workflowState';
+import {
+  loadStoredWorkflowState,
+  saveStoredWorkflowState,
+  type PersistedWorkflowState,
+} from './workflowState';
 
 const api = createApiClient();
 
@@ -55,6 +59,34 @@ export function useRemuxWorkflow() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [currentJobLog, setCurrentJobLog] = useState('');
+  const [currentWorkflowJobId, setCurrentWorkflowJobId] = useState<string | null>(
+    () => initialWorkflow?.currentJobId ?? null
+  );
+  const currentWorkflowJobIdRef = useRef<string | null>(currentWorkflowJobId);
+  const latestWorkflowStateRef = useRef<PersistedWorkflowState>({
+    step,
+    sources,
+    selectedSourceId,
+    bdinfoText,
+    parsedBDInfo,
+    draft,
+    filenamePreview,
+    outputFilename,
+    filenameEdited,
+    currentJobId: currentWorkflowJobId,
+  });
+  latestWorkflowStateRef.current = {
+    step,
+    sources,
+    selectedSourceId,
+    bdinfoText,
+    parsedBDInfo,
+    draft,
+    filenamePreview,
+    outputFilename,
+    filenameEdited,
+    currentJobId: currentWorkflowJobId,
+  };
   const currentJobSnapshotRequestRef = useRef(0);
   const armedCompletionJobIdRef = useRef<string | null>(null);
   const alertedCompletionJobIdRef = useRef<string | null>(null);
@@ -92,23 +124,26 @@ export function useRemuxWorkflow() {
     previousSeenJobStatusRef.current = null;
   };
 
-  useEffect(() => {
+  const persistWorkflowState = (jobId: string | null) => {
     if (!token) {
       saveStoredWorkflowState(null);
       return;
     }
     saveStoredWorkflowState({
-      step,
-      sources,
-      selectedSourceId,
-      bdinfoText,
-      parsedBDInfo,
-      draft,
-      filenamePreview,
-      outputFilename,
-      filenameEdited,
+      ...latestWorkflowStateRef.current,
+      currentJobId: jobId,
     });
-  }, [token, step, sources, selectedSourceId, bdinfoText, parsedBDInfo, draft, filenamePreview, outputFilename, filenameEdited]);
+  };
+
+  const trackCurrentWorkflowJob = (jobId: string | null) => {
+    currentWorkflowJobIdRef.current = jobId;
+    setCurrentWorkflowJobId(jobId);
+    persistWorkflowState(jobId);
+  };
+
+  useEffect(() => {
+    persistWorkflowState(currentWorkflowJobId);
+  }, [token, step, sources, selectedSourceId, bdinfoText, parsedBDInfo, draft, filenamePreview, outputFilename, filenameEdited, currentWorkflowJobId]);
 
   const clearInactiveCurrentJobSnapshot = (force = false) => {
     if (!force && currentJob?.status === 'running') {
@@ -116,6 +151,7 @@ export function useRemuxWorkflow() {
     }
     invalidateCurrentJobSnapshots();
     resetCompletionAlertState();
+    trackCurrentWorkflowJob(null);
     setCurrentJob(null);
     setCurrentJobLog('');
     setSubmitError(null);
@@ -297,6 +333,15 @@ export function useRemuxWorkflow() {
     const nextJobId = nextJob?.id ?? null;
     const nextJobStatus = nextJob?.status ?? null;
 
+    if (nextJob?.status === 'running') {
+      trackCurrentWorkflowJob(nextJob.id);
+    } else if (nextJob && currentWorkflowJobIdRef.current !== nextJob.id) {
+      trackCurrentWorkflowJob(null);
+      setCurrentJob(null);
+      setCurrentJobLog('');
+      return true;
+    }
+
     if (
       nextJob &&
       armedCompletionJobIdRef.current === nextJob.id &&
@@ -392,6 +437,7 @@ export function useRemuxWorkflow() {
         },
         token ?? undefined
       );
+      trackCurrentWorkflowJob(startedJob.id);
       armedCompletionJobIdRef.current = startedJob.id;
       alertedCompletionJobIdRef.current = null;
       previousSeenJobIdRef.current = startedJob.id;
