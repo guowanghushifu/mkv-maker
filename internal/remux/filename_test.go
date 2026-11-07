@@ -16,7 +16,7 @@ func TestBuildFilenameIncludesHDRAndDefaultAudio(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.TrueHD.7.1.Atmos.mkv"
+	want := "Nightcrawler - 2160p.BluRay.Remux.DV.HDR.HEVC.TrueHD.7.1.Atmos.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -36,7 +36,7 @@ func TestBuildFilenameUsesSelectedAudioWhenNoSelectedDefault(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.DTS-HD.MA.5.1.mkv"
+	want := "Nightcrawler - 2160p.BluRay.Remux.DV.HDR.HEVC.DTS-HD.MA.5.1.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -51,17 +51,17 @@ func TestBuildFilenameUsesExistingAudioCodecLabelsWithoutRenormalizing(t *testin
 		{
 			name:       "preserves dts hd ma alias separators exactly as provided",
 			codecLabel: "DTS_HD.MA.5.1",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv",
+			want:       "Nightcrawler - 2160p.BluRay.Remux.HDR.HEVC.DTS.HD.MA.5.1.mkv",
 		},
 		{
 			name:       "preserves side annotation exactly as provided",
 			codecLabel: "DD.5.1(side)",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.DD.5.1(side).mkv",
+			want:       "Nightcrawler - 2160p.BluRay.Remux.HDR.HEVC.DD.5.1(side).mkv",
 		},
 		{
 			name:       "falls back to unknown audio when codec label is empty",
 			codecLabel: "",
-			want:       "Nightcrawler - 2160p.BluRay.HDR.HEVC.UnknownAudio.mkv",
+			want:       "Nightcrawler - 2160p.BluRay.Remux.HDR.HEVC.UnknownAudio.mkv",
 		},
 	}
 
@@ -96,7 +96,7 @@ func TestBuildFilenameAddsDVWhenEnabled(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "Nightcrawler - 2160p.BluRay.DV.HDR.HEVC.UnknownAudio.mkv"
+	want := "Nightcrawler - 2160p.BluRay.Remux.DV.HDR.HEVC.UnknownAudio.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -116,7 +116,7 @@ func TestBuildFilenameSanitizesIllegalCharacters(t *testing.T) {
 	}
 
 	got := BuildFilename(draft)
-	want := "FooBar The Cut - 2160p.BluRay.HDR.HEVC.DTS-HD.MA.5.1.mkv"
+	want := "FooBar The Cut - 2160p.BluRay.Remux.HDR.HEVC.DTS-HD.MA.5.1.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -136,7 +136,7 @@ func TestBuildFilenamePreservesASCIIParenthesesAndRewritesUnderscores(t *testing
 	}
 
 	got := BuildFilename(draft)
-	want := "Alien.(1979) - 2160p.BluRay.HDR.HEVC.DTS.HD.MA.5.1.mkv"
+	want := "Alien.(1979) - 2160p.BluRay.Remux.HDR.HEVC.DTS.HD.MA.5.1.mkv"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}

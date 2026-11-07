@@ -22,6 +22,7 @@ func BuildFilename(d Draft) string {
 	parts := []string{
 		d.Title + " - " + d.Video.Resolution,
 		"BluRay",
+		"Remux",
 		hdrLabel,
 		d.Video.Codec,
 		audioLabel,
