@@ -17,6 +17,7 @@ ARG MAKEMKV_VERSION=1.18.4
 ARG MAKEMKV_OSS_URL=https://www.makemkv.com/download/makemkv-oss-${MAKEMKV_VERSION}.tar.gz
 ARG MAKEMKV_BIN_URL=https://www.makemkv.com/download/makemkv-bin-${MAKEMKV_VERSION}.tar.gz
 COPY --from=xx / /
+COPY deps /deps
 COPY docker/makemkv-build /build
 RUN /build/build.sh "${MAKEMKV_OSS_URL}" "${MAKEMKV_BIN_URL}"
 RUN xx-verify \

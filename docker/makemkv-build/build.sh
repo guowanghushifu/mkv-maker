@@ -22,6 +22,46 @@ log() {
     echo ">>> $*"
 }
 
+# Extract a tarball from a local path, /deps/<basename>, or a remote URL.
+# Compression is derived from the file extension (.tar.gz, .tgz, .tar.xz, …).
+# Usage: extract_tarball <url_or_path> <dest_dir>
+extract_tarball() {
+    local src="$1"
+    local dest="$2"
+    local local_file=""
+    local base
+    local compress=""
+
+    mkdir -p "$dest"
+
+    if [ -f "$src" ]; then
+        local_file="$src"
+    else
+        base="$(basename "${src%%[\?#]*}")"
+        if [ -f "/deps/$base" ]; then
+            local_file="/deps/$base"
+        fi
+    fi
+
+    base="$(basename "${src%%[\?#]*}")"
+    case "$base" in
+        *.tar.gz|*.tgz) compress=z ;;
+        *.tar.xz|*.txz) compress=J ;;
+        *.tar.bz2|*.tbz2) compress=j ;;
+        *.tar) compress="" ;;
+        *)
+            log "ERROR: Unsupported archive type: $base"
+            exit 1
+            ;;
+    esac
+
+    if [ -n "$local_file" ]; then
+        tar -x${compress} --strip-components 1 -f "$local_file" -C "$dest"
+    else
+        curl -# -L -f "$src" | tar -x${compress} --strip-components 1 -C "$dest"
+    fi
+}
+
 MAKEMKV_OSS_URL="$1"
 MAKEMKV_BIN_URL="$2"
 
@@ -84,20 +124,16 @@ xx-apt-get install -y --no-install-recommends \
 #
 
 log "Downloading fdk-aac..."
-mkdir /tmp/fdk-aac
-curl -# -L -f ${FDK_AAC_URL} | tar -xz --strip 1 -C /tmp/fdk-aac
+extract_tarball "${FDK_AAC_URL}" /tmp/fdk-aac
 
 log "Downloading ffmpeg..."
-mkdir /tmp/ffmpeg
-curl -# -L -f ${FFMPEG_URL} | tar -xJ --strip 1 -C /tmp/ffmpeg
+extract_tarball "${FFMPEG_URL}" /tmp/ffmpeg
 
 log "Downloading MakeMKV OSS..."
-mkdir /tmp/makemkv-oss
-curl -# -L -f ${MAKEMKV_OSS_URL} | tar -xz --strip 1 -C /tmp/makemkv-oss
+extract_tarball "${MAKEMKV_OSS_URL}" /tmp/makemkv-oss
 
 log "Downloading MakeMKV bin..."
-mkdir /tmp/makemkv-bin
-curl -# -L -f ${MAKEMKV_BIN_URL} | tar -xz --strip 1 -C /tmp/makemkv-bin
+extract_tarball "${MAKEMKV_BIN_URL}" /tmp/makemkv-bin
 
 #
 # Compile fdk-aac.
@@ -178,6 +214,9 @@ make -C /tmp/makemkv-oss -j$(nproc)
 
 log "Installing MakeMKV OSS..."
 make DESTDIR="$MAKEMKV_ROOT_DIR" -C /tmp/makemkv-oss install
+rm -v \
+    /opt/makemkv/bin/mmccextr \
+    /opt/makemkv/bin/mmgplsrv \
 
 #
 # Compile MakeMKV bin.
@@ -271,14 +310,9 @@ if xx-info is-cross; then
         exit 1
     fi
 else
-    INTERPRETER_PATH="$(find "$MAKEMKV_ROOT_DIR"/bin -type f -executable -exec patchelf --print-interpreter {} ';' -quit)"
-    if [ -z "$INTERPRETER_PATH" ] || [ ! -f "$INTERPRETER_PATH" ]; then
-        echo "ERROR: Interpreter not found at '$INTERPRETER_PATH'!"
-        exit 1
-    fi
-    INTERPRETER_FNAME="$(basename "$INTERPRETER_PATH")"
+    INTERPRETER_FNAME=ld-linux-x86-64.so.2
     echo "Copying interpreter..."
-    cp -v "$INTERPRETER_PATH" "$MAKEMKV_ROOT_DIR"/lib/"$INTERPRETER_FNAME"
+    cp -v /lib/x86_64-linux-gnu/"$INTERPRETER_FNAME" "$MAKEMKV_ROOT_DIR"/lib/"$INTERPRETER_FNAME"
 fi
 
 log "Patching ELF of binaries..."
